@@ -1,0 +1,124 @@
+\documentclass[a4paper]{article}
+
+\usepackage{pdp}
+
+%------------------------------------------------------------------------------
+%	REPORT INFORMATION
+%------------------------------------------------------------------------------
+
+\title{ProjectName -- C/Java/Python}
+\subtitle{Rapport final}
+\author{Étudiant1, Étudiant2, Étudiant3, Étudiant4, Étudiant5}
+
+%------------------------------------------------------------------------------
+
+\begin{document}
+
+%------------------------------------------------------------------------------
+%	TITLE PAGE
+%------------------------------------------------------------------------------
+
+\maketitle
+\thispagestyle{empty}
+
+%------------------------------------------------------------------------------
+%	MAIN MATTER
+%------------------------------------------------------------------------------
+
+\section*{Introduction}
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor
+incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis
+nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu
+fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in
+culpa qui officia deserunt mollit anim id est laborum.
+
+Pellentesque iaculis molestie euismod. In hac habitasse platea dictumst. Duis eu
+gravida sem. Vivamus pulvinar, tellus auctor sollicitudin iaculis, quam massa
+blandit ligula, in mollis est tellus et velit. Nulla gravida sapien nibh, nec
+faucibus lorem aliquam sed. Curabitur rutrum elit purus, et congue neque
+venenatis vitae. Sed non magna nisi. Pellentesque euismod non ipsum a hendrerit.
+Pellentesque vehicula tincidunt lacinia. Sed rhoncus porttitor facilisis.
+
+Etiam sed molestie odio. Nunc cursus sollicitudin est vitae posuere. Nullam
+pellentesque metus eu dui porttitor bibendum. Morbi egestas arcu ut urna dictum
+placerat non non nisl. Quisque non ante in eros cursus pulvinar. Sed augue
+libero, eleifend a urna eget, pellentesque condimentum odio. Sed sed dui non
+diam mattis interdum eget sed urna. Integer consectetur, erat id rutrum posuere,
+dui velit dictum mi, quis tincidunt magna diam sit amet nunc. Etiam dui augue,
+sollicitudin rhoncus nisl a, rhoncus tempor purus.
+
+Suspendisse cursus erat et metus fermentum ullamcorper. Etiam eros arcu, dapibus
+quis efficitur ut, congue id nunc. Pellentesque aliquam venenatis convallis.
+Nulla nisi justo, aliquet quis lacus eget, aliquet maximus velit. Maecenas ex
+turpis, iaculis eget dignissim non, efficitur vel mi. Maecenas pharetra elit
+ornare sem suscipit ornare id id sapien. Vivamus sem neque, consectetur vitae
+aliquet non, finibus eu lectus. Fusce aliquam ipsum ut viverra vehicula. Donec
+ultrices varius nulla vel finibus. Donec convallis fringilla ante id porta.
+
+\section{Première section}
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor
+incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis
+nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu
+fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in
+culpa qui officia deserunt mollit anim id est laborum.
+
+\section{Seconde section}
+
+Voici un exemple de code en Python :
+
+{\large
+  \begin{minted}[frame=single]{python}
+def hello_world():
+    print("Hello, World!")
+hello_world()
+  \end{minted}
+}
+
+Un exemple d'image flottante (Fig.~\ref{fig:example}).
+
+\begin{figure}[!ht]
+  \centering
+  \frame{\includegraphics[width=.85\textwidth]{layered_architectures.png}}
+  \caption{Une architecture en couches}\label{fig:example}
+\end{figure}
+
+\section*{Conclusion}
+
+Suspendisse sit amet nisi placerat, vestibulum nisl vel, iaculis nunc.
+Suspendisse quis libero vel ipsum gravida congue nec id arcu. Donec vel mi
+viverra, commodo urna vitae, tincidunt lectus. Fusce pellentesque, lectus a
+placerat vestibulum, magna lectus placerat nibh, vehicula pellentesque lacus
+erat non nulla. Suspendisse maximus, turpis at suscipit egestas, libero massa
+ultrices libero, at tincidunt velit eros a eros. Maecenas id tempor nunc.
+Phasellus condimentum porttitor sapien in sagittis. Proin in metus diam. Mauris
+in turpis sed ex viverra iaculis. Sed lobortis, tellus vitae congue blandit, leo
+elit auctor libero, id tempor ante dolor quis quam. Donec eget ligula quam.
+Maecenas porttitor massa vel felis elementum tristique.
+
+%------------------------------------------------------------------------------
+%	BIBLIOGRAPHY
+%------------------------------------------------------------------------------
+
+\nocite{*}
+\bibliographystyle{plain}
+\bibliography{bibliography}
+
+%------------------------------------------------------------------------------
+% BACK MATTER
+%------------------------------------------------------------------------------
+\appendix
+
+\section{Section en annexe}
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor
+incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis
+nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
+Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu
+fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in
+culpa qui officia deserunt mollit anim id est laborum.
+
+\end{document}
