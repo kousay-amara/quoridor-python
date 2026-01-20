@@ -100,14 +100,61 @@ non-trivial challenges for both human players and automated systems. This
 project builds upon these existing ideas while focusing primarily on the
 design of a robust, extensible, and well-engineered software implementation.
 
-\section{Première section}
+\section{Classification du jeu et complexité}
 
-Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor
-incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis
-nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
-Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu
-fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in
-culpa qui officia deserunt mollit anim id est laborum.
+\subsection{Classification du jeu}
+
+\textbf{Jeu de stratégie combinatoire abstrait :}
+\begin{itemize}
+  \item Pas de thème narratif fort, pas de dés, tout repose sur la logique et
+    les mouvements.
+  \item Pour Quoridor, c'est un duel de pure logique.
+\end{itemize}
+
+\textbf{Information parfaite :}
+\begin{itemize}
+  \item Aucune information cachée, chaque joueur connaît l'état du jeu à tout
+    moment.
+  \item Pour Quoridor, chaque joueur voit les murs adverses, les positions, le
+    nombre de murs restants.
+\end{itemize}
+
+\textbf{Déterministe :}
+\begin{itemize}
+  \item La résolution d'une action a un coup unique, aucun hasard.
+  \item Implication : on peut utiliser des algorithmes comme MiniMax car on
+    peut prévoir les coups futurs.
+\end{itemize}
+
+\subsection{Complexité de l'espace d'état}
+
+La thèse de Lisa Glendenning (2005) estime l'espace d'états du Quoridor à
+$10^{42}$ configurations légales \cite{Glendenning2005}. En comparaison :
+\begin{itemize}
+  \item Dames : $10^{20}$.
+  \item Échecs : $10^{46}$.
+  \item Go : $10^{172}$.
+\end{itemize}
+
+La complexité est proche des échecs, il est donc impossible de stocker toutes
+les positions en mémoire ou de résoudre le jeu par force brute (connaître le
+premier coup parfait dès le début).
+
+\subsection{Complexité de l'arbre de jeu et facteur de branchement}
+
+Au début d'une partie, il existe $8 \times 8 = 64$ positions possibles pour un
+mur, multipliées par 2 orientations, soit 128 coups légaux de placement, plus
+3 déplacements possibles, pour un total de 131 coups légaux.
+
+D'après Mertens (2006), le facteur de branchement moyen est d'environ 60, ce
+qui est élevé \cite{Mertens2006}. À titre de comparaison, il est d'environ 35
+aux échecs (et 250 au Go). Avec un facteur de 60, la taille de l'arbre de
+recherche explose rapidement : à profondeur 3, on obtient $60^3 \approx 216000$
+nœuds (contre environ 42000 aux échecs).
+
+Conclusion technique : il est essentiel d'utiliser un élagage alpha-bêta et
+de concevoir une heuristique forte.
+
 
 \section{Rules of the Game}
 
@@ -230,23 +277,119 @@ In the standard rules of Quoridor, draws are rare and generally not expected
 under normal play conditions, as players always have at least one legal move
 available until a pawn reaches its goal.
 
-Voici un exemple de code en Python :
+\section{Algorithms and Data Structures}
 
-{\large
-  \begin{minted}[frame=single]{python}
-def hello_world():
-    print("Hello, World!")
-hello_world()
-  \end{minted}
-}
+This section describes the data structures and algorithms selected for the
+implementation of the Quoridor game. The objective is to justify the chosen
+representations and algorithmic approaches with respect to the rules of the
+game and its inherent complexity, rather than to provide implementation-level
+details.
 
-Un exemple d'image flottante (Fig.~\ref{fig:example}).
+\subsection{Board Representation}
 
-\begin{figure}[!ht]
-  \centering
-  \frame{\includegraphics[width=.85\textwidth]{layered_architectures.png}}
-  \caption{Une architecture en couches}\label{fig:example}
-\end{figure}
+The Quoridor board is a fixed-size square grid of dimension 9×9 in the
+standard configuration. Each square represents a possible position for a pawn,
+while walls block movement between adjacent squares. Internally, the board is
+represented as a structured data object storing the positions of all pawns,
+the placement and orientation of walls, and the board dimensions.
+
+To support efficient rule validation and path analysis, the board
+representation must allow fast queries about adjacency relations between
+squares and the presence of blocking walls. This requirement naturally leads
+to an abstraction that separates static board geometry from dynamic
+connectivity.
+
+\subsection{Graph-Based Modeling}
+
+Following existing academic approaches, the board is modeled as a graph in
+which each square corresponds to a vertex and each legal movement between
+adjacent squares corresponds to an edge. Wall placements dynamically modify
+this graph by removing edges, thereby blocking movement between affected
+squares.
+
+This modeling approach has been widely adopted in the literature, notably in
+the work of Glendenning (2005), which formalizes Quoridor as a graph-based game
+and uses graph traversal algorithms to analyze movement and wall legality
+\cite{glendenning2005quoridor}. By representing the board as a graph,
+pathfinding and connectivity constraints can be expressed in a uniform and
+well-understood framework.
+
+Pawn positions are treated separately from walls in this model. Since pawns
+can be jumped over according to the rules, they do not permanently block
+vertices or edges in the graph and are instead handled dynamically during move
+validation.
+
+\subsection{Pawn Movement and Jump Handling}
+
+Basic pawn movement corresponds to traversing an edge between two adjacent
+vertices in the graph. Jump mechanics introduce special movement cases when
+two pawns are adjacent and no wall separates them. In such situations, a pawn
+may jump over an opposing pawn to the square immediately beyond it, provided
+that square is reachable.
+
+If a direct jump is not possible due to a wall or the edge of the board,
+diagonal movements are permitted under specific conditions. As suggested in
+Glendenning's formalization, these jump rules are not encoded directly in the
+static graph structure but are instead evaluated dynamically when determining
+the set of legal moves available to a pawn at a given state. This approach
+keeps the underlying graph representation simple while preserving full rule
+correctness.
+
+\subsection{Wall Placement Validation}
+
+Wall placement is subject to strict legality constraints. In addition to
+geometric restrictions such as non-overlapping and proper alignment, the rules
+require that every player must retain at least one valid path from their pawn's
+current position to their target edge after a wall is placed.
+
+To enforce this constraint, the proposed wall placement is simulated by
+temporarily removing the corresponding edges from the graph. A reachability
+test is then performed for each pawn to verify that a path to the goal still
+exists. This problem naturally reduces to a graph traversal task.
+
+Both breadth-first search (BFS) and Dijkstra's algorithm are suitable for this
+purpose. Since all movements have uniform cost, BFS is sufficient and more
+efficient in practice. This approach is consistent with the methods described
+in Glendenning (2005) and later works, which rely on shortest-path or
+reachability checks to validate wall placements.
+
+If at least one path exists for every player, the wall placement is accepted;
+otherwise, it is rejected as illegal.
+
+\subsection{Shortest Path Evaluation}
+
+Shortest-path computations are also useful beyond wall validation. By
+computing the minimum number of steps required for a pawn to reach its target
+edge, the system can estimate player progress and relative advantage.
+
+Such evaluations are commonly used in artificial intelligence research on
+Quoridor, as described by Mertens (2012), where shortest-path distances serve
+as heuristic features for comparing game states \cite{mertens2012quoridor}. In
+the context of this project, these computations may later be reused to support
+automated players or provide game analysis features.
+
+\subsection{Algorithmic Complexity}
+
+Although the overall state space of Quoridor is extremely large, the
+algorithms used for rule enforcement operate on a fixed-size graph. The number
+of vertices is bounded by the number of board squares, and the number of edges
+is limited by local adjacency relations.
+
+As a result, graph traversal algorithms such as BFS run in linear time
+relative to the size of the board and remain efficient even when executed
+repeatedly during gameplay. This makes the proposed approach suitable for
+interactive use and ensures that legality checks do not introduce noticeable
+delays.
+
+\subsection{Summary}
+
+The combination of grid-based data structures and graph algorithms provides a
+robust and conceptually clear foundation for implementing Quoridor. Modeling
+the board as a graph allows pawn movement, wall placement, and path validation
+to be handled in a unified manner using well-established algorithmic
+techniques. This approach is consistent with existing academic work and aligns
+with the goals of correctness, efficiency, and extensibility.
+
 
 \section*{Conclusion}
 

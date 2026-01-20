@@ -1,0 +1,42 @@
+\begin{thebibliography}{1}
+
+\bibitem{Browne2014}
+Cameron Browne.
+\newblock Bitboard methods for games.
+\newblock {\em ICGA Journal}, 37(2):67--84, June 2014.
+
+\bibitem{gigamicquoridorrules}
+{Gigamic}.
+\newblock Quoridor official rules, 1997.
+\newblock Accessed: 2025-01.
+
+\bibitem{glendenning2005quoridor}
+Lisa Glendenning.
+\newblock Formalizing the game of quoridor.
+\newblock Undergraduate thesis, University of New Mexico, 2005.
+\newblock Accessed: 2025-01.
+
+\bibitem{Glendenning2005}
+Lisa Glendenning.
+\newblock Mastering quoridor.
+\newblock B.s. thesis, The University of New Mexico, Albuquerque, New Mexico,
+  2005.
+
+\bibitem{ison2018mctsquoridor}
+J.~Ison et~al.
+\newblock Monte carlo tree search for the game of quoridor.
+\newblock {\em IEEE Conference on Computational Intelligence and Games}, 2018.
+\newblock Accessed: 2025-01.
+
+\bibitem{Mertens2006}
+P.~J.~C. Mertens.
+\newblock A quoridor-playing agent, June 2006.
+\newblock B.Sc. paper.
+
+\bibitem{mertens2012quoridor}
+Thomas Mertens.
+\newblock The game of quoridor.
+\newblock Bachelor thesis, Maastricht University, 2012.
+\newblock Accessed: 2025-01.
+
+\end{thebibliography}
