@@ -390,6 +390,44 @@ to be handled in a unified manner using well-established algorithmic
 techniques. This approach is consistent with existing academic work and aligns
 with the goals of correctness, efficiency, and extensibility.
 
+\section{Target Architecture}
+
+The proposed architecture is intentionally minimal and organized into three
+main blocks to reduce dependencies and keep validation straightforward.
+
+\textbf{Core (domain)}: contains the game state (board, pawns, walls) and all
+Quoridor rules (moves, jumps, wall placement, victory). This part has no
+dependency on user interfaces.
+
+\textbf{Application}: orchestrates a game session (turn management, action
+application, global checks). It is the single entry point for the interfaces.
+
+\textbf{Interfaces}: a command-line interface (CLI) and a graphical interface
+(GUI) that only collect player actions and display the current game state.
+
+Dependencies go strictly from interfaces to application, then to the core. This
+keeps the game logic testable and independent from UI choices.
+
+\textbf{Expected core functions}:
+\begin{itemize}
+  \item A game service that applies an action and checks for end-of-game.
+  \item A validation module for moves and wall placement.
+  \item A pathfinding module (BFS) to ensure at least one path remains after
+    any wall placement.
+\end{itemize}
+
+In practice, the UI translates user input into an action (move or wall), the
+application layer validates and applies it through the core, then returns the
+updated state back to the UI for rendering. This simple flow avoids circular
+dependencies and makes it easy to test the rules separately from the interfaces.
+
+\begin{center}
+  \texttt{Interface (CLI/GUI) $\rightarrow$ Application $\rightarrow$ Core}
+\end{center}
+
+This level of detail is sufficient to justify the structure without adding
+unnecessary complexity.
+
 
 \section*{Extended Specifications}
 

@@ -55,6 +55,18 @@ htmlcov/
 docs/_build/
 docs/.doctrees/
 
+# LaTeX
+*.aux
+*.bbl
+*.blg
+*.out
+*.toc
+*.lof
+*.lot
+*.fls
+*.fdb_latexmk
+*.synctex.gz
+
 # Logs
 *.log
 logs/
