@@ -391,6 +391,72 @@ techniques. This approach is consistent with existing academic work and aligns
 with the goals of correctness, efficiency, and extensibility.
 
 
+\section*{Extended Specifications}
+
+\subsection*{F20. Pawn Movement and Jump Mechanism}
+
+\textbf{Target functionality:} Allow the current player to move their pawn to a free adjacent square, or to perform a jump over an opponent if the conditions are met.
+
+\subsubsection*{1. Prerequisites and Sub-requirements}
+\textbf{Prerequisites:}
+\begin{itemize}
+    \item \textbf{F15 (Interactive Shell):} The system must be able to receive and parse a command such as "e2-e3" or "e2-e4".
+    \item \textbf{F26 (Graph Module):} The board must be modeled as a graph to verify connectivity between squares.
+    \item \textbf{F1 (Game Management):} The game is started and it is the concerned player’s turn.
+\end{itemize}
+
+\textbf{Sub-requirements:}
+\begin{itemize}
+    \item \textbf{Parsing:} Convert alphanumeric coordinates (e.g. "e2") into graph indices or $(x,y)$ coordinates.
+    \item \textbf{Topological Validation:}
+    \begin{itemize}
+        \item Simple case: Is the target square adjacent (distance = 1)?
+        \item Jump case: Is the target square at distance = 2 (aligned or diagonal)?
+    \end{itemize}
+    \item \textbf{Jump Detection:} If the target is at distance 2, verify that an opponent pawn strictly occupies the intermediate square.
+    \item \textbf{Wall Verification:} Ensure that no wall blocks the path (neither between the start and the opponent, nor between the opponent and the destination).
+\end{itemize}
+
+\subsubsection*{2. Functions and Signatures}
+
+\textbf{Name:} \texttt{is\_move\_valid}  
+
+\textbf{Role:} Validates whether a move (simple movement or jump) is legal according to the current board state and the opponents’ positions.
+
+\textbf{Signature (Python):}
+\begin{verbatim}
+def is_move_valid(board: Graph, players: list, start: str, end: str) -> bool:
+\end{verbatim}
+
+\newpage
+
+\subsubsection*{3. Unit Tests (Examples)}
+\begin{itemize}
+    \item \textbf{Test 1 (Simple Move):}
+    \begin{itemize}
+        \item \textit{Input:} Player 1 at "e2", target "e3". No wall, free square.
+        \item \textit{Output:} \texttt{True}.
+    \end{itemize}
+
+    \item \textbf{Test 2 (Wall Obstacle):}
+    \begin{itemize}
+        \item \textit{Input:} Player 1 at "e2", target "e3". Horizontal wall present at "e2h".
+        \item \textit{Output:} \texttt{False}.
+    \end{itemize}
+
+    \item \textbf{Test 3 (Valid Direct Jump):}
+    \begin{itemize}
+        \item \textit{Input:} Player 1 at "e2", Player 2 at "e3". Player 1 targets "e4" (face-to-face configuration).
+        \item \textit{Output:} \texttt{True}.
+    \end{itemize}
+
+    \item \textbf{Test 4 (Blocked Jump):}
+    \begin{itemize}
+        \item \textit{Input:} Player 1 at "e2", Player 2 at "e3". Player 1 targets "e4". A wall is present behind Player 2.
+        \item \textit{Output:} \texttt{False} (The jump is not possible).
+    \end{itemize}
+\end{itemize}
+
 \section*{Conclusion}
 
 Suspendisse sit amet nisi placerat, vestibulum nisl vel, iaculis nunc.
