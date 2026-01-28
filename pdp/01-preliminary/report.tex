@@ -390,43 +390,55 @@ to be handled in a unified manner using well-established algorithmic
 techniques. This approach is consistent with existing academic work and aligns
 with the goals of correctness, efficiency, and extensibility.
 
-\section{Target Architecture}
+\section{Architecture logicielle : MVC}
 
-The proposed architecture is intentionally minimal and organized into three
-main blocks to reduce dependencies and keep validation straightforward.
+\subsection{Objectifs architecturaux}
+L’architecture du projet a pour objectif de concevoir un moteur de jeu robuste, modulaire et extensible, tout en respectant strictement les règles du jeu Quoridor. Elle doit permettre une bonne testabilité du cœur applicatif, faciliter l’ajout de nouvelles interfaces utilisateur et préparer l’intégration de fonctionnalités avancées telles que l’intelligence artificielle ou le jeu en réseau.
 
-\textbf{Core (domain)}: contains the game state (board, pawns, walls) and all
-Quoridor rules (moves, jumps, wall placement, victory). This part has no
-dependency on user interfaces.
+Pour répondre à ces objectifs, nous avons adopté une architecture basée sur le modèle MVC (Model--View--Controller), adaptée au contexte spécifique d’un moteur de jeu.
 
-\textbf{Application}: orchestrates a game session (turn management, action
-application, global checks). It is the single entry point for the interfaces.
+\subsection{Couche Domaine -- Model}
+La couche Domaine correspond au \textbf{Model} du MVC. Elle regroupe l’ensemble des règles du jeu et des structures de données, sans dépendance vis-à-vis des interfaces utilisateur ou des mécanismes d’entrée/sortie.
 
-\textbf{Interfaces}: a command-line interface (CLI) and a graphical interface
-(GUI) that only collect player actions and display the current game state.
-
-Dependencies go strictly from interfaces to application, then to the core. This
-keeps the game logic testable and independent from UI choices.
-
-\textbf{Expected core functions}:
+Elle contient notamment :
 \begin{itemize}
-  \item A game service that applies an action and checks for end-of-game.
-  \item A validation module for moves and wall placement.
-  \item A pathfinding module (BFS) to ensure at least one path remains after
-    any wall placement.
+    \item \texttt{GameState}, représentant l’état complet d’une partie (plateau, joueurs, murs, tour courant) ;
+    \item \texttt{Board} et \texttt{Graph}, assurant la modélisation du plateau sous forme de graphe ;
+    \item les entités du jeu (\texttt{Player}, \texttt{Wall}, \texttt{Position}) ;
+    \item des modules de validation (\texttt{MoveValidator}, \texttt{WallValidator}) ;
+    \item un module de recherche de chemin (\texttt{PathfindingBFS}) permettant de vérifier l’accessibilité du plateau après la pose de murs.
 \end{itemize}
 
-In practice, the UI translates user input into an action (move or wall), the
-application layer validates and applies it through the core, then returns the
-updated state back to the UI for rendering. This simple flow avoids circular
-dependencies and makes it easy to test the rules separately from the interfaces.
+Cette séparation garantit que toutes les règles du jeu sont centralisées dans une couche indépendante, facilitant ainsi la validation des règles et les tests unitaires.
 
-\begin{center}
-  \texttt{Interface (CLI/GUI) $\rightarrow$ Application $\rightarrow$ Core}
-\end{center}
+\subsection{Couche Application -- Service applicatif}
+La couche Application assure l’orchestration globale du jeu et joue le rôle de point de coordination entre les interfaces utilisateur et la logique métier. Elle est principalement incarnée par la classe \texttt{GameService}.
 
-This level of detail is sufficient to justify the structure without adding
-unnecessary complexity.
+Les responsabilités de \texttt{GameService} sont les suivantes :
+\begin{itemize}
+    \item recevoir les actions produites par les interfaces utilisateur ;
+    \item orchestrer la validation des coups via les modules du domaine ;
+    \item appliquer les actions valides à l’état du jeu ;
+    \item gérer l’enchaînement des tours ;
+    \item détecter les conditions de fin de partie et déterminer le gagnant.
+\end{itemize}
+
+Ce choix garantit que toute modification de l’état du jeu passe par un point de contrôle unique, assurant la cohérence globale du moteur.
+
+\subsection{Couche Vue -- Interfaces utilisateur}
+La couche Vue regroupe les différentes interfaces utilisateur du projet :
+\begin{itemize}
+    \item une interface en ligne de commande (CLI) ;
+    \item une interface graphique (GUI).
+\end{itemize}
+
+Ces interfaces ont pour rôle exclusif de collecter les entrées utilisateur, de les traduire en actions métier et d’afficher l’état courant du jeu. Elles ne contiennent aucune logique métier et n’accèdent jamais directement à la couche Domaine.
+
+Cette organisation rend les interfaces interchangeables sans impact sur le cœur du moteur de jeu.
+
+\subsection{Synthèse}
+En conclusion, l’architecture MVC adoptée dans ce projet constitue une base solide pour le développement incrémental du moteur de jeu. Elle permet de garantir une séparation claire des responsabilités, une bonne testabilité du cœur applicatif et une évolutivité compatible avec les extensions prévues par le cahier des charges.
+
 
 
 \section*{Extended Specifications}
