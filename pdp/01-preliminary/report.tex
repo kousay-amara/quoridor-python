@@ -411,7 +411,7 @@ Elle contient notamment :
 
 Cette séparation garantit que toutes les règles du jeu sont centralisées dans une couche indépendante, facilitant ainsi la validation des règles et les tests unitaires.
 
-\subsection{Couche Application -- Service applicatif}
+\subsection{Couche Application -- Controller}
 La couche Application assure l’orchestration globale du jeu et joue le rôle de point de coordination entre les interfaces utilisateur et la logique métier. Elle est principalement incarnée par la classe \texttt{GameService}.
 
 Les responsabilités de \texttt{GameService} sont les suivantes :
@@ -425,7 +425,7 @@ Les responsabilités de \texttt{GameService} sont les suivantes :
 
 Ce choix garantit que toute modification de l’état du jeu passe par un point de contrôle unique, assurant la cohérence globale du moteur.
 
-\subsection{Couche Vue -- Interfaces utilisateur}
+\subsection{Couche Vue -– Interfaces utilisateur (View)}
 La couche Vue regroupe les différentes interfaces utilisateur du projet :
 \begin{itemize}
     \item une interface en ligne de commande (CLI) ;
