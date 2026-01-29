@@ -378,6 +378,98 @@ as heuristic features for comparing game states \cite{mertens2012quoridor}. In
 the context of this project, these computations may later be reused to support
 automated players or provide game analysis features.
 
+\subsection{Adversarial Search: Minimax and Alpha-Beta Pruning}
+
+Quoridor is a perfect-information, deterministic game, making it well-suited
+for adversarial search algorithms. The Minimax algorithm provides a
+theoretically optimal strategy for such games by exploring the game tree and
+selecting moves that maximize the minimum gain while assuming the opponent
+plays optimally.
+
+However, given Quoridor's high branching factor (approximately 60 on average)
+and large state space, an exhaustive Minimax search is computationally
+intractable beyond very shallow depths. Alpha-beta pruning addresses this
+limitation by eliminating branches that cannot influence the final decision,
+thereby reducing the number of nodes evaluated without affecting the optimality
+of the result.
+
+The alpha-beta algorithm maintains two values during the search:
+\begin{itemize}
+  \item \textbf{Alpha}: the best value that the maximizing player can achieve
+    so far along the path to the root.
+  \item \textbf{Beta}: the best value that the minimizing player can achieve
+    so far along the path to the root.
+\end{itemize}
+
+When beta becomes less than or equal to alpha, the remaining branches at that
+node can be pruned, as they cannot lead to a better outcome than what has
+already been found. This pruning can reduce the number of nodes evaluated from
+$O(b^d)$ to $O(b^{d/2})$ in the best case, where $b$ is the branching factor
+and $d$ is the search depth.
+
+\subsubsection{Heuristic Evaluation Function}
+
+Since exploring the entire game tree to terminal states is infeasible, a
+heuristic evaluation function is used to estimate the value of non-terminal
+game states. This function assigns a numerical score to a position, typically
+from the perspective of the current player, where higher scores indicate more
+favorable positions.
+
+For Quoridor, an effective heuristic should consider multiple factors that
+influence the game outcome:
+
+\begin{itemize}
+  \item \textbf{Distance to goal}: The shortest path distance from each
+    player's pawn to their target edge, computed using BFS. A player closer to
+    their goal has a positional advantage.
+  \item \textbf{Wall resources}: The number of walls remaining for each player.
+    Walls are valuable strategic resources that can be used to block opponents
+    or create advantageous positions.
+  \item \textbf{Mobility}: The number of legal moves available to each player.
+    Higher mobility provides more tactical options and flexibility.
+\end{itemize}
+
+The following pseudo-code illustrates a weighted heuristic function that
+combines these factors:
+
+\begin{verbatim}
+function heuristic(state, player):
+    score = 0
+    w_dist = 10
+    w_walls = 3
+    w_mobility = 1
+
+    // 1. Distance to goal
+    my_distance = BFS(player)
+    opponent_distance = BFS(opponent)
+    score = score + w_dist * (opponent_distance - my_distance)
+    
+    // 2. Wall resources
+    my_walls = remaining_walls_count(player)
+    opponent_walls = remaining_walls_count(opponent)
+    score = score + w_walls * (my_walls - opponent_walls)
+    
+    // 3. Mobility
+    my_moves = possible_moves_count(player)
+    opponent_moves = possible_moves_count(opponent)
+    score = score + w_mobility * (my_moves - opponent_moves)
+    
+    return score
+\end{verbatim}
+
+The weights ($w_{\mathrm{dist}} = 10$, $w_{\mathrm{walls}} = 3$, $w_{\mathrm{mobility}} = 1$)
+reflect the relative importance of each factor. Distance to goal is weighted
+most heavily, as it directly relates to the primary objective of reaching the
+target edge. Wall resources are moderately weighted, as they provide strategic
+options but are not immediately decisive. Mobility has the lowest weight, as it
+is a secondary tactical consideration.
+
+This heuristic function is evaluated at the leaves of the search tree (or at a
+fixed depth limit) and the values are propagated upward using the Minimax
+algorithm with alpha-beta pruning. The combination of efficient pruning and a
+well-designed heuristic enables the implementation of competitive automated
+players while maintaining reasonable computational requirements.
+
 \subsection{Algorithmic Complexity}
 
 Although the overall state space of Quoridor is extremely large, the
@@ -449,117 +541,116 @@ This separation allows the user interfaces to remain interchangeable without imp
 \subsection{Summary}
 In conclusion, the layered architecture adopted in this project provides a solid foundation for the incremental development of the game engine. It guarantees a clear separation of responsibilities, good testability of the core logic, and extensibility compatible with the future enhancements defined in the project specifications.
 
-\section{Diagramme UML}
+\section{UML Diagram}
 
-Le diagramme UML ci-dessous illustre l'architecture détaillée du système
-Quoridor, en présentant les classes principales, leurs attributs, leurs méthodes
-et les relations entre elles.
+The UML diagram below illustrates the detailed architecture of the Quoridor
+system, presenting the main classes, their attributes, their methods, and the
+relationships between them.
 
 \begin{figure}[!ht]
   \centering
   \includegraphics[width=\textwidth]{resources/UML.jpg}
-  \caption{Diagramme de classes UML du système Quoridor}
+  \caption{UML class diagram of the Quoridor system}
   \label{fig:uml-diagram}
 \end{figure}
 
-\subsection{Description du diagramme}
+\subsection{Diagram Description}
 
-Le diagramme de classes présente une architecture en couches clairement séparées,
-avec une distinction nette entre la logique métier (core), la couche
-d'application et les interfaces utilisateur.
+The class diagram presents a clearly separated layered architecture, with a
+distinct separation between the business logic (core), the application layer,
+and the user interfaces.
 
-\subsubsection{Énumérations et types de base}
+\subsubsection{Enumerations and Base Types}
 
-Le diagramme définit deux énumérations essentielles :
+The diagram defines two essential enumerations:
 \begin{itemize}
-  \item \texttt{TargetEdge} : définit les quatre bords cibles possibles
-    (\texttt{TOP}, \texttt{BOTTOM}, \texttt{LEFT}, \texttt{RIGHT}) vers lesquels
-    chaque joueur doit se diriger.
-  \item \texttt{Orientation} : spécifie l'orientation des murs
+  \item \texttt{TargetEdge}: defines the four possible target edges
+    (\texttt{TOP}, \texttt{BOTTOM}, \texttt{LEFT}, \texttt{RIGHT}) toward which
+    each player must move.
+  \item \texttt{Orientation}: specifies the orientation of walls
     (\texttt{HORIZONTAL}, \texttt{VERTICAL}).
 \end{itemize}
 
-\subsubsection{Classes principales du domaine}
+\subsubsection{Main Domain Classes}
 
-\textbf{Position} : Représente une coordonnée sur le plateau avec des méthodes
-pour calculer les distances entre positions.
+\textbf{Position}: Represents a coordinate on the board with methods for
+calculating distances between positions.
 
-\textbf{Player} : Modélise un joueur avec son identifiant, la position de son
-pion, son bord cible et le nombre de murs restants.
+\textbf{Player}: Models a player with their identifier, their pawn's position,
+their target edge, and the number of remaining walls.
 
-\textbf{Wall} : Représente un mur placé sur le plateau, défini par une position
-d'ancrage et une orientation.
+\textbf{Wall}: Represents a wall placed on the board, defined by an anchor
+position and an orientation.
 
-\textbf{Board} : Encapsule le plateau de jeu et maintient une référence à un
-graphe sous-jacent pour la modélisation de la connectivité.
+\textbf{Board}: Encapsulates the game board and maintains a reference to an
+underlying graph for connectivity modeling.
 
-\subsubsection{Modélisation par graphe}
+\subsubsection{Graph-Based Modeling}
 
-\textbf{Graph} : Classe centrale qui modélise le plateau comme un graphe, où les
-sommets correspondent aux cases et les arêtes aux mouvements légaux. Cette
-classe gère dynamiquement l'ajout et la suppression d'arêtes lors du placement
-de murs, et fournit des méthodes pour vérifier si un chemin est bloqué.
+\textbf{Graph}: Central class that models the board as a graph, where vertices
+correspond to squares and edges to legal movements. This class dynamically
+manages the addition and removal of edges when placing walls, and provides
+methods to check if a path is blocked.
 
-\textbf{PathfindingBFS} : Implémente l'algorithme de parcours en largeur
-(breadth-first search) pour vérifier l'existence de chemins et calculer les
-distances minimales vers les objectifs. Cette classe est cruciale pour valider
-la légalité des placements de murs.
+\textbf{PathfindingBFS}: Implements the breadth-first search algorithm to verify
+the existence of paths and calculate minimum distances to goals. This class is
+crucial for validating the legality of wall placements.
 
-\subsubsection{État du jeu et actions}
+\subsubsection{Game State and Actions}
 
-\textbf{GameState} : Contient l'état complet du jeu, incluant le plateau, la
-liste des joueurs (2 à 4), la liste des murs placés, et l'index du joueur
-courant. Cette classe centralise toutes les informations nécessaires pour
-représenter un état de partie.
+\textbf{GameState}: Contains the complete game state, including the board, the
+list of players (2 to 4), the list of placed walls, and the current player's
+index. This class centralizes all information necessary to represent a game
+state.
 
-\textbf{Action} : Classe abstraite représentant une action générique. Deux
-classes concrètes en héritent :
+\textbf{Action}: Abstract class representing a generic action. Two concrete
+classes inherit from it:
 \begin{itemize}
-  \item \texttt{MoveAction} : représente un déplacement de pion avec une
-    position de départ et une position d'arrivée.
-  \item \texttt{PlaceWallAction} : représente le placement d'un mur.
+  \item \texttt{MoveAction}: represents a pawn movement with a starting
+    position and an ending position.
+  \item \texttt{PlaceWallAction}: represents the placement of a wall.
 \end{itemize}
 
-\subsubsection{Validation et logique métier}
+\subsubsection{Validation and Business Logic}
 
-\textbf{MoveValidator} : Valide les mouvements de pions en vérifiant la
-légalité topologique, la présence de murs bloquants, et les règles de saut.
+\textbf{MoveValidator}: Validates pawn movements by checking topological
+legality, the presence of blocking walls, and jump rules.
 
-\textbf{WallValidator} : Valide les placements de murs en s'assurant qu'ils
-respectent les contraintes géométriques et, surtout, qu'ils ne bloquent pas
-complètement le chemin d'un joueur vers son objectif. Cette validation utilise
-\texttt{PathfindingBFS} pour vérifier la connectivité.
+\textbf{WallValidator}: Validates wall placements by ensuring they respect
+geometric constraints and, most importantly, that they do not completely block
+a player's path to their goal. This validation uses \texttt{PathfindingBFS} to
+verify connectivity.
 
-\subsubsection{Couche d'application}
+\subsubsection{Application Layer}
 
-\textbf{GameService} : Service central qui orchestre le déroulement de la
-partie. Il maintient l'état du jeu, applique les actions, gère les tours de
-jeu, et détermine les conditions de fin de partie. Cette classe constitue le
-point d'entrée unique pour les interfaces utilisateur.
+\textbf{GameService}: Central service that orchestrates the game flow. It
+maintains the game state, applies actions, manages game turns, and determines
+end-of-game conditions. This class constitutes the unique entry point for user
+interfaces.
 
-\subsubsection{Interfaces utilisateur}
+\subsubsection{User Interfaces}
 
-\textbf{CLI} et \textbf{GUI} : Deux interfaces utilisateur distinctes qui
-partagent la même responsabilité : lire les actions des joueurs et afficher
-l'état du jeu. Elles dépendent toutes deux de \texttt{GameService} et
-\texttt{GameState}, mais n'interfèrent pas avec la logique métier.
+\textbf{CLI} and \textbf{GUI}: Two distinct user interfaces that share the same
+responsibility: reading player actions and displaying the game state. They both
+depend on \texttt{GameService} and \texttt{GameState}, but do not interfere with
+the business logic.
 
-\subsubsection{Relations et dépendances}
+\subsubsection{Relations and Dependencies}
 
-Le diagramme illustre clairement la séparation des responsabilités :
+The diagram clearly illustrates the separation of responsibilities:
 \begin{itemize}
-  \item Les relations de composition (diamant plein) montrent que
-    \texttt{GameService} possède un \texttt{GameState}, qui lui-même possède un
-    \texttt{Board} et des listes de \texttt{Player} et \texttt{Wall}.
-  \item Les dépendances (flèches en pointillés) indiquent que les interfaces
-    dépendent de la couche application, qui dépend elle-même des validateurs et
-    du pathfinding, respectant ainsi le principe de dépendance unidirectionnelle.
-  \item L'héritage (triangle creux) montre que \texttt{MoveAction} et
-    \texttt{PlaceWallAction} sont des spécialisations de \texttt{Action}.
+  \item Composition relationships (filled diamond) show that
+    \texttt{GameService} owns a \texttt{GameState}, which itself owns a
+    \texttt{Board} and lists of \texttt{Player} and \texttt{Wall}.
+  \item Dependencies (dashed arrows) indicate that interfaces depend on the
+    application layer, which itself depends on validators and pathfinding,
+    respecting the principle of unidirectional dependency.
+  \item Inheritance (hollow triangle) shows that \texttt{MoveAction} and
+    \texttt{PlaceWallAction} are specializations of \texttt{Action}.
 \end{itemize}
 
-Cette architecture garantit que la logique métier reste indépendante des
-interfaces, facilitant les tests, la maintenance et l'extensibilité du système.
+This architecture ensures that business logic remains independent of
+interfaces, facilitating testing, maintenance, and system extensibility.
 
 \section*{Extended Specifications}
 
