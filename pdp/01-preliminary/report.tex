@@ -100,60 +100,70 @@ non-trivial challenges for both human players and automated systems. This
 project builds upon these existing ideas while focusing primarily on the
 design of a robust, extensible, and well-engineered software implementation.
 
-\section{Classification du jeu et complexité}
+\section{Game Classification and Complexity}
 
-\subsection{Classification du jeu}
+\subsection{Game Classification}
 
-\textbf{Jeu de stratégie combinatoire abstrait :}
+\textbf{Abstract combinatorial strategy game:}
 \begin{itemize}
-  \item Pas de thème narratif fort, pas de dés, tout repose sur la logique et
-    les mouvements.
-  \item Pour Quoridor, c'est un duel de pure logique.
+  \item No strong narrative theme and no randomness; the game relies entirely
+    on logic and player decisions.
+  \item In the case of Quoridor, the game is a pure logical confrontation
+    between players.
 \end{itemize}
 
-\textbf{Information parfaite :}
+\textbf{Perfect information game:}
 \begin{itemize}
-  \item Aucune information cachée, chaque joueur connaît l'état du jeu à tout
-    moment.
-  \item Pour Quoridor, chaque joueur voit les murs adverses, les positions, le
-    nombre de murs restants.
+  \item There is no hidden information: the complete game state is known to
+    all players at all times.
+  \item In Quoridor, each player can see the positions of all pawns, all
+    placed walls, and the number of walls remaining for each opponent.
 \end{itemize}
 
-\textbf{Déterministe :}
+\textbf{Deterministic game:}
 \begin{itemize}
-  \item La résolution d'une action a un coup unique, aucun hasard.
-  \item Implication : on peut utiliser des algorithmes comme MiniMax car on
-    peut prévoir les coups futurs.
+  \item Each action leads to a single, well-defined outcome, with no element
+    of chance.
+  \item As a consequence, adversarial search algorithms such as Minimax can be
+    applied, since future game states can be fully predicted from the current
+    state.
 \end{itemize}
 
-\subsection{Complexité de l'espace d'état}
+\subsection{State Space Complexity}
 
-La thèse de Lisa Glendenning (2005) estime l'espace d'états du Quoridor à
-$10^{42}$ configurations légales \cite{Glendenning2005}. En comparaison :
+According to the thesis of Lisa Glendenning (2005), the state space of
+Quoridor is estimated to be on the order of $10^{42}$ legal configurations
+\cite{Glendenning2005}.
+For comparison:
 \begin{itemize}
-  \item Dames : $10^{20}$.
-  \item Échecs : $10^{46}$.
-  \item Go : $10^{172}$.
+  \item Checkers: approximately $10^{20}$ states.
+  \item Chess: approximately $10^{46}$ states.
+  \item Go: approximately $10^{172}$ states.
 \end{itemize}
 
-La complexité est proche des échecs, il est donc impossible de stocker toutes
-les positions en mémoire ou de résoudre le jeu par force brute (connaître le
-premier coup parfait dès le début).
+The state space complexity of Quoridor is therefore close to that of chess. As
+a result, it is impossible to store all possible positions in memory or to
+solve the game by brute-force methods, such as computing the optimal first
+move exhaustively.
 
-\subsection{Complexité de l'arbre de jeu et facteur de branchement}
+\subsection{Game Tree Complexity and Branching Factor}
 
-Au début d'une partie, il existe $8 \times 8 = 64$ positions possibles pour un
-mur, multipliées par 2 orientations, soit 128 coups légaux de placement, plus
-3 déplacements possibles, pour un total de 131 coups légaux.
+At the beginning of a game, there are $8 \times 8 = 64$ possible positions for
+placing a wall. Considering the two possible orientations (horizontal and
+vertical), this yields 128 legal wall placements. In addition, a player
+typically has up to 3 possible pawn moves. This results in a total of
+approximately 131 legal moves at the start of the game.
 
-D'après Mertens (2006), le facteur de branchement moyen est d'environ 60, ce
-qui est élevé \cite{Mertens2006}. À titre de comparaison, il est d'environ 35
-aux échecs (et 250 au Go). Avec un facteur de 60, la taille de l'arbre de
-recherche explose rapidement : à profondeur 3, on obtient $60^3 \approx 216000$
-nœuds (contre environ 42000 aux échecs).
+According to Mertens (2006), the average branching factor of Quoridor is
+around 60, which is relatively high \cite{Mertens2006}. For comparison: chess
+has an average branching factor of about 35, and Go has a branching factor of
+approximately 250. With a branching factor of 60, the size of the search tree
+grows extremely fast. At depth 3, this leads to roughly
+$60^3 \approx 216000$ nodes, compared to approximately 42000 nodes in chess.
 
-Conclusion technique : il est essentiel d'utiliser un élagage alpha-bêta et
-de concevoir une heuristique forte.
+Technical conclusion: it is essential to use alpha--beta pruning and to design
+strong heuristic evaluation functions in order to make adversarial search
+tractable.
 
 
 \section{Rules of the Game}
@@ -439,8 +449,6 @@ Cette organisation rend les interfaces interchangeables sans impact sur le cœur
 \subsection{Synthèse}
 En conclusion, l’architecture MVC adoptée dans ce projet constitue une base solide pour le développement incrémental du moteur de jeu. Elle permet de garantir une séparation claire des responsabilités, une bonne testabilité du cœur applicatif et une évolutivité compatible avec les extensions prévues par le cahier des charges.
 
-
-
 \section*{Extended Specifications}
 
 \subsection*{F20. Pawn Movement and Jump Mechanism}
@@ -507,19 +515,6 @@ def is_move_valid(board: Graph, players: list, start: str, end: str) -> bool:
     \end{itemize}
 \end{itemize}
 
-\section*{Conclusion}
-
-Suspendisse sit amet nisi placerat, vestibulum nisl vel, iaculis nunc.
-Suspendisse quis libero vel ipsum gravida congue nec id arcu. Donec vel mi
-viverra, commodo urna vitae, tincidunt lectus. Fusce pellentesque, lectus a
-placerat vestibulum, magna lectus placerat nibh, vehicula pellentesque lacus
-erat non nulla. Suspendisse maximus, turpis at suscipit egestas, libero massa
-ultrices libero, at tincidunt velit eros a eros. Maecenas id tempor nunc.
-Phasellus condimentum porttitor sapien in sagittis. Proin in metus diam. Mauris
-in turpis sed ex viverra iaculis. Sed lobortis, tellus vitae congue blandit, leo
-elit auctor libero, id tempor ante dolor quis quam. Donec eget ligula quam.
-Maecenas porttitor massa vel felis elementum tristique.
-
 %------------------------------------------------------------------------------
 %	BIBLIOGRAPHY
 %------------------------------------------------------------------------------
@@ -532,14 +527,4 @@ Maecenas porttitor massa vel felis elementum tristique.
 % BACK MATTER
 %------------------------------------------------------------------------------
 \appendix
-
-\section{Section en annexe}
-
-Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor
-incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis
-nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
-Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu
-fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in
-culpa qui officia deserunt mollit anim id est laborum.
-
 \end{document}
