@@ -400,54 +400,54 @@ to be handled in a unified manner using well-established algorithmic
 techniques. This approach is consistent with existing academic work and aligns
 with the goals of correctness, efficiency, and extensibility.
 
-\section{Architecture logicielle}
+\section{Software Architecture}
 
-\subsection{Objectifs architecturaux}
-L’architecture du projet a pour objectif de concevoir un moteur de jeu robuste, modulaire et extensible, tout en respectant strictement les règles du jeu Quoridor. Elle doit permettre une bonne testabilité du cœur applicatif, faciliter l’ajout de nouvelles interfaces utilisateur et préparer l’intégration de fonctionnalités avancées telles que l’intelligence artificielle ou le jeu en réseau.
+\subsection{Architectural Objectives}
+The objective of the project architecture is to design a robust, modular, and extensible game engine, while strictly respecting the rules of the game Quoridor. It must ensure good testability of the core logic, facilitate the addition of new user interfaces, and prepare the integration of advanced features such as artificial intelligence or network play.
 
-Pour répondre à ces objectifs, nous avons adopté une architecture logicielle organisée en couches, permettant une séparation claire des responsabilités entre les différentes parties du système.
+To achieve these objectives, we adopted a layered software architecture, enabling a clear separation of responsibilities between the different parts of the system.
 
-\subsection{Couche Domaine}
-La couche Domaine regroupe l’ensemble des règles du jeu et des structures de données. Elle est totalement indépendante des interfaces utilisateur ainsi que des mécanismes d’entrée/sortie.
+\subsection{Domain Layer}
+The Domain layer contains all the game rules and data structures. It is fully independent from user interfaces and input/output mechanisms.
 
-Elle contient notamment :
+It notably includes:
 \begin{itemize}
-    \item \texttt{GameState}, représentant l’état complet d’une partie (plateau, joueurs, murs, tour courant) ;
-    \item \texttt{Board} et \texttt{Graph}, assurant la modélisation du plateau sous forme de graphe ;
-    \item les entités du jeu (\texttt{Player}, \texttt{Wall}, \texttt{Position}) ;
-    \item des modules de validation (\texttt{MoveValidator}, \texttt{WallValidator}) ;
-    \item un module de recherche de chemin (\texttt{PathfindingBFS}) permettant de vérifier l’accessibilité du plateau après la pose de murs.
+    \item \texttt{GameState}, representing the complete state of a game (board, players, walls, current turn);
+    \item \texttt{Board} and \texttt{Graph}, responsible for modeling the board as a graph;
+    \item game entities (\texttt{Player}, \texttt{Wall}, \texttt{Position});
+    \item validation modules (\texttt{MoveValidator}, \texttt{WallValidator});
+    \item a pathfinding module (\texttt{PathfindingBFS}) used to verify board accessibility after wall placement.
 \end{itemize}
 
-Cette organisation garantit que toutes les règles du jeu sont centralisées dans une couche indépendante, facilitant ainsi la validation des règles et la mise en place de tests unitaires.
+This organization ensures that all game rules are centralized in an independent layer, which simplifies rule validation and enables effective unit testing.
 
-\subsection{Couche Application}
-La couche Application assure l’orchestration globale du jeu et joue le rôle de point de coordination entre les interfaces utilisateur et la logique métier. Elle est principalement incarnée par la classe \texttt{GameService}.
+\subsection{Application Layer}
+The Application layer is responsible for orchestrating the overall execution of the game and acts as a coordination point between the user interfaces and the domain logic. This role is mainly fulfilled by the \texttt{GameService} class.
 
-Les responsabilités de \texttt{GameService} sont les suivantes :
+The responsibilities of \texttt{GameService} include:
 \begin{itemize}
-    \item recevoir les actions produites par les interfaces utilisateur ;
-    \item déclencher leur validation via les modules de la couche Domaine ;
-    \item appliquer les actions valides à l’état du jeu ;
-    \item gérer l’enchaînement des tours ;
-    \item détecter les conditions de fin de partie et déterminer le gagnant.
+    \item receiving actions produced by the user interfaces;
+    \item triggering their validation through the Domain layer;
+    \item applying valid actions to the game state;
+    \item managing turn progression;
+    \item detecting end-of-game conditions and determining the winner.
 \end{itemize}
 
-Ce choix garantit que toute modification de l’état du jeu passe par un point de contrôle unique, assurant la cohérence globale du moteur.
+This design ensures that any modification of the game state passes through a single control point, guaranteeing the global consistency of the game engine.
 
-\subsection{Interfaces utilisateur}
-Les interfaces utilisateur constituent la couche la plus externe du système. Elles regroupent :
+\subsection{User Interfaces}
+The user interfaces constitute the outermost layer of the system. They include:
 \begin{itemize}
-    \item une interface en ligne de commande (CLI) ;
-    \item une interface graphique (GUI).
+    \item a command-line interface (CLI);
+    \item a graphical user interface (GUI).
 \end{itemize}
 
-Leur rôle se limite à collecter les entrées utilisateur, à les traduire en actions applicatives et à afficher l’état courant du jeu. Elles ne contiennent aucune logique métier et n’accèdent jamais directement à la couche Domaine.
+Their role is strictly limited to collecting user inputs, translating them into application-level actions, and displaying the current game state. They contain no domain logic and never directly access the Domain layer.
 
-Cette séparation permet de rendre les interfaces interchangeables sans impact sur le cœur du moteur de jeu.
+This separation allows the user interfaces to remain interchangeable without impacting the core game engine.
 
-\subsection{Synthèse}
-En conclusion, l’architecture en couches adoptée dans ce projet constitue une base solide pour le développement incrémental du moteur de jeu. Elle permet de garantir une séparation claire des responsabilités, une bonne testabilité du cœur applicatif et une évolutivité compatible avec les extensions prévues par le cahier des charges.
+\subsection{Summary}
+In conclusion, the layered architecture adopted in this project provides a solid foundation for the incremental development of the game engine. It guarantees a clear separation of responsibilities, good testability of the core logic, and extensibility compatible with the future enhancements defined in the project specifications.
 
 \section{Diagramme UML}
 
