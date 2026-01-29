@@ -400,15 +400,15 @@ to be handled in a unified manner using well-established algorithmic
 techniques. This approach is consistent with existing academic work and aligns
 with the goals of correctness, efficiency, and extensibility.
 
-\section{Architecture logicielle : MVC}
+\section{Architecture logicielle}
 
 \subsection{Objectifs architecturaux}
 L’architecture du projet a pour objectif de concevoir un moteur de jeu robuste, modulaire et extensible, tout en respectant strictement les règles du jeu Quoridor. Elle doit permettre une bonne testabilité du cœur applicatif, faciliter l’ajout de nouvelles interfaces utilisateur et préparer l’intégration de fonctionnalités avancées telles que l’intelligence artificielle ou le jeu en réseau.
 
-Pour répondre à ces objectifs, nous avons adopté une architecture basée sur le modèle MVC (Model--View--Controller), adaptée au contexte spécifique d’un moteur de jeu.
+Pour répondre à ces objectifs, nous avons adopté une architecture logicielle organisée en couches, permettant une séparation claire des responsabilités entre les différentes parties du système.
 
-\subsection{Couche Domaine -- Model}
-La couche Domaine correspond au \textbf{Model} du MVC. Elle regroupe l’ensemble des règles du jeu et des structures de données, sans dépendance vis-à-vis des interfaces utilisateur ou des mécanismes d’entrée/sortie.
+\subsection{Couche Domaine}
+La couche Domaine regroupe l’ensemble des règles du jeu et des structures de données. Elle est totalement indépendante des interfaces utilisateur ainsi que des mécanismes d’entrée/sortie.
 
 Elle contient notamment :
 \begin{itemize}
@@ -419,35 +419,35 @@ Elle contient notamment :
     \item un module de recherche de chemin (\texttt{PathfindingBFS}) permettant de vérifier l’accessibilité du plateau après la pose de murs.
 \end{itemize}
 
-Cette séparation garantit que toutes les règles du jeu sont centralisées dans une couche indépendante, facilitant ainsi la validation des règles et les tests unitaires.
+Cette organisation garantit que toutes les règles du jeu sont centralisées dans une couche indépendante, facilitant ainsi la validation des règles et la mise en place de tests unitaires.
 
-\subsection{Couche Application -- Controller}
+\subsection{Couche Application}
 La couche Application assure l’orchestration globale du jeu et joue le rôle de point de coordination entre les interfaces utilisateur et la logique métier. Elle est principalement incarnée par la classe \texttt{GameService}.
 
 Les responsabilités de \texttt{GameService} sont les suivantes :
 \begin{itemize}
     \item recevoir les actions produites par les interfaces utilisateur ;
-    \item orchestrer la validation des coups via les modules du domaine ;
+    \item déclencher leur validation via les modules de la couche Domaine ;
     \item appliquer les actions valides à l’état du jeu ;
     \item gérer l’enchaînement des tours ;
     \item détecter les conditions de fin de partie et déterminer le gagnant.
 \end{itemize}
 
-Ce choix garantit que toute modification de l'état du jeu passe par un point de contrôle unique, assurant la cohérence globale du moteur.
+Ce choix garantit que toute modification de l’état du jeu passe par un point de contrôle unique, assurant la cohérence globale du moteur.
 
-\subsection{Couche Vue -– Interfaces utilisateur (View)}
-La couche Vue regroupe les différentes interfaces utilisateur du projet :
+\subsection{Interfaces utilisateur}
+Les interfaces utilisateur constituent la couche la plus externe du système. Elles regroupent :
 \begin{itemize}
     \item une interface en ligne de commande (CLI) ;
     \item une interface graphique (GUI).
 \end{itemize}
 
-Ces interfaces ont pour rôle exclusif de collecter les entrées utilisateur, de les traduire en actions métier et d'afficher l'état courant du jeu. Elles ne contiennent aucune logique métier et n'accèdent jamais directement à la couche Domaine.
+Leur rôle se limite à collecter les entrées utilisateur, à les traduire en actions applicatives et à afficher l’état courant du jeu. Elles ne contiennent aucune logique métier et n’accèdent jamais directement à la couche Domaine.
 
-Cette organisation rend les interfaces interchangeables sans impact sur le cœur du moteur de jeu.
+Cette séparation permet de rendre les interfaces interchangeables sans impact sur le cœur du moteur de jeu.
 
 \subsection{Synthèse}
-En conclusion, l'architecture MVC adoptée dans ce projet constitue une base solide pour le développement incrémental du moteur de jeu. Elle permet de garantir une séparation claire des responsabilités, une bonne testabilité du cœur applicatif et une évolutivité compatible avec les extensions prévues par le cahier des charges.
+En conclusion, l’architecture en couches adoptée dans ce projet constitue une base solide pour le développement incrémental du moteur de jeu. Elle permet de garantir une séparation claire des responsabilités, une bonne testabilité du cœur applicatif et une évolutivité compatible avec les extensions prévues par le cahier des charges.
 
 \section{Diagramme UML}
 
