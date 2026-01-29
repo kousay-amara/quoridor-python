@@ -515,6 +515,44 @@ def is_move_valid(board: Graph, players: list, start: str, end: str) -> bool:
     \end{itemize}
 \end{itemize}
 
+\subsection*{F7. Undo and Redo Mechanism}
+
+In addition to rule enforcement and path validation, the game engine must
+support the ability to undo and redo actions. This functionality is essential
+for several reasons, including user interaction (undoing a mistaken move),
+artificial intelligence search (backtracking during Minimax exploration), and
+potential replay or analysis features.
+
+To support undo and redo operations efficiently, the game state evolution is
+modeled as a sequence of reversible actions rather than irreversible state
+mutations. Each player action, whether a pawn movement or a wall placement, is
+represented as an atomic operation that records all the information required
+to revert its effects.
+
+A stack-based approach is used to manage this mechanism. Two stacks are
+maintained:
+\begin{itemize}
+    \item an undo stack, which stores the history of applied actions;
+    \item a redo stack, which stores actions that have been undone and may be
+      reapplied.
+\end{itemize}
+
+When an action is executed, it is pushed onto the undo stack and the redo stack
+is cleared. Undoing an action consists of popping the most recent operation
+from the undo stack and applying its inverse, thereby restoring the previous
+game state. Redoing an action consists of popping an operation from the redo
+stack and reapplying it to the game state.
+
+This design aligns naturally with the requirements of adversarial search
+algorithms. During Minimax exploration, actions can be applied and reverted
+efficiently without duplicating entire board states, which significantly
+reduces memory usage and improves performance. Moreover, this approach
+maintains a clear separation between game logic and state history management.
+
+By modeling game evolution as a reversible sequence of actions, the undo/redo
+mechanism contributes to the robustness, testability, and extensibility of the
+overall system architecture.
+
 %------------------------------------------------------------------------------
 %	BIBLIOGRAPHY
 %------------------------------------------------------------------------------
