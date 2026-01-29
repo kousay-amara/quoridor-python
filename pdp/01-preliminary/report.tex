@@ -470,6 +470,25 @@ algorithm with alpha-beta pruning. The combination of efficient pruning and a
 well-designed heuristic enables the implementation of competitive automated
 players while maintaining reasonable computational requirements.
 
+\subsection{Monte Carlo Tree Search}
+
+As an alternative to the heuristic-heavy Minimax, we implemented the Monte Carlo 
+Tree Search (MCTS) algorithm. MCTS builds an asymmetric game tree based on the results of 
+random simulations (playouts), allowing the AI to focus on promising lines of play without 
+requiring complex domain knowledge.The MCTS cycle consists of four steps:
+\textbf{Selection} : We traverse the existing tree from the root to a leaf node. 
+To balance Exploitation (choosing moves with high win rates) and Exploration (trying less-visited moves), 
+we utilize the UCT (Upper Confidence bounds applied to Trees) formula:
+$$UCT = \frac{w_i}{n_i} + c \sqrt{\frac{\ln N}{n_i}}$$
+\textbf{Expansion} : One or more child nodes are added to the selected leaf node, 
+representing possible future moves. \\
+\textbf{Simulation (Rollout)}: From the new node, the game is played out randomly until 
+a terminal state (win/loss) is reached. \\
+\textbf{Backpropagation} : The result of the simulation is propagated back up the tree to 
+the root, updating the win counts ($w_i$) and visit counts ($n_i$) of all traversed nodes. 
+\newline This method allows the AI to converge toward optimal play as the number of simulations 
+increases within the allocated time.
+
 \subsection{Algorithmic Complexity}
 
 Although the overall state space of Quoridor is extremely large, the
