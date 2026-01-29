@@ -1,5 +1,1 @@
-"""
-Projet Quoridor - Module principal
-"""
-
-__version__ = "0.1.0"
+"""Ce fichier marque le dossier quoridor/ comme un package Python."""

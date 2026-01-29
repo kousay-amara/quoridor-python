@@ -24,6 +24,10 @@ dependencies = [
     "PyGObject>=3.42.0",
 ]
 
+[project.scripts]
+quoridor = "quoridor.cli:main"
+qoridor = "quoridor.cli:main"
+
 [project.optional-dependencies]
 dev = [
     "pytest>=7.4.0",
@@ -36,7 +40,10 @@ dev = [
 ]
 
 [tool.setuptools]
-packages = ["src"]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [tool.setuptools.package-data]
 "*" = ["*.txt", "*.md"]
