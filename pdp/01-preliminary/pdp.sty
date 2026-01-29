@@ -10,8 +10,8 @@
 \usepackage[T1]{fontenc}
 
 \usepackage{lmodern}
-\usepackage{palatino}
-\renewcommand\ttdefault{pcr}
+% \usepackage{palatino} % Temporairement commenté car les polices Palatino ne sont pas disponibles dans BasicTeX
+% \renewcommand\ttdefault{pcr} % Temporairement commenté car Courier n'est pas disponible dans BasicTeX
 
 %------------------------------------------------------------------------------
 %	MARGINS AND SPACING
@@ -36,8 +36,9 @@
 \usepackage{tikz}
 \usetikzlibrary{calc}
 
-\usepackage{minted} % Required for including code snippets
-\setminted{fontfamily=tt}
+% \usepackage{minted} % Required for including code snippets
+% \setminted{fontfamily=tt}
+% Temporairement commenté à cause d'un problème de compatibilité avec Python 3.14
 
 \usepackage{graphicx}
 \PassOptionsToPackage{svgnames}{xcolor}
@@ -109,7 +110,7 @@
   \vspace{-25pt}
   \noindent\HRule%
   \vspace{0pt} % Horizontal rule before the title
-  \fontsize{32}{36}\usefont{T1}{ppl}{b}{n}\selectfont % Palatino
+  \fontsize{32}{36}\usefont{T1}{lmr}{b}{n}\selectfont % Latin Modern Roman (remplace Palatino)
   \color{DarkBlue} % Text color for the title and author(s)
 }
 

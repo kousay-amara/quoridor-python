@@ -50,7 +50,7 @@ algorithmic perspective, as its gameplay can be naturally modeled using
 graph-based representations and shortest-path algorithms, which are commonly
 studied in computer science research.
 
-\begin{figure}[H]
+\begin{figure}[!ht]
   \centering
   \begin{minipage}[t]{0.42\textwidth}
     \centering
@@ -433,7 +433,7 @@ Les responsabilités de \texttt{GameService} sont les suivantes :
     \item détecter les conditions de fin de partie et déterminer le gagnant.
 \end{itemize}
 
-Ce choix garantit que toute modification de l’état du jeu passe par un point de contrôle unique, assurant la cohérence globale du moteur.
+Ce choix garantit que toute modification de l'état du jeu passe par un point de contrôle unique, assurant la cohérence globale du moteur.
 
 \subsection{Couche Vue -– Interfaces utilisateur (View)}
 La couche Vue regroupe les différentes interfaces utilisateur du projet :
@@ -442,12 +442,124 @@ La couche Vue regroupe les différentes interfaces utilisateur du projet :
     \item une interface graphique (GUI).
 \end{itemize}
 
-Ces interfaces ont pour rôle exclusif de collecter les entrées utilisateur, de les traduire en actions métier et d’afficher l’état courant du jeu. Elles ne contiennent aucune logique métier et n’accèdent jamais directement à la couche Domaine.
+Ces interfaces ont pour rôle exclusif de collecter les entrées utilisateur, de les traduire en actions métier et d'afficher l'état courant du jeu. Elles ne contiennent aucune logique métier et n'accèdent jamais directement à la couche Domaine.
 
 Cette organisation rend les interfaces interchangeables sans impact sur le cœur du moteur de jeu.
 
 \subsection{Synthèse}
-En conclusion, l’architecture MVC adoptée dans ce projet constitue une base solide pour le développement incrémental du moteur de jeu. Elle permet de garantir une séparation claire des responsabilités, une bonne testabilité du cœur applicatif et une évolutivité compatible avec les extensions prévues par le cahier des charges.
+En conclusion, l'architecture MVC adoptée dans ce projet constitue une base solide pour le développement incrémental du moteur de jeu. Elle permet de garantir une séparation claire des responsabilités, une bonne testabilité du cœur applicatif et une évolutivité compatible avec les extensions prévues par le cahier des charges.
+
+\section{Diagramme UML}
+
+Le diagramme UML ci-dessous illustre l'architecture détaillée du système
+Quoridor, en présentant les classes principales, leurs attributs, leurs méthodes
+et les relations entre elles.
+
+\begin{figure}[!ht]
+  \centering
+  \includegraphics[width=\textwidth]{resources/UML.jpg}
+  \caption{Diagramme de classes UML du système Quoridor}
+  \label{fig:uml-diagram}
+\end{figure}
+
+\subsection{Description du diagramme}
+
+Le diagramme de classes présente une architecture en couches clairement séparées,
+avec une distinction nette entre la logique métier (core), la couche
+d'application et les interfaces utilisateur.
+
+\subsubsection{Énumérations et types de base}
+
+Le diagramme définit deux énumérations essentielles :
+\begin{itemize}
+  \item \texttt{TargetEdge} : définit les quatre bords cibles possibles
+    (\texttt{TOP}, \texttt{BOTTOM}, \texttt{LEFT}, \texttt{RIGHT}) vers lesquels
+    chaque joueur doit se diriger.
+  \item \texttt{Orientation} : spécifie l'orientation des murs
+    (\texttt{HORIZONTAL}, \texttt{VERTICAL}).
+\end{itemize}
+
+\subsubsection{Classes principales du domaine}
+
+\textbf{Position} : Représente une coordonnée sur le plateau avec des méthodes
+pour calculer les distances entre positions.
+
+\textbf{Player} : Modélise un joueur avec son identifiant, la position de son
+pion, son bord cible et le nombre de murs restants.
+
+\textbf{Wall} : Représente un mur placé sur le plateau, défini par une position
+d'ancrage et une orientation.
+
+\textbf{Board} : Encapsule le plateau de jeu et maintient une référence à un
+graphe sous-jacent pour la modélisation de la connectivité.
+
+\subsubsection{Modélisation par graphe}
+
+\textbf{Graph} : Classe centrale qui modélise le plateau comme un graphe, où les
+sommets correspondent aux cases et les arêtes aux mouvements légaux. Cette
+classe gère dynamiquement l'ajout et la suppression d'arêtes lors du placement
+de murs, et fournit des méthodes pour vérifier si un chemin est bloqué.
+
+\textbf{PathfindingBFS} : Implémente l'algorithme de parcours en largeur
+(breadth-first search) pour vérifier l'existence de chemins et calculer les
+distances minimales vers les objectifs. Cette classe est cruciale pour valider
+la légalité des placements de murs.
+
+\subsubsection{État du jeu et actions}
+
+\textbf{GameState} : Contient l'état complet du jeu, incluant le plateau, la
+liste des joueurs (2 à 4), la liste des murs placés, et l'index du joueur
+courant. Cette classe centralise toutes les informations nécessaires pour
+représenter un état de partie.
+
+\textbf{Action} : Classe abstraite représentant une action générique. Deux
+classes concrètes en héritent :
+\begin{itemize}
+  \item \texttt{MoveAction} : représente un déplacement de pion avec une
+    position de départ et une position d'arrivée.
+  \item \texttt{PlaceWallAction} : représente le placement d'un mur.
+\end{itemize}
+
+\subsubsection{Validation et logique métier}
+
+\textbf{MoveValidator} : Valide les mouvements de pions en vérifiant la
+légalité topologique, la présence de murs bloquants, et les règles de saut.
+
+\textbf{WallValidator} : Valide les placements de murs en s'assurant qu'ils
+respectent les contraintes géométriques et, surtout, qu'ils ne bloquent pas
+complètement le chemin d'un joueur vers son objectif. Cette validation utilise
+\texttt{PathfindingBFS} pour vérifier la connectivité.
+
+\subsubsection{Couche d'application}
+
+\textbf{GameService} : Service central qui orchestre le déroulement de la
+partie. Il maintient l'état du jeu, applique les actions, gère les tours de
+jeu, et détermine les conditions de fin de partie. Cette classe constitue le
+point d'entrée unique pour les interfaces utilisateur.
+
+\subsubsection{Interfaces utilisateur}
+
+\textbf{CLI} et \textbf{GUI} : Deux interfaces utilisateur distinctes qui
+partagent la même responsabilité : lire les actions des joueurs et afficher
+l'état du jeu. Elles dépendent toutes deux de \texttt{GameService} et
+\texttt{GameState}, mais n'interfèrent pas avec la logique métier.
+
+\subsubsection{Relations et dépendances}
+
+Le diagramme illustre clairement la séparation des responsabilités :
+\begin{itemize}
+  \item Les relations de composition (diamant plein) montrent que
+    \texttt{GameService} possède un \texttt{GameState}, qui lui-même possède un
+    \texttt{Board} et des listes de \texttt{Player} et \texttt{Wall}.
+  \item Les dépendances (flèches en pointillés) indiquent que les interfaces
+    dépendent de la couche application, qui dépend elle-même des validateurs et
+    du pathfinding, respectant ainsi le principe de dépendance unidirectionnelle.
+  \item L'héritage (triangle creux) montre que \texttt{MoveAction} et
+    \texttt{PlaceWallAction} sont des spécialisations de \texttt{Action}.
+\end{itemize}
+
+Cette architecture garantit que la logique métier reste indépendante des
+interfaces, facilitant les tests, la maintenance et l'extensibilité du système.
 
 \section*{Extended Specifications}
 

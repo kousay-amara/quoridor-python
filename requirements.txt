@@ -1,18 +1,26 @@
 # Dépendances Python pour le projet Quoridor
 # Installation: pip install -r requirements.txt
+# OU utiliser: pip install -e ".[dev]" pour installer avec les dépendances de dev
 
 # Gestion des variables d'environnement
 python-dotenv>=1.0.0
 
-# Tests
+# Interface Graphique (GUI) - OBLIGATOIRE
+PyGObject>=3.42.0
+
+# Tests - OBLIGATOIRE (couverture >= 85%)
 pytest>=7.4.0
 pytest-cov>=4.1.0
 
-# Formatage et linting
+# Formatage et linting (PEP8)
 black>=23.9.0
 flake8>=6.1.0
 mypy>=1.6.0
 
-# Documentation
+# Documentation (Sphinx) - OBLIGATOIRE
 sphinx>=7.2.0
 sphinx-rtd-theme>=1.3.0
+
+# Build system
+setuptools>=65.0
+wheel>=0.38.0
