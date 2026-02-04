@@ -38,5 +38,42 @@ class Graph:
             self.adj[node1].remove(node2)
 
 
+    def has_path(self, node, target_row = None, target_col = None):
+        """
+        BFS pour trouver un chemin valide si il existe.
+        On part d'un noeud de départ et on essais d'arriver à la ligne ou colonne de victoire (2 ou 4 joueurs)
+        """
+
+        visited = {node}
+        queue = deque([node])
+
+        while queue :
+            curr = queue.popleft()
+
+            #Vérification de victoire 
+            curr_row, curr_col = divmod(curr, self.size)
+            if target_row is not None and curr_row == target_row :
+                return True
+            if target_col is not None and curr_col == target_col :
+                return True
+
+            for neighbor in self.adj[curr]:
+                if neighbor not in visited :
+                    visited.add(neighbor)
+                    queue.append(neighbor)
+    
+        return False
+    
+    def is_wall_legal(self, player_position, wall_edges):
+        """Vérifie si la pose d'un mur est légal (Ne bloque aucun joueur)"""
+
+        # 1 : Sauvegarde temporaire du plateau (arêtes)
+        # 2 : Suppression des arêtes
+        # 3 : Simulation (BFS)
+        # 4 : Si illégal alors restauration du plateau
+        # 5 : Si légal application du nouveau plateau
+
+
+
 test = Graph()
 print(test.adj)
