@@ -35,7 +35,7 @@ class Graph:
             self.adj[node1].remove(node2)
         
         if node1 in self.adj[node2] :
-            self.adj[node1].remove(node2)
+            self.adj[node2].remove(node1)
 
 
     def has_path(self, node, target_row = None, target_col = None):
