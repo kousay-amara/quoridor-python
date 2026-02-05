@@ -1,7 +1,7 @@
 """
-Graphe du plateau Quoridor : cases en nœuds, déplacements possibles en arêtes.
+Board graph for Quoridor: cells as nodes, possible moves as edges.
 
-Les murs sont représentés par l'absence d'arête entre deux cases adjacentes.
+Walls are represented by the absence of an edge between two adjacent cells.
 """
 
 from collections import deque
@@ -9,21 +9,21 @@ from collections import deque
 
 class Graph:
     """
-    Plateau de jeu modélisé en graphe (grille 4-connexe).
+    Game board modelled as a graph (4-connected grid).
 
     Attributes:
-        size: Côté du plateau (grille size x size).
-        nodes: Nombre de cases (size * size).
-        adj: Dictionnaire qui relie chaque nœud (int) à la liste de ses voisins
-            accessibles (sans mur entre eux).
+        size: Board side length (size x size grid).
+        nodes: Number of cells (size * size).
+        adj: Dictionary mapping each node (int) to the list of its reachable
+            neighbors (no wall between them).
     """
 
     def __init__(self, size=9):
         """
-        Initialise le plateau sous forme de graphe.
+        Initialize the board as a graph.
 
         Args:
-            size: Côté du plateau (défaut 9, grille 9x9).
+            size: Board side length (default 9, 9x9 grid).
         """
         self.size = size
         self.nodes = size * size
@@ -33,13 +33,13 @@ class Graph:
 
     def get_initial_neighbors(self, node):
         """
-        Calcule les voisins d'une case sans aucun mur (grille 4-connexe).
+        Compute the neighbors of a cell with no walls (4-connected grid).
 
         Args:
-            node: Index du nœud (0..nodes-1).
+            node: Node index (0..nodes-1).
 
         Returns:
-            Liste des nœuds voisins (haut, bas, gauche, droite selon les bords).
+            List of neighboring nodes (up, down, left, right depending on bounds).
         """
         neighbors = []
         row, col = divmod(node, self.size)
@@ -53,11 +53,11 @@ class Graph:
     
     def remove_edge(self, node1, node2):
         """
-        Supprime le lien entre deux cases (pose d'un mur entre elles).
+        Remove the link between two cells (place a wall between them).
 
         Args:
-            node1: Première case.
-            node2: Deuxième case (doit être voisine de node1).
+            node1: First cell.
+            node2: Second cell (must be adjacent to node1).
         """
         if node2 in self.adj[node1] :
             self.adj[node1].remove(node2)
@@ -68,19 +68,19 @@ class Graph:
 
     def has_path(self, node, target_row = None, target_col = None):
         """
-        BFS pour trouver un chemin valide depuis un nœud vers une ligne ou colonne de victoire.
+        BFS to find a valid path from a node to a winning row or column.
 
-        On part du nœud de départ et on cherche à atteindre la ligne target_row
-        et/ou la colonne target_col (selon le mode 2 ou 4 joueurs). À chaque nœud
-        visité, on vérifie si la ligne ou colonne de victoire est atteinte.
+        Starts from the given node and searches for target_row and/or target_col
+        (2 or 4 player mode). At each visited node, checks if the winning row
+        or column is reached.
 
         Args:
-            node: Nœud de départ.
-            target_row: Ligne à atteindre (None pour ignorer).
-            target_col: Colonne à atteindre (None pour ignorer).
+            node: Starting node.
+            target_row: Row to reach (None to ignore).
+            target_col: Column to reach (None to ignore).
 
         Returns:
-            True si un chemin existe vers la cible, False sinon.
+            True if a path to the target exists, False otherwise.
         """
         visited = {node}
         queue = deque([node])
@@ -102,14 +102,14 @@ class Graph:
 
     def is_walk_legal(self, from_node: int, to_node: int) -> bool:
         """
-        Vérifie si un déplacement du pion est légal (pas de mur entre les deux cases).
+        Check whether a pawn move is legal (no wall between the two cells).
 
         Args:
-            from_node: Case de départ (index 0..nodes-1).
-            to_node: Case d'arrivée.
+            from_node: Starting cell (index 0..nodes-1).
+            to_node: Destination cell.
 
         Returns:
-            True si to_node est voisine de from_node dans le graphe actuel (déplacement autorisé).
+            True if to_node is adjacent to from_node in the current graph (move allowed).
         """
         if from_node < 0 or from_node >= self.nodes or to_node < 0 or to_node >= self.nodes:
             return False
@@ -122,30 +122,30 @@ class Graph:
         player_targets: list[tuple[int | None, int | None]] | None = None,
     ) -> bool:
         """
-        Vérifie si la pose d'un mur est légale (aucun joueur ne doit être bloqué).
+        Check whether placing a wall is legal (no player must be blocked).
 
-        Simule la suppression des arêtes du mur, vérifie que chaque joueur peut
-        encore atteindre sa ligne/colonne de victoire (BFS), puis restaure le graphe.
-        Ne modifie pas le graphe en cas de succès : l'appelant doit appeler
-        remove_edge pour chaque arête du mur s'il souhaite l'appliquer.
+        Simulates removing the wall edges, checks that each player can still
+        reach their winning row/column (BFS), then restores the graph. Does not
+        modify the graph on success: the caller must call remove_edge for each
+        wall edge to apply it.
 
         Args:
-            player_positions: Liste des cases actuelles des joueurs [pos0, pos1, ...].
-            wall_edges: Liste des arêtes à bloquer par le mur, ex. [(node1, node2)].
-            player_targets: Pour chaque joueur, (target_row, target_col) avec l'un à None.
-                Si None : 2 joueurs -> (ligne 8, ligne 0), 4 joueurs -> (ligne 8, ligne 0, col 8, col 0).
+            player_positions: List of current player cell indices [pos0, pos1, ...].
+            wall_edges: List of edges to block by the wall, e.g. [(node1, node2)].
+            player_targets: For each player, (target_row, target_col) with one None.
+                If None: 2 players -> (row 8, row 0), 4 players -> (row 8, row 0, col 8, col 0).
 
         Returns:
-            True si la pose du mur est légale (tous les joueurs gardent un chemin).
+            True if placing the wall is legal (all players keep a path).
 
         Algorithm:
-            1. Déterminer les cibles par défaut si besoin (2 joueurs : lignes 8 et 0 ;
-               4 joueurs : lignes 8 et 0, colonnes 8 et 0).
-            2. Vérifier que chaque arête du mur existe (liaison réelle entre deux cases).
-            3. Sauvegarder le plateau (copie des listes d'adjacence).
-            4. Supprimer temporairement les arêtes du mur.
-            5. Pour chaque joueur, vérifier qu'il existe un chemin vers sa cible (BFS).
-            6. Restaurer le plateau dans tous les cas (finally).
+            1. Determine default targets if needed (2 players: rows 8 and 0;
+               4 players: rows 8 and 0, cols 8 and 0).
+            2. Check that each wall edge exists (actual link between two cells).
+            3. Save the board (copy of adjacency lists).
+            4. Temporarily remove the wall edges.
+            5. For each player, check that a path to their target exists (BFS).
+            6. Restore the board in all cases (finally).
         """
         wall_edges = list(wall_edges)
         if not wall_edges:
