@@ -15,21 +15,26 @@ _ = gettext.gettext
 
 
 class QuoridorArgumentParser(argparse.ArgumentParser):
-    """Parser personnalisé pour la CLI de Quoridor."""
+    """Custom parser for the Quoridor CLI."""
 
     def error(self, message: str) -> None:
-        # Handles parsing errors: print the error, show help, then exit with a non-zero code
+        # Print errors on stderr, then show help and exit with a non-zero code.
         sys.stderr.write(f"{self.prog}: {_('error')}: {message}\n\n")
         self.print_help(sys.stderr)
         raise SystemExit(1)
 
 
 def _build_parser() -> argparse.ArgumentParser:
-    # Build and configure the command-line argument parser
+    # Build and configure the command-line argument parser.
     parser = QuoridorArgumentParser(
         prog="quoridor",
         description=_("Quoridor game command-line interface."),
         add_help=True,
+    )
+    parser.add_argument(
+        "save_file",
+        nargs="?",
+        help=_("path to a saved game file"),
     )
     parser.add_argument(
         "-V",
@@ -49,11 +54,24 @@ def _build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help=_("show debug messages"),
     )
+    parser.add_argument(
+        "-b",
+        "--blitz",
+        action="store_true",
+        help=_("enable blitz mode"),
+    )
+    parser.add_argument(
+        "-t",
+        "--time",
+        type=int,
+        default=30,
+        help=_("time limit in minutes for blitz mode"),
+    )
     return parser
 
 
 def _configure_logging(verbose: bool, debug: bool) -> None:
-    # Configure logging level based on verbose and debug flags
+    # Configure logging level based on verbose and debug flags.
     level = logging.WARNING
     if debug:
         level = logging.DEBUG
@@ -63,7 +81,7 @@ def _configure_logging(verbose: bool, debug: bool) -> None:
 
 
 def _get_version() -> str:
-    # Fetch the version of the installed Quoridor package
+    # Fetch the version of the installed Quoridor package.
     try:
         return metadata.version("quoridor")
     except metadata.PackageNotFoundError:
@@ -71,7 +89,7 @@ def _get_version() -> str:
 
 
 def main(argv: list[str] | None = None) -> int:
-    # Main CLI entry point: parse options and run the program
+    # Main CLI entry point: parse options and run the program.
     parser = _build_parser()
     args = parser.parse_args(argv)
 
@@ -80,10 +98,61 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     _configure_logging(args.verbose, args.debug)
-    print(_("Quoridor CLI started."))
+    time_limit = args.time
+    if args.time != 30 and not args.blitz:
+        sys.stderr.write(
+            _("warning: --time is ignored unless --blitz is enabled\n")
+        )
+        time_limit = 30
+    _run_interactive_shell(
+        blitz=args.blitz,
+        time_limit=time_limit,
+        save_file=args.save_file,
+    )
     return 0
 
 
+def _run_interactive_shell(
+    *,
+    blitz: bool,
+    time_limit: int,
+    save_file: str | None,
+) -> None:
+    # Start a new game with default options (F4).
+    if save_file:
+        print(_("Loading game from {path}").format(path=save_file))
+        return
+    if blitz:
+        print(
+            _("New game started (blitz: {minutes} min/player).").format(
+                minutes=time_limit
+            )
+        )
+    else:
+        print(_("New game started with default options."))
+    print(_("Type 'help' for available commands."))
+
+    while True:
+        try:
+            line = input(">> ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            break
+
+        if not line:
+            continue
+
+        if line == "help":
+            print(_("Available commands: help, quit"))
+            continue
+
+        if line == "quit":
+            print(_("Bye."))
+            break
+
+        print(_("Unknown command: {cmd}").format(cmd=line))
+
+
 if __name__ == "__main__":
-    # Allow direct execution or via the `qoridor` entry point
+    # Allow direct execution or via the `qoridor` entry point.
     raise SystemExit(main())
