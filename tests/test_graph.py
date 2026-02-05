@@ -32,3 +32,78 @@ def test_has_path_blocked():
     g.remove_edge(0, 9)
     # La case 0 ne peut plus atteindre la ligne 8 (ou n'importe quelle autre ligne)
     assert g.has_path(node=0, target_row=8) == False
+
+
+def test_is_walk_legal_neighbor():
+    """Déplacement vers une case voisine sans mur est légal."""
+    g = Graph(size=9)
+    assert g.is_walk_legal(40, 31) is True   # centre vers haut
+    assert g.is_walk_legal(40, 49) is True   # centre vers bas
+    assert g.is_walk_legal(40, 39) is True   # centre vers gauche
+    assert g.is_walk_legal(40, 41) is True   # centre vers droite
+
+
+def test_is_walk_legal_not_neighbor():
+    """Déplacement vers une case non voisine est illégal."""
+    g = Graph(size=9)
+    assert g.is_walk_legal(0, 2) is False
+    assert g.is_walk_legal(0, 18) is False
+    assert g.is_walk_legal(40, 0) is False
+
+
+def test_is_walk_legal_after_wall():
+    """Après pose d'un mur entre deux cases, le déplacement entre elles est illégal."""
+    g = Graph(size=9)
+    assert g.is_walk_legal(0, 1) is True
+    g.remove_edge(0, 1)
+    assert g.is_walk_legal(0, 1) is False
+
+
+def test_is_walk_legal_bounds():
+    """Cases hors plateau : déplacement illégal."""
+    g = Graph(size=9)
+    assert g.is_walk_legal(0, -1) is False
+    assert g.is_walk_legal(0, 81) is False
+    assert g.is_walk_legal(-1, 0) is False
+
+
+def test_is_wall_legal_ok():
+    """Pose d'un mur qui ne bloque aucun joueur : légal."""
+    g = Graph(size=9)
+    # Joueur 0 en 0 vise ligne 8, joueur 1 en 80 vise ligne 0. Mur au centre (40-41) ne les bloque pas.
+    assert g.is_wall_legal(
+        player_positions=[0, 80],
+        wall_edges=[(40, 41)],
+    ) is True
+    # Le graphe est inchangé après le test (simulation + restauration)
+    assert 41 in g.adj[40]
+    assert 40 in g.adj[41]
+
+
+def test_is_wall_legal_blocked():
+    """Pose d'un mur qui enferme un joueur : illégal."""
+    g = Graph(size=9)
+    # Joueur 0 en case 0 doit atteindre ligne 8. Si on coupe (0,1) et (0,9), il est bloqué.
+    assert g.is_wall_legal(
+        player_positions=[0],
+        wall_edges=[(0, 1), (0, 9)],
+        player_targets=[(8, None)],
+    ) is False
+    # Graphe restauré
+    assert 1 in g.adj[0]
+    assert 9 in g.adj[0]
+
+
+def test_is_wall_legal_empty_edges():
+    """Aucune arête à bloquer : toujours légal."""
+    g = Graph(size=9)
+    assert g.is_wall_legal(player_positions=[0, 80], wall_edges=[]) is True
+
+
+def test_is_wall_legal_invalid_edge():
+    """Mur sur une arête inexistante (cases non voisines) : illégal."""
+    g = Graph(size=9)
+    assert g.is_wall_legal(
+        player_positions=[0, 80],
+        wall_edges=[(0, 2)],  # 0 et 2 ne sont pas voisines
+    ) is False
