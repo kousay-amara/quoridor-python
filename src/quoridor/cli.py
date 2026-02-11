@@ -8,10 +8,12 @@ import sys
 from importlib import metadata
 
 from i18n import setup_i18n
+from quoridor.config import DEFAULTS, load_or_init_config
 
 
 setup_i18n()
 _ = gettext.gettext
+LOGGER = logging.getLogger(__name__)
 
 
 class QuoridorArgumentParser(argparse.ArgumentParser):
@@ -24,7 +26,7 @@ class QuoridorArgumentParser(argparse.ArgumentParser):
         raise SystemExit(1)
 
 
-def _build_parser() -> argparse.ArgumentParser:
+def _build_parser(defaults: dict[str, bool | int]) -> argparse.ArgumentParser:
     # Build and configure the command-line argument parser.
     parser = QuoridorArgumentParser(
         prog="quoridor",
@@ -64,10 +66,22 @@ def _build_parser() -> argparse.ArgumentParser:
         "-t",
         "--time",
         type=int,
-        default=30,
+        default=int(defaults["time"]),
         help=_("time limit in minutes for blitz mode"),
     )
+    parser.set_defaults(
+        verbose=bool(defaults["verbose"]),
+        blitz=bool(defaults["blitz"]),
+    )
     return parser
+
+
+def _is_time_passed_on_cli(argv: list[str]) -> bool:
+    # Detect explicit --time usage so config defaults do not trigger warnings.
+    return any(
+        token in {"-t", "--time"} or token.startswith("--time=")
+        for token in argv
+    )
 
 
 def _configure_logging(verbose: bool, debug: bool) -> None:
@@ -78,6 +92,7 @@ def _configure_logging(verbose: bool, debug: bool) -> None:
     elif verbose:
         level = logging.INFO
     logging.basicConfig(level=level, format="%(levelname)s: %(message)s")
+    LOGGER.debug("Logging configured with level=%s", logging.getLevelName(level))
 
 
 def _get_version() -> str:
@@ -90,20 +105,24 @@ def _get_version() -> str:
 
 def main(argv: list[str] | None = None) -> int:
     # Main CLI entry point: parse options and run the program.
-    parser = _build_parser()
-    args = parser.parse_args(argv)
+    cli_argv = sys.argv[1:] if argv is None else argv
+    defaults = load_or_init_config()
+    parser = _build_parser(defaults)
+    args = parser.parse_args(cli_argv)
 
     if args.version:
         print(_get_version())
         return 0
 
     _configure_logging(args.verbose, args.debug)
+    LOGGER.debug("Loaded defaults from .qoridorrc: %s", defaults)
+    LOGGER.debug("Parsed CLI args: %s", vars(args))
     time_limit = args.time
-    if args.time != 30 and not args.blitz:
+    if _is_time_passed_on_cli(cli_argv) and not args.blitz:
         sys.stderr.write(
             _("warning: --time is ignored unless --blitz is enabled\n")
         )
-        time_limit = 30
+        time_limit = int(defaults.get("time", DEFAULTS["time"]))
     _run_interactive_shell(
         blitz=args.blitz,
         time_limit=time_limit,
@@ -120,15 +139,18 @@ def _run_interactive_shell(
 ) -> None:
     # Start a new game with default options (F4).
     if save_file:
+        LOGGER.info("Loading saved game: %s", save_file)
         print(_("Loading game from {path}").format(path=save_file))
         return
     if blitz:
+        LOGGER.info("Starting blitz game with time limit=%s", time_limit)
         print(
             _("New game started (blitz: {minutes} min/player).").format(
                 minutes=time_limit
             )
         )
     else:
+        LOGGER.info("Starting game with default options")
         print(_("New game started with default options."))
     print(_("Type 'help' for available commands."))
 
