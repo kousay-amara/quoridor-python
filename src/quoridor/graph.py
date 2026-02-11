@@ -5,6 +5,9 @@ Walls are represented by the absence of an edge between two adjacent cells.
 """
 
 from collections import deque
+from legal_moves import get_all_legal_pawn_moves
+from player import Player
+import pathfiding
 
 
 class Graph:
@@ -65,122 +68,26 @@ class Graph:
         if node1 in self.adj[node2] :
             self.adj[node2].remove(node1)
 
-
-    def has_path(self, node, target_row = None, target_col = None):
+    def add_edge(self, node1, node2):
         """
-        BFS to find a valid path from a node to a winning row or column.
-
-        Starts from the given node and searches for target_row and/or target_col
-        (2 or 4 player mode). At each visited node, checks if the winning row
-        or column is reached.
-
+        Add a link between two cells
+        
         Args:
-            node: Starting node.
-            target_row: Row to reach (None to ignore).
-            target_col: Column to reach (None to ignore).
-
-        Returns:
-            True if a path to the target exists, False otherwise.
+            node1 : First cell.
+            node2 : Second cell.
         """
-        visited = {node}
-        queue = deque([node])
+        if node2 not in self.adj[node1]:
+            self.adj[node1].append(node2)
 
-        while queue :
-            curr = queue.popleft()
-            curr_row, curr_col = divmod(curr, self.size)
-            if target_row is not None and curr_row == target_row :
-                return True
-            if target_col is not None and curr_col == target_col :
-                return True
+        if node1 not in self.adj[node2] :
+            self.adj[node2].append(node1)
 
-            for neighbor in self.adj[curr]:
-                if neighbor not in visited :
-                    visited.add(neighbor)
-                    queue.append(neighbor)
-    
-        return False
 
-    def is_walk_legal(self, from_node: int, to_node: int) -> bool:
-        """
-        Check whether a pawn move is legal (no wall between the two cells).
-
-        Args:
-            from_node: Starting cell (index 0..nodes-1).
-            to_node: Destination cell.
-
-        Returns:
-            True if to_node is adjacent to from_node in the current graph (move allowed).
-        """
-        if from_node < 0 or from_node >= self.nodes or to_node < 0 or to_node >= self.nodes:
-            return False
-        return to_node in self.adj[from_node]
-
-    def is_wall_legal(
-        self,
-        player_positions: list[int],
-        wall_edges: list[tuple[int, int]],
-        player_targets: list[tuple[int | None, int | None]] | None = None,
-    ) -> bool:
-        """
-        Check whether placing a wall is legal (no player must be blocked).
-
-        Simulates removing the wall edges, checks that each player can still
-        reach their winning row/column (BFS), then restores the graph. Does not
-        modify the graph on success: the caller must call remove_edge for each
-        wall edge to apply it.
-
-        Args:
-            player_positions: List of current player cell indices [pos0, pos1, ...].
-            wall_edges: List of edges to block by the wall, e.g. [(node1, node2)].
-            player_targets: For each player, (target_row, target_col) with one None.
-                If None: 2 players -> (row 8, row 0), 4 players -> (row 8, row 0, col 8, col 0).
-
-        Returns:
-            True if placing the wall is legal (all players keep a path).
-
-        Algorithm:
-            1. Determine default targets if needed (2 players: rows 8 and 0;
-               4 players: rows 8 and 0, cols 8 and 0).
-            2. Check that each wall edge exists (actual link between two cells).
-            3. Save the board (copy of adjacency lists).
-            4. Temporarily remove the wall edges.
-            5. For each player, check that a path to their target exists (BFS).
-            6. Restore the board in all cases (finally).
-        """
-        wall_edges = list(wall_edges)
-        if not wall_edges:
-            return True
-
-        n = len(player_positions)
-        if player_targets is None:
-            if n == 2:
-                player_targets = [(self.size - 1, None), (0, None)]
-            elif n == 4:
-                player_targets = [
-                    (self.size - 1, None),
-                    (0, None),
-                    (None, self.size - 1),
-                    (None, 0),
-                ]
-            else:
-                player_targets = [(self.size - 1, None)] * n
-
-        for (n1, n2) in wall_edges:
-            if n1 not in self.adj or n2 not in self.adj.get(n1, []):
-                return False
-
-        backup = {i: list(neighbors) for i, neighbors in self.adj.items()}
-
-        for (n1, n2) in wall_edges:
-            self.remove_edge(n1, n2)
-
-        try:
-            for i, pos in enumerate(player_positions):
-                if i >= len(player_targets):
-                    break
-                target_row, target_col = player_targets[i]
-                if not self.has_path(pos, target_row=target_row, target_col=target_col):
-                    return False
-            return True
-        finally:
-            self.adj = backup
+"""Quelques tests temporaires"""
+player = Player(1, 5, 8, None, 10)
+graph = Graph()
+graph.remove_edge(9, 0)
+graph.remove_edge(1,10)
+graph.remove_edge(9, 18)
+graph.remove_edge(10, 11)
+print(get_all_legal_pawn_moves(graph, 9, [10]))
