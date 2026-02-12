@@ -9,9 +9,9 @@ from importlib import metadata
 
 from i18n import setup_i18n
 from quoridor.config import DEFAULTS, load_or_init_config
+from quoridor.contest import ContestError, run_contest
 
 
-setup_i18n()
 _ = gettext.gettext
 LOGGER = logging.getLogger(__name__)
 
@@ -63,6 +63,12 @@ def _build_parser(defaults: dict[str, bool | int]) -> argparse.ArgumentParser:
         help=_("enable blitz mode"),
     )
     parser.add_argument(
+        "-c",
+        "--contest",
+        action="store_true",
+        help=_("enable contest mode (read position file and output a move)"),
+    )
+    parser.add_argument(
         "-t",
         "--time",
         type=int,
@@ -74,6 +80,30 @@ def _build_parser(defaults: dict[str, bool | int]) -> argparse.ArgumentParser:
         blitz=bool(defaults["blitz"]),
     )
     return parser
+
+
+def _build_contest_parser() -> argparse.ArgumentParser:
+    parser = QuoridorArgumentParser(
+        prog="quoridor",
+        description="Quoridor contest mode.",
+        add_help=True,
+    )
+    parser.add_argument(
+        "save_file",
+        nargs="?",
+        help="path to a saved game file",
+    )
+    parser.add_argument(
+        "-c",
+        "--contest",
+        action="store_true",
+        help="enable contest mode (read position file and output a move)",
+    )
+    return parser
+
+
+def _is_contest_on_cli(argv: list[str]) -> bool:
+    return any(token in {"-c", "--contest"} for token in argv)
 
 
 def _is_time_passed_on_cli(argv: list[str]) -> bool:
@@ -103,12 +133,25 @@ def _get_version() -> str:
         return "0.0.0"
 
 
-def main(argv: list[str] | None = None) -> int:
-    # Main CLI entry point: parse options and run the program.
-    cli_argv = sys.argv[1:] if argv is None else argv
+def _main_contest(argv: list[str]) -> int:
+    parser = _build_contest_parser()
+    args = parser.parse_args(argv)
+    if not args.save_file:
+        parser.error("contest mode requires a game file argument")
+    try:
+        move = run_contest(args.save_file)
+    except ContestError as exc:
+        sys.stderr.write(f"error: {exc}\n")
+        return 1
+    print(move)
+    return 0
+
+
+def _main_interactive(argv: list[str]) -> int:
+    setup_i18n()
     defaults = load_or_init_config()
     parser = _build_parser(defaults)
-    args = parser.parse_args(cli_argv)
+    args = parser.parse_args(argv)
 
     if args.version:
         print(_get_version())
@@ -117,8 +160,9 @@ def main(argv: list[str] | None = None) -> int:
     _configure_logging(args.verbose, args.debug)
     LOGGER.debug("Loaded defaults from .qoridorrc: %s", defaults)
     LOGGER.debug("Parsed CLI args: %s", vars(args))
+
     time_limit = args.time
-    if _is_time_passed_on_cli(cli_argv) and not args.blitz:
+    if _is_time_passed_on_cli(argv) and not args.blitz:
         sys.stderr.write(
             _("warning: --time is ignored unless --blitz is enabled\n")
         )
@@ -129,6 +173,14 @@ def main(argv: list[str] | None = None) -> int:
         save_file=args.save_file,
     )
     return 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    # Main CLI entry point: parse options and run the program.
+    cli_argv = sys.argv[1:] if argv is None else argv
+    if _is_contest_on_cli(cli_argv):
+        return _main_contest(cli_argv)
+    return _main_interactive(cli_argv)
 
 
 def _run_interactive_shell(

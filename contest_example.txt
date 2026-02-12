@@ -1,0 +1,22 @@
+# Exemple de position Quoridor (format minimal)
+[game]
+1 # Joueur courant
+# Plateau 9x9 (9 lignes de cases + 8 lignes separatrices)
+_ _ _ _ _ _ _ _ _
+. . . . . . . . .
+_ _ _ _ _ _ _ _ _
+. . . . . . . . .
+_ _ _ _ _ _ _ _ _
+. . . . . . . . .
+_ _ _ _ 1 _ _ _ _
+. . . . . . . . .
+_ _ _ _ _ _ _ _ _
+. . . . . . . . .
+_ _ _ _ _ _ _ _ _
+. . . . . . . . .
+_ _ _ _ _ _ _ _ _
+. . . . . . . . .
+_ _ _ _ _ _ _ _ _
+. . . . . . . . .
+_ _ _ _ 2 _ _ _ _
+walls: 20 20
