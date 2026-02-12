@@ -4,11 +4,6 @@ Board graph for Quoridor: cells as nodes, possible moves as edges.
 Walls are represented by the absence of an edge between two adjacent cells.
 """
 
-from collections import deque
-from legal_moves import get_all_legal_pawn_moves
-from player import Player
-import pathfiding
-
 
 class Graph:
     """
@@ -81,13 +76,3 @@ class Graph:
 
         if node1 not in self.adj[node2] :
             self.adj[node2].append(node1)
-
-
-"""Quelques tests temporaires"""
-player = Player(1, 5, 8, None, 10)
-graph = Graph()
-graph.remove_edge(9, 0)
-graph.remove_edge(1,10)
-graph.remove_edge(9, 18)
-graph.remove_edge(10, 11)
-print(get_all_legal_pawn_moves(graph, 9, [10]))

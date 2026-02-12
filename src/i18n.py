@@ -63,5 +63,4 @@ def setup_i18n(language: str | None = None) -> gettext.NullTranslations:
     return translation
 
 
-# Initialize i18n with default language
-_ = setup_i18n()
+# Note: call setup_i18n() explicitly from application entry points.
