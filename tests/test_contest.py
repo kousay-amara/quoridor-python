@@ -1,4 +1,4 @@
-from src.quoridor.contest import run_contest
+from src.quoridor.application.contest import run_contest
 
 
 def test_contest_respects_horizontal_wall(tmp_path):

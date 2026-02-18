@@ -1,12 +1,10 @@
-"""Contest mode: read a game position and output a legal move."""
+"""Contest input parser."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
 import re
-
-from quoridor.graph import Graph
-from quoridor.legal_moves import get_all_legal_pawn_moves
 
 
 class ContestError(ValueError):
@@ -185,17 +183,15 @@ def parse_contest_file(path: str | Path) -> ContestPosition:
 
     board_lines: list[tuple[int, str]] = []
     while cursor < len(lines):
-        line_no, line = lines[cursor]
+        _line_no, line = lines[cursor]
         if line.startswith("[") and line.endswith("]"):
             break
         if line.lower().startswith("walls:"):
             break
-        board_lines.append((line_no, line))
+        board_lines.append(lines[cursor])
         cursor += 1
 
-    size, positions, vertical_walls, horizontal_walls = _parse_board_lines(
-        board_lines
-    )
+    size, positions, vertical_walls, horizontal_walls = _parse_board_lines(board_lines)
     if current_player not in positions:
         raise ContestError(f"current player {current_player} not on board")
 
@@ -206,25 +202,3 @@ def parse_contest_file(path: str | Path) -> ContestPosition:
         vertical_walls=vertical_walls,
         horizontal_walls=horizontal_walls,
     )
-
-
-def _node_to_notation(node: int, size: int) -> str:
-    row, col = divmod(node, size)
-    return f"{chr(ord('a') + col)}{row + 1}"
-
-
-def run_contest(path: str | Path) -> str:
-    position = parse_contest_file(path)
-    graph = Graph(position.size)
-    for edge in position.vertical_walls + position.horizontal_walls:
-        graph.remove_edge(*edge)
-
-    ordered_players = sorted(position.positions.keys())
-    positions_list = [position.positions[p] for p in ordered_players]
-    current_pos = position.positions[position.current_player]
-    legal_moves = get_all_legal_pawn_moves(graph, current_pos, positions_list)
-    if not legal_moves:
-        raise ContestError("no legal moves available")
-
-    target = sorted(legal_moves)[0]
-    return f"{_node_to_notation(current_pos, position.size)}-{_node_to_notation(target, position.size)}"

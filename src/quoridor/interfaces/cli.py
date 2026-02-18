@@ -8,8 +8,9 @@ import sys
 from importlib import metadata
 
 from i18n import setup_i18n
-from quoridor.config import DEFAULTS, load_or_init_config
-from quoridor.contest import ContestError, run_contest
+from ..application.contest import run_contest
+from ..config import DEFAULTS, load_or_init_config
+from .contest_parser import ContestError
 
 
 _ = gettext.gettext
@@ -20,48 +21,24 @@ class QuoridorArgumentParser(argparse.ArgumentParser):
     """Custom parser for the Quoridor CLI."""
 
     def error(self, message: str) -> None:
-        # Print errors on stderr, then show help and exit with a non-zero code.
         sys.stderr.write(f"{self.prog}: {_('error')}: {message}\n\n")
         self.print_help(sys.stderr)
         raise SystemExit(1)
 
 
 def _build_parser(defaults: dict[str, bool | int]) -> argparse.ArgumentParser:
-    # Build and configure the command-line argument parser.
     parser = QuoridorArgumentParser(
         prog="quoridor",
         description=_("Quoridor game command-line interface."),
         add_help=True,
     )
+    parser.add_argument("save_file", nargs="?", help=_("path to a saved game file"))
     parser.add_argument(
-        "save_file",
-        nargs="?",
-        help=_("path to a saved game file"),
+        "-V", "--version", action="store_true", help=_("show program version and exit")
     )
-    parser.add_argument(
-        "-V",
-        "--version",
-        action="store_true",
-        help=_("show program version and exit"),
-    )
-    parser.add_argument(
-        "-v",
-        "--verbose",
-        action="store_true",
-        help=_("increase program verbosity"),
-    )
-    parser.add_argument(
-        "-d",
-        "--debug",
-        action="store_true",
-        help=_("show debug messages"),
-    )
-    parser.add_argument(
-        "-b",
-        "--blitz",
-        action="store_true",
-        help=_("enable blitz mode"),
-    )
+    parser.add_argument("-v", "--verbose", action="store_true", help=_("increase program verbosity"))
+    parser.add_argument("-d", "--debug", action="store_true", help=_("show debug messages"))
+    parser.add_argument("-b", "--blitz", action="store_true", help=_("enable blitz mode"))
     parser.add_argument(
         "-c",
         "--contest",
@@ -75,10 +52,7 @@ def _build_parser(defaults: dict[str, bool | int]) -> argparse.ArgumentParser:
         default=int(defaults["time"]),
         help=_("time limit in minutes for blitz mode"),
     )
-    parser.set_defaults(
-        verbose=bool(defaults["verbose"]),
-        blitz=bool(defaults["blitz"]),
-    )
+    parser.set_defaults(verbose=bool(defaults["verbose"]), blitz=bool(defaults["blitz"]))
     return parser
 
 
@@ -88,11 +62,7 @@ def _build_contest_parser() -> argparse.ArgumentParser:
         description="Quoridor contest mode.",
         add_help=True,
     )
-    parser.add_argument(
-        "save_file",
-        nargs="?",
-        help="path to a saved game file",
-    )
+    parser.add_argument("save_file", nargs="?", help="path to a saved game file")
     parser.add_argument(
         "-c",
         "--contest",
@@ -107,15 +77,10 @@ def _is_contest_on_cli(argv: list[str]) -> bool:
 
 
 def _is_time_passed_on_cli(argv: list[str]) -> bool:
-    # Detect explicit --time usage so config defaults do not trigger warnings.
-    return any(
-        token in {"-t", "--time"} or token.startswith("--time=")
-        for token in argv
-    )
+    return any(token in {"-t", "--time"} or token.startswith("--time=") for token in argv)
 
 
 def _configure_logging(verbose: bool, debug: bool) -> None:
-    # Configure logging level based on verbose and debug flags.
     level = logging.WARNING
     if debug:
         level = logging.DEBUG
@@ -126,7 +91,6 @@ def _configure_logging(verbose: bool, debug: bool) -> None:
 
 
 def _get_version() -> str:
-    # Fetch the version of the installed Quoridor package.
     try:
         return metadata.version("quoridor")
     except metadata.PackageNotFoundError:
@@ -163,44 +127,27 @@ def _main_interactive(argv: list[str]) -> int:
 
     time_limit = args.time
     if _is_time_passed_on_cli(argv) and not args.blitz:
-        sys.stderr.write(
-            _("warning: --time is ignored unless --blitz is enabled\n")
-        )
+        sys.stderr.write(_("warning: --time is ignored unless --blitz is enabled\n"))
         time_limit = int(defaults.get("time", DEFAULTS["time"]))
-    _run_interactive_shell(
-        blitz=args.blitz,
-        time_limit=time_limit,
-        save_file=args.save_file,
-    )
+    _run_interactive_shell(blitz=args.blitz, time_limit=time_limit, save_file=args.save_file)
     return 0
 
 
 def main(argv: list[str] | None = None) -> int:
-    # Main CLI entry point: parse options and run the program.
     cli_argv = sys.argv[1:] if argv is None else argv
     if _is_contest_on_cli(cli_argv):
         return _main_contest(cli_argv)
     return _main_interactive(cli_argv)
 
 
-def _run_interactive_shell(
-    *,
-    blitz: bool,
-    time_limit: int,
-    save_file: str | None,
-) -> None:
-    # Start a new game with default options (F4).
+def _run_interactive_shell(*, blitz: bool, time_limit: int, save_file: str | None) -> None:
     if save_file:
         LOGGER.info("Loading saved game: %s", save_file)
         print(_("Loading game from {path}").format(path=save_file))
         return
     if blitz:
         LOGGER.info("Starting blitz game with time limit=%s", time_limit)
-        print(
-            _("New game started (blitz: {minutes} min/player).").format(
-                minutes=time_limit
-            )
-        )
+        print(_("New game started (blitz: {minutes} min/player).").format(minutes=time_limit))
     else:
         LOGGER.info("Starting game with default options")
         print(_("New game started with default options."))
@@ -228,5 +175,4 @@ def _run_interactive_shell(
 
 
 if __name__ == "__main__":
-    # Allow direct execution or via the `qoridor` entry point.
     raise SystemExit(main())
