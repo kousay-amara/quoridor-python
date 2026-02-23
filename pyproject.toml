@@ -25,8 +25,8 @@ dependencies = [
 ]
 
 [project.scripts]
-quoridor = "quoridor.cli:main"
-qoridor = "quoridor.cli:main"
+quoridor = "quoridor.interfaces.cli:main"
+qoridor = "quoridor.interfaces.cli:main"
 
 [project.optional-dependencies]
 dev = [
