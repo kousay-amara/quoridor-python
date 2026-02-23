@@ -5,6 +5,8 @@ from src.quoridor.core.board import QuoridorBoard
 from src.quoridor.rules.pawn_rules import is_walk_legal
 from src.quoridor.rules.pawn_rules import get_all_legal_pawn_moves
 from src.quoridor.rules.wall_rules import is_wall_legal
+from src.quoridor.core.notation import get_edges_for_wall
+from src.quoridor.core.notation import get_notation_from_node
 
 # --- Définition des lambdas de victoire pour les tests ---
 TARGET_L8 = lambda n: (n // 9) == 8
@@ -143,3 +145,35 @@ def test_pawn_jump_blocked_by_two_opponents():
     # On ne peut pas sauter en 22 car occupé, et le code fait 'pass' 
     # pour cette direction si aucune diagonale n'est possible (si murs présents par ex)
     assert 22 not in moves
+
+def test_get_edges_for_wall():
+    # Sur un plateau 9x9, 'a1h' devrait bloquer (0,9) et (1,10)
+    edges = get_edges_for_wall("a1h", size=9)
+    assert (0, 9) in edges
+    assert (1, 10) in edges
+
+    # 'a1v' devrait bloquer (0,1) et (9,10)
+    edges = get_edges_for_wall("a1v", size=9)
+    assert (0, 1) in edges
+    assert (9, 10) in edges
+
+
+def test_get_notation_from_node():
+    """
+    Tests the conversion from node index to algebraic notation.
+    Size 9 board: 0 is 'a1', 80 is 'i9'.
+    """
+    size = 9
+    
+    # Test corners
+    assert get_notation_from_node(0, size) == "a1"
+    assert get_notation_from_node(8, size) == "i1"
+    assert get_notation_from_node(72, size) == "a9"
+    assert get_notation_from_node(80, size) == "i9"
+    
+    # Test center (e5)
+    assert get_notation_from_node(40, size) == "e5"
+    
+    # Test random positions
+    assert get_notation_from_node(20, size) == "c3"
+    assert get_notation_from_node(61, size) == "h7"
