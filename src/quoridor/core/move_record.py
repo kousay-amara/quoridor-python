@@ -36,7 +36,7 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass
 class MoveRecord:
     """One recorded move with state before/after execution."""
 
