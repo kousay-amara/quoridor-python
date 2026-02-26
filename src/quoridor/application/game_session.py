@@ -51,6 +51,24 @@ class GameSession:
         self.history.record_move(record)
         return record
 
+    # utile pour la fonction is_wall_legal qui a besoin de savoir les objectif de chaque joueur
+    def _build_player_target_funcs(self):
+        size = self.state.board_size
+        player_ids = sorted(self.state.player_positions.keys())
+        funcs = []
+
+        for idx, _pid in enumerate(player_ids):
+            if idx == 0:      # joueur 1 -> dernière ligne
+                funcs.append(lambda n, s=size: (n // s) == s - 1)
+            elif idx == 1:    # joueur 2 -> première ligne
+                funcs.append(lambda n, s=size: (n // s) == 0)
+            elif idx == 2:    # joueur 3 -> dernière colonne
+                funcs.append(lambda n, s=size: (n % s) == s - 1)
+            elif idx == 3:    # joueur 4 -> première colonne
+                funcs.append(lambda n, s=size: (n % s) == 0)
+
+        return funcs
+
     def place_wall(
         self,
         player_id: int,
@@ -64,7 +82,8 @@ class GameSession:
             raise ValueError("wall_edges must not be empty")
 
         positions = [self.state.player_positions[p] for p in sorted(self.state.player_positions)]
-        if not is_wall_legal(self.state.graph, positions, wall_edges):
+        target_funcs = self._build_player_target_funcs()
+        if not is_wall_legal(self.state.graph, positions, wall_edges, target_funcs):
             raise ValueError(f"illegal wall placement: {wall_edges}")
 
         before = self.state.to_snapshot()

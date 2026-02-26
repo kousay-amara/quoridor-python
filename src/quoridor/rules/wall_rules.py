@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 from typing import Callable, List, Tuple
-from src.utils.algorithms import bfs_has_path
+from utils.algorithms import bfs_has_path
 
 
 def is_wall_legal(graph, 
@@ -11,6 +11,11 @@ def is_wall_legal(graph,
     player_target_funcs: List[Callable[[int], bool]]
 ) -> bool:
     """Check whether placing a wall is legal (no player is blocked)."""
+    # A wall cannot be placed on already removed edges.
+    for (n1, n2) in wall_edges:
+        if n1 not in graph.adj or n2 not in graph.adj[n1]:
+            return False
+
     for (n1, n2) in wall_edges:
         graph.remove_edge(n1, n2)
 

@@ -19,8 +19,14 @@ def get_node_from_notation(notation: str, size: int = 9) -> int:
     Returns:
         The corresponding node index (row * size + col).
     """
-    col = ord(notation[0].lower()) - ord('a')
-    row = int(notation[1:]) - 1
+    text = notation.strip().lower()
+    if len(text) < 2:
+        raise ValueError(f"invalid cell notation: {notation}")
+
+    col = ord(text[0]) - ord('a')
+    row = int(text[1:]) - 1
+    if col < 0 or col >= size or row < 0 or row >= size:
+        raise ValueError(f"cell out of bounds: {notation}")
     return row * size + col
 
 
@@ -54,10 +60,27 @@ def get_edges_for_wall(notation: str, size: int = 9) -> list[tuple[int, int]]:
     Returns:
         A list of two tuples, each representing an edge (node1, node2).
     """
-    base_notation = notation[:2]
-    orientation = notation[2].lower()
+    text = notation.strip().lower()
+    if len(text) < 3:
+        raise ValueError(f"invalid wall notation: {notation}")
 
-    node = get_node_from_notation(base_notation, size)
+    orientation = text[-1]
+    if orientation not in {"h", "v"}:
+        raise ValueError(f"invalid wall orientation in notation: {notation}")
+
+    base_notation = text[:-1]
+    col = ord(base_notation[0]) - ord("a")
+    row = int(base_notation[1:]) - 1
+
+    # Wall anchors must be inside intersections:
+    # on 9x9 board: cols a..h and rows 1..8.
+    if row < 0 or row >= size - 1 or col < 0 or col >= size - 1:
+        raise ValueError(
+            f"wall anchor out of bounds: {notation} "
+            f"(valid columns a-{chr(ord('a') + size - 2)}, rows 1-{size - 1})"
+        )
+
+    node = row * size + col
     edges = []
     if orientation == 'h':
         # Mur horizontal : bloque entre (row, col) et (row+1, col) ET entre (row, col+1) et (row+1, col+1)
