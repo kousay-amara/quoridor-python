@@ -256,23 +256,21 @@ def _print_state(session: GameSession) -> None:
     state = session.state
     size = state.board_size
 
-    print(f"Current player: {state.current_player}")
-
     ordered_ids = sorted(state.player_positions.keys())
     players_line = ", ".join(
         f"Player {pid}: {get_notation_from_node(state.player_positions[pid], size)}"
         for pid in ordered_ids
     )
-    print(players_line)
-
     walls_line = ", ".join(
         f"Player {pid}: "
         f"{'unlimited' if state.remaining_walls.get(pid, 0) < 0 else state.remaining_walls.get(pid, 0)}"
         for pid in ordered_ids
     )
-    print(f"Walls left -> {walls_line}")
-    print()
     print(_render_ascii_board(state))
+    print()
+    print(f"Current player: {state.current_player}")
+    print(players_line)
+    print(f"Walls -> {walls_line}")
 
 
 def _print_moves(session: GameSession) -> None:
