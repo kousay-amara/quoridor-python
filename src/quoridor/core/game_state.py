@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from .graph import Graph
+from ...utils.graph import Graph
 from .move_record import GameSnapshot
 
 

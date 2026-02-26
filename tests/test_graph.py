@@ -1,5 +1,5 @@
 import pytest
-from src.quoridor.core.graph import Graph
+from src.utils.graph import Graph
 from src.utils.algorithms import bfs_has_path
 from src.quoridor.core.board import QuoridorBoard
 from src.quoridor.rules.pawn_rules import is_walk_legal
