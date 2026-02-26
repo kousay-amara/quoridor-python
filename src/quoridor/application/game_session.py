@@ -76,7 +76,8 @@ class GameSession:
         orientation: WallOrientation,
     ) -> MoveRecord:
         self._ensure_current_player(player_id)
-        if self.state.remaining_walls.get(player_id, 0) <= 0:
+        walls_left = self.state.remaining_walls.get(player_id, 0)
+        if walls_left == 0:
             raise ValueError(f"player {player_id} has no walls left")
         if not wall_edges:
             raise ValueError("wall_edges must not be empty")
@@ -93,7 +94,8 @@ class GameSession:
             self.state.vertical_walls.extend(wall_edges)
         else:
             self.state.horizontal_walls.extend(wall_edges)
-        self.state.remaining_walls[player_id] = self.state.remaining_walls[player_id] - 1
+        if walls_left > 0:
+            self.state.remaining_walls[player_id] = walls_left - 1
         self._advance_turn()
         after = self.state.to_snapshot()
 

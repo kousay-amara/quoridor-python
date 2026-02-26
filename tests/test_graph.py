@@ -1,5 +1,5 @@
 import pytest
-from src.utils.graph import Graph
+from src.quoridor.core.graph import Graph
 from src.utils.algorithms import bfs_has_path
 from src.quoridor.core.board import QuoridorBoard
 from src.quoridor.rules.pawn_rules import is_walk_legal
@@ -81,12 +81,10 @@ def test_is_wall_legal_blocked():
     assert 9 in board.graph.adj[0]
 
 def test_is_wall_legal_invalid_edge():
-    """Mur sur une arête inexistante : géré par le graphe."""
+    """Mur sur une arête inexistante : illégal."""
     board = QuoridorBoard(size=9)
     # 0 et 2 ne sont pas voisins, l'arête n'existe pas
-    assert is_wall_legal(board.graph, [0], [(0, 2)], [TARGET_L8]) is True 
-    # Note : Cela renvoie True car remove_edge sur une arête inexistante 
-    # ne change rien au graphe, donc le chemin reste valide.
+    assert is_wall_legal(board.graph, [0], [(0, 2)], [TARGET_L8]) is False
 
 def test_get_all_legal_pawn_moves_simple():
     board = QuoridorBoard(size=9)

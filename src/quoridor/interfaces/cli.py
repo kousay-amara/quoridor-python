@@ -30,6 +30,26 @@ class QuoridorArgumentParser(argparse.ArgumentParser):
         raise SystemExit(1)
 
 
+def _players_type(raw: str) -> int:
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("players must be an integer") from exc
+    if value not in {2, 3, 4}:
+        raise argparse.ArgumentTypeError("players must be one of: 2, 3, 4")
+    return value
+
+
+def _size_type(raw: str) -> int:
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("size must be an integer") from exc
+    if value < 3 or value > 15 or value % 2 == 0:
+        raise argparse.ArgumentTypeError("size must be odd and between 3 and 15")
+    return value
+
+
 def _build_parser(defaults: dict[str, bool | int]) -> argparse.ArgumentParser:
     parser = QuoridorArgumentParser(
         prog="quoridor",
@@ -55,6 +75,27 @@ def _build_parser(defaults: dict[str, bool | int]) -> argparse.ArgumentParser:
         type=int,
         default=int(defaults["time"]),
         help=_("time limit in minutes for blitz mode"),
+    )
+    parser.add_argument(
+        "-p",
+        "--players",
+        type=_players_type,
+        default=int(defaults.get("players", 2)),
+        help=_("number of players (2, 3, or 4)"),
+    )
+    parser.add_argument(
+        "-w",
+        "--walls",
+        type=int,
+        default=int(defaults.get("walls", 20)),
+        help=_("walls per player (negative means unlimited)"),
+    )
+    parser.add_argument(
+        "-s",
+        "--size",
+        type=_size_type,
+        default=int(defaults.get("size", 9)),
+        help=_("board size (odd number between 3 and 15)"),
     )
     parser.set_defaults(verbose=bool(defaults["verbose"]), blitz=bool(defaults["blitz"]))
     return parser
@@ -133,7 +174,14 @@ def _main_interactive(argv: list[str]) -> int:
     if _is_time_passed_on_cli(argv) and not args.blitz:
         sys.stderr.write(_("warning: --time is ignored unless --blitz is enabled\n"))
         time_limit = int(defaults.get("time", DEFAULTS["time"]))
-    _run_interactive_shell(blitz=args.blitz, time_limit=time_limit, save_file=args.save_file)
+    _run_interactive_shell(
+        blitz=args.blitz,
+        time_limit=time_limit,
+        save_file=args.save_file,
+        players=args.players,
+        walls_per_player=args.walls,
+        board_size=args.size,
+    )
     return 0
 
 
@@ -184,7 +232,7 @@ def _render_ascii_board(state) -> str:
             if c < size - 1:
                 right = _node(r, c + 1, size)
                 has_vwall = (n, right) in vwalls or (right, n) in vwalls
-                row_tokens.append("X" if has_vwall else ".")
+                row_tokens.append("X" if has_vwall else " ")
 
         lines.append(f"{r + 1:>2}  " + " ".join(row_tokens))
 
@@ -195,7 +243,7 @@ def _render_ascii_board(state) -> str:
                 top = _node(r, c, size)
                 bottom = _node(r + 1, c, size)
                 has_hwall = (top, bottom) in hwalls or (bottom, top) in hwalls
-                sep_tokens.append("X" if has_hwall else ".")
+                sep_tokens.append("X" if has_hwall else " ")
                 if c < size - 1:
                     sep_tokens.append(" ")
             lines.append("    " + " ".join(sep_tokens))
@@ -218,7 +266,8 @@ def _print_state(session: GameSession) -> None:
     print(players_line)
 
     walls_line = ", ".join(
-        f"Player {pid}: {state.remaining_walls.get(pid, 0)}"
+        f"Player {pid}: "
+        f"{'unlimited' if state.remaining_walls.get(pid, 0) < 0 else state.remaining_walls.get(pid, 0)}"
         for pid in ordered_ids
     )
     print(f"Walls left -> {walls_line}")
@@ -240,27 +289,67 @@ def _print_moves(session: GameSession) -> None:
     print(f"Legal pawn moves for player {current}: {legal_notation}")
 
 
-def _run_interactive_shell(*, blitz: bool, time_limit: int, save_file: str | None) -> None:
+def _has_player_won(player_id: int, node: int, size: int) -> bool:
+    row = node // size
+    col = node % size
+    if player_id == 1:
+        return row == size - 1
+    if player_id == 2:
+        return row == 0
+    if player_id == 3:
+        return col == size - 1
+    if player_id == 4:
+        return col == 0
+    return False
+
+
+def _initial_player_positions(size: int, players: int) -> dict[int, int]:
+    mid = size // 2
+    all_positions = {
+        1: _node(0, mid, size),
+        2: _node(size - 1, mid, size),
+        3: _node(mid, 0, size),
+        4: _node(mid, size - 1, size),
+    }
+    return {pid: all_positions[pid] for pid in range(1, players + 1)}
+
+
+def _run_interactive_shell(
+    *,
+    blitz: bool,
+    time_limit: int,
+    save_file: str | None,
+    players: int,
+    walls_per_player: int,
+    board_size: int,
+) -> None:
     # save/load pas encore implémenté
     if save_file:
         print(_("Loading game from {path}").format(path=save_file))
         print(_("warning: save/load not implemented yet, starting a new game."))
 
-    # État initial 2 joueurs sur 9x9
+    player_positions = _initial_player_positions(board_size, players)
+    wall_count = walls_per_player if walls_per_player >= 0 else -1
+    remaining_walls = {pid: wall_count for pid in player_positions}
+    player_types = {pid: "human" for pid in player_positions}
+
+    # État initial
     state = GameState(
-        board_size=9,
+        board_size=board_size,
         current_player=1,
-        player_positions={1: 4, 2: 76},      # e1 et e9
-        remaining_walls={1: 10, 2: 10},
+        player_positions=player_positions,
+        remaining_walls=remaining_walls,
         vertical_walls=[],
         horizontal_walls=[],
     )
-    session = GameSession(state=state, player_types={1: "human", 2: "human"})
+    session = GameSession(state=state, player_types=player_types)
 
     if blitz:
         print(_("New game started (blitz: {minutes} min/player).").format(minutes=time_limit))
     else:
         print(_("New game started with default options."))
+    if players == 3:
+        print(_("warning: 3-player mode can be unbalanced."))
 
     print(_("Type 'help' for available commands."))
     _print_state(session)
@@ -312,8 +401,7 @@ def _run_interactive_shell(*, blitz: bool, time_limit: int, save_file: str | Non
 
                 # vérification cas de victoire 
                 new_pos = session.state.player_positions[current]
-                row = new_pos // session.state.board_size
-                if (current == 1 and row == session.state.board_size - 1) or (current == 2 and row == 0):
+                if _has_player_won(current, new_pos, session.state.board_size):
                     print(f"Player {current} wins!")
                     _print_state(session)
                     break
