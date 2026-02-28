@@ -83,12 +83,25 @@ def get_edges_for_wall(notation: str, size: int = 9) -> list[tuple[int, int]]:
     node = row * size + col
     edges = []
     if orientation == 'h':
-        # Mur horizontal : bloque entre (row, col) et (row+1, col) ET entre (row, col+1) et (row+1, col+1)
         edges.append((node, node + size))
         edges.append((node + 1, node + 1 + size))
+
     elif orientation == 'v':
-        # Mur vertical : bloque entre (row, col) et (row, col+1) ET entre (row+1, col) et (row+1, col+1)
         edges.append((node, node + 1))
         edges.append((node + size, node + size + 1))
     
+    return edges
+
+
+
+def get_edges_for_wall_at(row: int, col: int, orientation: str, size: int) -> list[tuple[int, int]]:
+    node = row * size + col
+    edges = []
+    if orientation == 'h':
+        edges.append((node, node + size))
+        edges.append((node + 1, node + 1 + size))
+
+    elif orientation == 'v':
+        edges.append((node, node + 1))
+        edges.append((node + size, node + size + 1))
     return edges
