@@ -15,7 +15,7 @@ from ..application.game_session import GameSession
 from ..core.game_state import GameState
 from ..core.notation import get_edges_for_wall, get_node_from_notation, get_notation_from_node
 from ..rules.pawn_rules import get_all_legal_pawn_moves
-
+from ..core.validators import validate_pawn_move, validate_wall
 
 _ = gettext.gettext
 LOGGER = logging.getLogger(__name__)
@@ -395,6 +395,16 @@ def _run_interactive_shell(
                     print(f"Invalid move: current player pawn is not on {from_txt}")
                     continue
 
+                valid, error = validate_pawn_move(
+                    session.state.graph,
+                    from_node,
+                    to_node,
+                    list(session.state.player_positions.values())
+                )
+                if not valid:
+                    print(f"Invalid move: {error}")
+                    continue
+
                 session.play_pawn_move(current, to_node)
 
                 # vérification cas de victoire 
@@ -427,6 +437,21 @@ def _run_interactive_shell(
                 orientation = "horizontal" if ori_char == "h" else "vertical"
 
                 current = session.state.current_player
+                target_funcs = [
+                    (lambda pid: (lambda node: _has_player_won(pid, node, session.state.board_size)))(p)
+                    for p in session.state.player_positions
+                ]
+                valid, error = validate_wall(
+                    session.state.graph,
+                    list(session.state.player_positions.values()),
+                    wall_edges,
+                    target_funcs,
+                    session.state.remaining_walls,
+                    current
+                )
+                if not valid:
+                    print(f"Invalid wall: {error}")
+                    continue
                 session.place_wall(current, wall_edges, orientation)
 
                 _print_state(session)

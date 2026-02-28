@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 from typing import Callable, List, Tuple
-from utils.algorithms import bfs_has_path
+from utils.graph import bfs_has_path
 
 
 def is_wall_legal(graph, 
