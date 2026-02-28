@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 
 from ...utils.graph import Graph
 from .move_record import GameSnapshot
+from .board import QuoridorBoard
 
 
 @dataclass
@@ -28,12 +29,13 @@ class GameState:
         self._rebuild_graph()
 
     def _rebuild_graph(self) -> None:
-        graph = Graph(self.board_size)
+        board = QuoridorBoard(size=self.board_size)
+        self.graph = board.graph
+    
         for edge in self.vertical_walls:
-            graph.remove_edge(*edge)
+            self.graph.remove_edge(*edge)
         for edge in self.horizontal_walls:
-            graph.remove_edge(*edge)
-        self.graph = graph
+            self.graph.remove_edge(*edge)
 
     def to_snapshot(self) -> GameSnapshot:
         """Return a serializable snapshot of the current state."""

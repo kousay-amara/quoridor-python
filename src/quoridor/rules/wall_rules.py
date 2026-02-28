@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 from typing import Callable, List, Tuple
-from utils.graph import bfs_has_path
+from ...utils.graph import bfs_has_path
 from ..core.game_state import GameState
 from ..core.notation import get_edges_for_wall_at
 
