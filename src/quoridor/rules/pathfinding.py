@@ -31,8 +31,6 @@ def has_path(
     return False
 
 
-from collections import deque
-
 def get_shortest_path_length(graph, start_node, is_target_func) -> int:
     """
     Return the the number of move to the shortest path for reach the target.
