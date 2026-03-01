@@ -53,10 +53,30 @@ def apply_move(state: GameState, move: tuple) -> None:
     state.current_player = pids[(idx + 1) % len(pids)]
 
 
-def evaluate_state(state: GameState, ai_player_id: int) -> float:
+def evaluate_state(state: GameState, ai_player_id: int, scoring_type: int = 1) -> float :
     """
-    Give a note for a state for AI POV.
-    Highest is the score, better is the position
+    Évalue l'état selon le mode choisi via --ai-minimax-scoring.
+    """
+    if scoring_type == 1:
+        return evaluate_state_default(state, ai_player_id)
+
+    elif scoring_type == 2:
+        return evaluate_state_material(state, ai_player_id)
+    
+    elif scoring_type == 3:
+        return evaluate_state_hybrid(state, ai_player_id)
+    
+
+
+"""
+The three next fonctions are heuristics for AI.
+They return a note for a state for AI POV.
+Highest is the score, better is the position
+"""
+
+def evaluate_state_default(state: GameState, ai_player_id: int) -> float:
+    """
+    First heuristic, based on the distance from players to their target and the number of remaining wall
     """
     player_ids = sorted(state.player_positions.keys())
     targets = get_player_target_funcs(state.board_size, player_ids)
@@ -71,6 +91,41 @@ def evaluate_state(state: GameState, ai_player_id: int) -> float:
     
     score = distances[opponent_id] - distances[ai_player_id]
     
-    score += (state.remaining_walls[ai_player_id] - state.remaining_walls[opponent_id]) * 0.1
+    score += (state.remaining_walls[ai_player_id] - state.remaining_walls[opponent_id]) * 0.5
     
     return float(score)
+
+
+def evaluate_state_material(state: GameState, ai_player_id: id) -> float:
+    """
+    Second heurisrtic, focused on maintaining the walls and blocking the opposing team.
+    """
+    player_ids = sorted(state.player_positions.keys())
+    targets = get_player_target_funcs(state.board_size, player_ids)
+    opponent_id = [pid for pid in player_ids if pid != ai_player_id[0]]
+
+    my_pos = state.player_positions[ai_player_id]
+    opp_pos = state.player_positions[opponent_id]
+
+    my_dist = get_shortest_path_length(state.graph, my_pos, targets[player_ids.index(ai_player_id)])
+    opp_dist = get_shortest_path_length(state.graph, opp_pos, targets[player_ids.index(opponent_id)])
+
+    my_walls = state.remaining_walls[ai_player_id]
+    opp_walls = state.remaining_walls[opponent_id]
+    wall_diff = my_walls - opp_walls
+
+    if my_dist >= 999: return -1000.0
+    if opp_dist >= 999: return 1000.0
+
+    score = (opp_dist * 1.5) - (my_dist * 0.5) + (wall_diff * 2.0)
+    
+    return float(score)
+
+
+def evaluate_state_hybrid(state: GameState, ai_player_id: id) -> float:
+    """
+    Third heuristic, a balanced mix of distance, remaining walls, and center control.
+    Reduce the risk to being blocked by one oponent's wall. Try to control the center and maximise oportunities.
+    """
+    score = 0
+    return score
