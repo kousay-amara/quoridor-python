@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ...utils.graph import Graph
+from utils.graph import Graph
 from ..interfaces.contest_parser import ContestError, ContestPosition, parse_contest_file
 from ..rules.pawn_rules import get_all_legal_pawn_moves
 

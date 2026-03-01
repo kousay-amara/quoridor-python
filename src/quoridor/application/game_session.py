@@ -9,6 +9,7 @@ from ..core.move_record import MoveRecord, PlayerType
 from ..rules.pawn_rules import get_all_legal_pawn_moves
 from ..rules.wall_rules import is_wall_legal
 from .history_manager import HistoryManager
+from .minimax_engine import choose_best_move_minimax
 
 
 WallOrientation = Literal["vertical", "horizontal"]
@@ -122,6 +123,26 @@ class GameSession:
             self.state.restore,
             requester_type=requester_type,
         )
+
+    def play_ai_turn(self, depth: int = 2) -> MoveRecord:
+        """Compute and play the current AI player's move with minimax."""
+        player_id = self.state.current_player
+        if self._player_type(player_id) != "ai":
+            raise ValueError(f"player {player_id} is not an AI player")
+
+        move = choose_best_move_minimax(self.state, ai_player_id=player_id, depth=depth)
+        move_type = move[0]
+
+        if move_type == "pawn":
+            return self.play_pawn_move(player_id, move[1])
+
+        if move_type == "wall":
+            edges = move[1]
+            orientation_token = move[2]
+            orientation: WallOrientation = "horizontal" if orientation_token in {"h", "horizontal"} else "vertical"
+            return self.place_wall(player_id, edges, orientation)
+
+        raise ValueError(f"unsupported AI move type: {move_type}")
 
     def _ensure_current_player(self, player_id: int) -> None:
         if player_id != self.state.current_player:

@@ -1,6 +1,6 @@
 """Board graph for Quoridor: cells as nodes, possible moves as edges."""
 
-from src.utils.graph import Graph
+from utils.graph import Graph
 
 class QuoridorBoard:
     """Game board modelled as a 4-connected grid graph."""
@@ -17,4 +17,3 @@ class QuoridorBoard:
                     self.graph.add_edge(node, node + 1)
                 if r < self.size - 1:
                     self.graph.add_edge(node, node + self.size)
-
