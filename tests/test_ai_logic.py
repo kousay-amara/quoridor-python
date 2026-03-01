@@ -1,6 +1,6 @@
 import pytest
 from src.quoridor.core.game_state import GameState
-from src.quoridor.application.ai_logic import get_all_legal_moves, apply_move, clone_state
+from src.quoridor.application.ai_logic import evaluate_state, get_all_legal_moves, apply_move, clone_state
 
 def test_clone_state():
     pos = {1: 4, 2: 76}
