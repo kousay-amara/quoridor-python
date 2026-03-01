@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 from typing import Callable, List, Tuple
-from ...utils.graph import bfs_has_path
+from utils.graph import bfs_has_path
 from ..core.game_state import GameState
 from ..core.notation import get_edges_for_wall_at
 
@@ -69,6 +69,5 @@ def get_all_legal_wall_placements(state : GameState):
                 if is_wall_legal(state.graph, positions, edges, targets) : 
                     legal_walls.append(('wall', edges, orientation))
     return legal_walls
-
 
 

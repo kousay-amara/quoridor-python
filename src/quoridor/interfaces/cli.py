@@ -50,6 +50,16 @@ def _size_type(raw: str) -> int:
     return value
 
 
+def _player_id_type(raw: str) -> int:
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("player id must be an integer") from exc
+    if value < 1 or value > 4:
+        raise argparse.ArgumentTypeError("player id must be between 1 and 4")
+    return value
+
+
 def _build_parser(defaults: dict[str, bool | int]) -> argparse.ArgumentParser:
     parser = QuoridorArgumentParser(
         prog="quoridor",
@@ -96,6 +106,31 @@ def _build_parser(defaults: dict[str, bool | int]) -> argparse.ArgumentParser:
         type=_size_type,
         default=int(defaults.get("size", 9)),
         help=_("board size (odd number between 3 and 15)"),
+    )
+    parser.add_argument(
+        "--ai-player",
+        action="append",
+        default=[],
+        type=_player_id_type,
+        help=_("player id controlled by AI (repeat option for multiple players)"),
+    )
+    parser.add_argument(
+        "--ai-mode",
+        choices=["minimax"],
+        default="minimax",
+        help=_("AI mode (currently only minimax is available)"),
+    )
+    parser.add_argument(
+        "--ai-time",
+        type=int,
+        default=5,
+        help=_("AI thinking time in seconds (reserved for iterative mode)"),
+    )
+    parser.add_argument(
+        "--ai-minimax-depth",
+        type=int,
+        default=2,
+        help=_("minimax search depth"),
     )
     parser.set_defaults(verbose=bool(defaults["verbose"]), blitz=bool(defaults["blitz"]))
     return parser
@@ -161,6 +196,12 @@ def _main_interactive(argv: list[str]) -> int:
     defaults = load_or_init_config()
     parser = _build_parser(defaults)
     args = parser.parse_args(argv)
+    if any(pid > args.players for pid in args.ai_player):
+        parser.error("--ai-player id must be <= --players")
+    if args.ai_time <= 0:
+        parser.error("--ai-time must be > 0")
+    if args.ai_minimax_depth <= 0:
+        parser.error("--ai-minimax-depth must be > 0")
 
     if args.version:
         print(_get_version())
@@ -181,6 +222,10 @@ def _main_interactive(argv: list[str]) -> int:
         players=args.players,
         walls_per_player=args.walls,
         board_size=args.size,
+        ai_players=args.ai_player,
+        ai_mode=args.ai_mode,
+        ai_time=args.ai_time,
+        ai_minimax_depth=args.ai_minimax_depth,
     )
     return 0
 
@@ -312,6 +357,25 @@ def _initial_player_positions(size: int, players: int) -> dict[int, int]:
     return {pid: all_positions[pid] for pid in range(1, players + 1)}
 
 
+def _auto_play_ai_until_human_or_end(
+    session: GameSession,
+    ai_minimax_depth: int,
+) -> bool:
+    while session.player_types.get(session.state.current_player) == "ai":
+        current_ai = session.state.current_player
+        session.play_ai_turn(depth=ai_minimax_depth)
+        print(f"AI player {current_ai} played.")
+
+        new_pos = session.state.player_positions[current_ai]
+        if _has_player_won(current_ai, new_pos, session.state.board_size):
+            print(f"Player {current_ai} wins!")
+            _print_state(session)
+            return True
+
+        _print_state(session)
+    return False
+
+
 def _run_interactive_shell(
     *,
     blitz: bool,
@@ -320,6 +384,10 @@ def _run_interactive_shell(
     players: int,
     walls_per_player: int,
     board_size: int,
+    ai_players: list[int],
+    ai_mode: str,
+    ai_time: int,
+    ai_minimax_depth: int,
 ) -> None:
     # save/load pas encore implémenté
     if save_file:
@@ -329,7 +397,8 @@ def _run_interactive_shell(
     player_positions = _initial_player_positions(board_size, players)
     wall_count = walls_per_player if walls_per_player >= 0 else -1
     remaining_walls = {pid: wall_count for pid in player_positions}
-    player_types = {pid: "human" for pid in player_positions}
+    ai_set = set(ai_players)
+    player_types = {pid: ("ai" if pid in ai_set else "human") for pid in player_positions}
 
     # État initial
     state = GameState(
@@ -350,7 +419,12 @@ def _run_interactive_shell(
         print(_("warning: 3-player mode can be unbalanced."))
 
     print(_("Type 'help' for available commands."))
+    if ai_set:
+        print(f"AI players: {sorted(ai_set)} (mode={ai_mode}, depth={ai_minimax_depth}, time={ai_time}s)")
     _print_state(session)
+
+    if _auto_play_ai_until_human_or_end(session, ai_minimax_depth):
+        return
 
     while True:
         try:
@@ -399,7 +473,8 @@ def _run_interactive_shell(
                     session.state.graph,
                     from_node,
                     to_node,
-                    list(session.state.player_positions.values())
+                    list(session.state.player_positions.values()),
+                    session.state.board_size,
                 )
                 if not valid:
                     print(f"Invalid move: {error}")
@@ -415,6 +490,8 @@ def _run_interactive_shell(
                     break
 
                 _print_state(session)
+                if _auto_play_ai_until_human_or_end(session, ai_minimax_depth):
+                    break
             # commande invalid 
             except Exception as exc:
                 print(f"Invalid command: {exc}")
@@ -455,6 +532,8 @@ def _run_interactive_shell(
                 session.place_wall(current, wall_edges, orientation)
 
                 _print_state(session)
+                if _auto_play_ai_until_human_or_end(session, ai_minimax_depth):
+                    break
             except Exception as exc:
                 print(f"Invalid command: {exc}")
             continue
