@@ -49,3 +49,41 @@ def bfs_has_path(graph, start_node, is_target_func) -> bool:
                 visited.add(neighbor)
                 queue.append(neighbor)
     return False
+
+
+def get_shortest_path_length(graph, start_node, is_target_func) -> int:
+    """
+    Return the the number of move to the shortest path for reach the target.
+    Return a large value (999) if there is no path.
+    """
+    queue = deque([(start_node, 0)])
+    visited = {start_node}
+    
+    while queue:
+        curr, dist = queue.popleft()
+        
+        if is_target_func(curr):
+            return dist
+            
+        for neighbor in graph.adj.get(curr, []):
+            if neighbor not in visited:
+                visited.add(neighbor)
+                queue.append((neighbor, dist + 1))
+                
+    return 999 
+
+
+def count_connected_components(self) -> int:
+    """Count the number of connected components"""
+    visited = set()
+    count = 0
+    for node in self.adj:
+        if node not in visited:
+            count += 1
+            stack = [node]
+            while stack:
+                curr = stack.pop()
+                if curr not in visited:
+                    visited.add(curr)
+                    stack.extend(self.adj[curr])
+    return count

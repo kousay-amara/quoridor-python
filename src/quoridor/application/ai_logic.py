@@ -2,7 +2,7 @@ from ..core.game_state import GameState
 from ..rules.pawn_rules import get_all_legal_pawn_moves
 from ..rules.wall_rules import get_all_legal_wall_placements
 from ..rules.wall_rules import get_player_target_funcs
-from ..rules.pathfinding import get_shortest_path_length
+from ...utils.graph import get_shortest_path_length
 
 SCORING_DEFAULT = 1
 SCORING_MATERIAL = 2
