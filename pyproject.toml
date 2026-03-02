@@ -21,7 +21,6 @@ classifiers = [
 
 dependencies = [
     "python-dotenv>=1.0.0",
-    "PyGObject>=3.42.0",
 ]
 
 [project.scripts]
@@ -29,6 +28,10 @@ quoridor = "quoridor.interfaces.cli:main"
 qoridor = "quoridor.interfaces.cli:main"
 
 [project.optional-dependencies]
+gui = [
+    "PyGObject>=3.42.0",
+]
+
 dev = [
     "pytest>=7.4.0",
     "pytest-cov>=4.1.0",
@@ -117,4 +120,3 @@ warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = false
 ignore_missing_imports = true
-
