@@ -1,0 +1,42 @@
+digraph "packages" {
+rankdir=BT
+charset="utf-8"
+"src.quoridor" [color="black", label=<src.quoridor>, shape="box", style="solid"];
+"src.quoridor.__main__" [color="black", label=<src.quoridor.__main__>, shape="box", style="solid"];
+"src.quoridor.application" [color="black", label=<src.quoridor.application>, shape="box", style="solid"];
+"src.quoridor.application.ai_logic" [color="black", label=<src.quoridor.application.ai_logic>, shape="box", style="solid"];
+"src.quoridor.application.contest" [color="black", label=<src.quoridor.application.contest>, shape="box", style="solid"];
+"src.quoridor.application.game_session" [color="black", label=<src.quoridor.application.game_session>, shape="box", style="solid"];
+"src.quoridor.application.history_manager" [color="black", label=<src.quoridor.application.history_manager>, shape="box", style="solid"];
+"src.quoridor.application.minimax_engine" [color="black", label=<src.quoridor.application.minimax_engine>, shape="box", style="solid"];
+"src.quoridor.config" [color="black", label=<src.quoridor.config>, shape="box", style="solid"];
+"src.quoridor.core" [color="black", label=<src.quoridor.core>, shape="box", style="solid"];
+"src.quoridor.core.board" [color="black", label=<src.quoridor.core.board>, shape="box", style="solid"];
+"src.quoridor.core.game_state" [color="black", label=<src.quoridor.core.game_state>, shape="box", style="solid"];
+"src.quoridor.core.move_record" [color="black", label=<src.quoridor.core.move_record>, shape="box", style="solid"];
+"src.quoridor.core.notation" [color="black", label=<src.quoridor.core.notation>, shape="box", style="solid"];
+"src.quoridor.core.player" [color="black", label=<src.quoridor.core.player>, shape="box", style="solid"];
+"src.quoridor.core.validators" [color="black", label=<src.quoridor.core.validators>, shape="box", style="solid"];
+"src.quoridor.interfaces" [color="black", label=<src.quoridor.interfaces>, shape="box", style="solid"];
+"src.quoridor.interfaces.cli" [color="black", label=<src.quoridor.interfaces.cli>, shape="box", style="solid"];
+"src.quoridor.interfaces.contest_parser" [color="black", label=<src.quoridor.interfaces.contest_parser>, shape="box", style="solid"];
+"src.quoridor.interfaces.gui" [color="black", label=<src.quoridor.interfaces.gui>, shape="box", style="solid"];
+"src.quoridor.rules" [color="black", label=<src.quoridor.rules>, shape="box", style="solid"];
+"src.quoridor.rules.pathfinding" [color="black", label=<src.quoridor.rules.pathfinding>, shape="box", style="solid"];
+"src.quoridor.rules.pawn_rules" [color="black", label=<src.quoridor.rules.pawn_rules>, shape="box", style="solid"];
+"src.quoridor.rules.wall_rules" [color="black", label=<src.quoridor.rules.wall_rules>, shape="box", style="solid"];
+"src.quoridor.application" -> "src.quoridor.application.game_session" [arrowhead="open", arrowtail="none"];
+"src.quoridor.application" -> "src.quoridor.application.history_manager" [arrowhead="open", arrowtail="none"];
+"src.quoridor.application.game_session" -> "src.quoridor.application.history_manager" [arrowhead="open", arrowtail="none"];
+"src.quoridor.application.game_session" -> "src.quoridor.application.minimax_engine" [arrowhead="open", arrowtail="none"];
+"src.quoridor.application.minimax_engine" -> "src.quoridor.application.ai_logic" [arrowhead="open", arrowtail="none"];
+"src.quoridor.core" -> "src.quoridor.core.game_state" [arrowhead="open", arrowtail="none"];
+"src.quoridor.core" -> "src.quoridor.core.move_record" [arrowhead="open", arrowtail="none"];
+"src.quoridor.core" -> "src.quoridor.core.player" [arrowhead="open", arrowtail="none"];
+"src.quoridor.core.game_state" -> "src.quoridor.core.board" [arrowhead="open", arrowtail="none"];
+"src.quoridor.core.game_state" -> "src.quoridor.core.move_record" [arrowhead="open", arrowtail="none"];
+"src.quoridor.interfaces.cli" -> "src.quoridor.interfaces.contest_parser" [arrowhead="open", arrowtail="none"];
+"src.quoridor.rules" -> "src.quoridor.rules.pathfinding" [arrowhead="open", arrowtail="none"];
+"src.quoridor.rules" -> "src.quoridor.rules.pawn_rules" [arrowhead="open", arrowtail="none"];
+"src.quoridor.rules" -> "src.quoridor.rules.wall_rules" [arrowhead="open", arrowtail="none"];
+}
