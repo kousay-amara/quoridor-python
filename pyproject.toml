@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "quoridor"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Quoridor game implementation in Python"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -120,3 +120,6 @@ warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = false
 ignore_missing_imports = true
+
+[tool.setuptools.dynamic]
+version = {attr = "quoridor.__version__"}
