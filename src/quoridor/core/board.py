@@ -7,6 +7,7 @@ class QuoridorBoard:
     def __init__(self, size: int = 9):
         self.size = size
         self.graph = Graph()
+        self.adj = self.graph.adj
         self._build_grid()
 
     def _build_grid(self):
