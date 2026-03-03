@@ -106,8 +106,8 @@ def evaluate_state_material(state: GameState, ai_player_id: id) -> float:
     """
     player_ids = sorted(state.player_positions.keys())
     targets = get_player_target_funcs(state.board_size, player_ids)
-    opponent_id = [pid for pid in player_ids if pid != ai_player_id[0]]
-
+    opponent_id = [pid for pid in player_ids if pid != ai_player_id][0]
+    
     my_pos = state.player_positions[ai_player_id]
     opp_pos = state.player_positions[opponent_id]
 

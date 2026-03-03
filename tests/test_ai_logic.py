@@ -1,6 +1,8 @@
+"""Tests for ai_logic"""
+
 import pytest
 from src.quoridor.core.game_state import GameState
-from src.quoridor.application.ai_logic import evaluate_state, get_all_legal_moves, apply_move, clone_state
+from src.quoridor.application.ai_logic import evaluate_state, get_all_legal_moves, apply_move, clone_state, SCORING_MATERIAL, SCORING_HYBRID, SCORING_DEFAULT
 
 def test_clone_state():
     pos = {1: 4, 2: 76}
@@ -74,3 +76,17 @@ def test_apply_move_wall_horizontal():
     assert edges[1] in state.horizontal_walls
     assert state.remaining_walls[1] == 9
     assert state.current_player == 2
+
+
+def test_evaluate_scoring_selection():
+    pos = {1: 4, 2: 76}
+    state = GameState(9, 1, pos, {1: 10, 2: 10})
+    
+    score_mat = evaluate_state(state, 1, scoring_type=SCORING_MATERIAL)
+    assert isinstance(score_mat, float)
+    
+    score_hyb = evaluate_state(state, 1, scoring_type=SCORING_HYBRID)
+    assert isinstance(score_hyb, float)
+    
+    score_def = evaluate_state(state, 1, scoring_type=SCORING_DEFAULT)
+    assert isinstance(score_def, float)
