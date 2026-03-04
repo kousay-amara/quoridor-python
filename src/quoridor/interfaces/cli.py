@@ -9,13 +9,14 @@ from importlib import metadata
 
 from i18n import setup_i18n
 from ..application.contest import run_contest
+from ..application.minimax_engine import choose_best_move_minimax
 from ..config import DEFAULTS, load_or_init_config
-from .contest_parser import ContestError
-from ..application.game_session import GameSession
+from .contest_parser import ContestError, parse_contest_file
+from ..application.game_session import GameSession, initial_player_positions
 from ..core.game_state import GameState
 from ..core.notation import get_edges_for_wall, get_node_from_notation, get_notation_from_node
 from ..rules.pawn_rules import get_all_legal_pawn_moves
-from ..core.validators import validate_pawn_move, validate_wall
+from ..rules.win_rules import has_player_won
 
 _ = gettext.gettext
 LOGGER = logging.getLogger(__name__)
@@ -254,20 +255,16 @@ def _render_ascii_board(state) -> str:
     """
     size = state.board_size
 
-    # Pour lookup rapide des murs
     vwalls = set(tuple(edge) for edge in state.vertical_walls)
     hwalls = set(tuple(edge) for edge in state.horizontal_walls)
 
-    # positions inversées: node -> player_id
     player_at = {node: pid for pid, node in state.player_positions.items()}
 
     lines = []
-    # Fixed-width header aligned with cell columns.
     lines.append("    " + "   ".join(chr(ord("a") + c) for c in range(size)))
     lines.append("")
 
     for r in range(size):
-        # Cell row: one cell token and one vertical-separator token between cells.
         row_tokens = []
         for c in range(size):
             n = _node(r, c, size)
@@ -281,7 +278,6 @@ def _render_ascii_board(state) -> str:
 
         lines.append(f"{r + 1:>2}  " + " ".join(row_tokens))
 
-        # Separator row between r and r+1: horizontal walls only.
         if r < size - 1:
             sep_tokens = []
             for c in range(size):
@@ -322,39 +318,175 @@ def _print_moves(session: GameSession) -> None:
     """Shows the legal moves for the current player"""
     current = session.state.current_player
 
-    # take the current position of the current player
     from_node = session.state.player_positions[current]
-    # and then see the legal moves
     all_positions = list(session.state.player_positions.values())
     legal_nodes = get_all_legal_pawn_moves(session.state.graph, from_node, all_positions)
-    # transform in notation for visibily
     legal_notation = [get_notation_from_node(n, session.state.board_size) for n in sorted(legal_nodes)]
     print(f"Legal pawn moves for player {current}: {legal_notation}")
 
 
-def _has_player_won(player_id: int, node: int, size: int) -> bool:
-    row = node // size
-    col = node % size
-    if player_id == 1:
-        return row == size - 1
-    if player_id == 2:
-        return row == 0
-    if player_id == 3:
-        return col == size - 1
-    if player_id == 4:
-        return col == 0
+def _play_pawn_move_from_token(session: GameSession, move_token: str) -> bool:
+    token = move_token.strip().lower()
+    if "-" not in token:
+        raise ValueError("Invalid format. Use: e2-e3")
+
+    from_txt, to_txt = token.split("-", 1)
+    from_node = get_node_from_notation(from_txt, session.state.board_size)
+    to_node = get_node_from_notation(to_txt, session.state.board_size)
+
+    current = session.state.current_player
+    session.play_pawn_move_from_to(current, from_node, to_node)
+    new_pos = session.state.player_positions[current]
+    if has_player_won(current, new_pos, session.state.board_size):
+        print(f"Player {current} wins!")
+        _print_state(session)
+        return True
+
+    _print_state(session)
     return False
 
 
-def _initial_player_positions(size: int, players: int) -> dict[int, int]:
-    mid = size // 2
-    all_positions = {
-        1: _node(0, mid, size),
-        2: _node(size - 1, mid, size),
-        3: _node(mid, 0, size),
-        4: _node(mid, size - 1, size),
+def _place_wall_from_token(session: GameSession, wall_token: str) -> None:
+    token = wall_token.strip().lower()
+    if len(token) < 3:
+        raise ValueError("Invalid format. Use: e2h or e2v")
+
+    ori_char = token[-1]
+    if ori_char not in {"h", "v"}:
+        raise ValueError("Invalid wall orientation. Use h or v")
+
+    wall_edges = get_edges_for_wall(token, session.state.board_size)
+    orientation = "horizontal" if ori_char == "h" else "vertical"
+
+    current = session.state.current_player
+    session.place_wall(current, wall_edges, orientation)
+    _print_state(session)
+
+
+def _format_hint_move(move: tuple, *, from_node: int, size: int) -> str:
+    move_type = move[0]
+    if move_type == "pawn":
+        to_node = int(move[1])
+        return f"{get_notation_from_node(from_node, size)}-{get_notation_from_node(to_node, size)}"
+    if move_type == "wall":
+        edges = move[1]
+        orientation = move[2]
+        anchor = min(min(a, b) for a, b in edges)
+        ori = "h" if orientation in {"h", "horizontal"} else "v"
+        return f"{get_notation_from_node(anchor, size)}{ori}"
+    return str(move)
+
+
+def _load_session_from_file(
+    path: str,
+    *,
+    fallback_player_types: dict[int, str],
+    fallback_walls_per_player: dict[int, int],
+) -> GameSession:
+    position = parse_contest_file(path)
+    players = sorted(position.positions.keys())
+    remaining_walls = {
+        pid: fallback_walls_per_player.get(pid, 20)
+        for pid in players
     }
-    return {pid: all_positions[pid] for pid in range(1, players + 1)}
+    player_types = {
+        pid: fallback_player_types.get(pid, "human")
+        for pid in players
+    }
+    state = GameState(
+        board_size=position.size,
+        current_player=position.current_player,
+        player_positions=position.positions,
+        remaining_walls=remaining_walls,
+        vertical_walls=position.vertical_walls,
+        horizontal_walls=position.horizontal_walls,
+    )
+    return GameSession(state=state, player_types=player_types)
+
+
+def _serialize_game_section(state: GameState) -> str:
+    size = state.board_size
+    vwalls = set(tuple(edge) for edge in state.vertical_walls)
+    hwalls = set(tuple(edge) for edge in state.horizontal_walls)
+    player_at = {node: pid for pid, node in state.player_positions.items()}
+
+    lines: list[str] = []
+    lines.append("[game]")
+    lines.append(str(state.current_player))
+
+    for row in range(size):
+        cell_tokens: list[str] = []
+        for col in range(size):
+            node = _node(row, col, size)
+            cell = str(player_at[node]) if node in player_at else "_"
+
+            prefix = ""
+            if col > 0:
+                left = _node(row, col - 1, size)
+                has_vwall = (left, node) in vwalls or (node, left) in vwalls
+                if has_vwall:
+                    prefix = "X"
+            cell_tokens.append(f"{prefix}{cell}")
+        lines.append(" ".join(cell_tokens))
+
+        if row < size - 1:
+            sep_tokens: list[str] = []
+            for col in range(size):
+                top = _node(row, col, size)
+                bottom = _node(row + 1, col, size)
+                has_hwall = (top, bottom) in hwalls or (bottom, top) in hwalls
+                sep_tokens.append("X" if has_hwall else ".")
+            lines.append(" ".join(sep_tokens))
+
+    ordered_players = sorted(state.remaining_walls.keys())
+    walls_part = " ".join(str(state.remaining_walls[pid]) for pid in ordered_players)
+    lines.append(f"walls: {walls_part}")
+    return "\n".join(lines) + "\n"
+
+
+def _save_session_to_file(path: str, session: GameSession) -> None:
+    content = _serialize_game_section(session.state)
+    with open(path, "w", encoding="utf-8") as stream:
+        stream.write(content)
+
+
+def _prompt_save_before_quit(session: GameSession) -> bool:
+    """Return True when the caller should quit."""
+    try:
+        choice = input("Save the game before quitting? [Y/N] ").strip()
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return True
+
+    if choice.lower() not in {"y", "yes"}:
+        return True
+
+    while True:
+        try:
+            path = input("Save file path: ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return True
+
+        if not path:
+            print("Invalid path.")
+        else:
+            try:
+                _save_session_to_file(path, session)
+                print(_("Game saved to {path}").format(path=path))
+                return True
+            except OSError as exc:
+                print(f"Cannot save file: {exc}")
+            except Exception as exc:
+                print(f"Cannot save game: {exc}")
+
+        try:
+            retry = input("Saving failed. Try again? [Y/N] ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return True
+        if retry.lower() not in {"y", "yes"}:
+            return True
 
 
 def _auto_play_ai_until_human_or_end(
@@ -367,7 +499,7 @@ def _auto_play_ai_until_human_or_end(
         print(f"AI player {current_ai} played.")
 
         new_pos = session.state.player_positions[current_ai]
-        if _has_player_won(current_ai, new_pos, session.state.board_size):
+        if has_player_won(current_ai, new_pos, session.state.board_size):
             print(f"Player {current_ai} wins!")
             _print_state(session)
             return True
@@ -389,18 +521,16 @@ def _run_interactive_shell(
     ai_time: int,
     ai_minimax_depth: int,
 ) -> None:
-    # save/load pas encore implémenté
     if save_file:
         print(_("Loading game from {path}").format(path=save_file))
         print(_("warning: save/load not implemented yet, starting a new game."))
 
-    player_positions = _initial_player_positions(board_size, players)
+    player_positions = initial_player_positions(board_size, players)
     wall_count = walls_per_player if walls_per_player >= 0 else -1
     remaining_walls = {pid: wall_count for pid in player_positions}
     ai_set = set(ai_players)
     player_types = {pid: ("ai" if pid in ai_set else "human") for pid in player_positions}
 
-    # État initial
     state = GameState(
         board_size=board_size,
         current_player=1,
@@ -410,6 +540,7 @@ def _run_interactive_shell(
         horizontal_walls=[],
     )
     session = GameSession(state=state, player_types=player_types)
+    has_unsaved_changes = False
 
     if blitz:
         print(_("New game started (blitz: {minutes} min/player).").format(minutes=time_limit))
@@ -436,136 +567,229 @@ def _run_interactive_shell(
         if not line:
             continue
 
-        # 1) HELP
-        if line == "help":
-            print("Commands: help, show, moves, move <e2-e3>, wall <e2h|e2v>, undo, redo, quit")
+        if line == "help" or line.startswith("help "):
+            help_by_command = {
+                "help": "help [CMD]\n  Show shell help, or help for CMD.",
+                "load": "load FILE\n  Load a game position from FILE.",
+                "save": "save FILE\n  Save the current game position to FILE.",
+                "hint": "hint\n  Show a suggested move for the current player.",
+                "show board": "show board\n  Display only the current board.",
+                "moves": "moves\n  Display legal pawn moves for the current player.",
+                "move": "move <FROM-TO>\n  Move the current pawn (example: move e2-e3). Shorthand: e2-e3.",
+                "wall": "wall <POSh|POSv>\n  Place a wall (example: wall e2h or wall e2v). Shorthand: e2h/e2v.",
+                "undo": "undo [N]\n  Undo the last move-group (or N groups).",
+                "redo": "redo [N]\n  Redo the last undone move-group (or N groups).",
+                "quit": "quit\n  Exit the program.",
+            }
+
+            parts = line.split(maxsplit=1)
+            if len(parts) == 1:
+                print("Commands: help [CMD], load, save, hint, show board, moves, move, wall, undo, redo, quit")
+                print("Use: help <command>")
+                continue
+
+            target = parts[1].strip().lower()
+            if target in help_by_command:
+                print(help_by_command[target])
+            else:
+                print(_("Invalid command."))
             continue
 
-        # 2) SHOW
-        if line == "show":
-            _print_state(session)
+        if line.lower().startswith("load "):
+            file_path = line[5:].strip()
+            if not file_path:
+                print("Invalid format. Use: load FILE")
+                continue
+            try:
+                session = _load_session_from_file(
+                    file_path,
+                    fallback_player_types=session.player_types,
+                    fallback_walls_per_player=session.state.remaining_walls,
+                )
+                has_unsaved_changes = True
+                print(_("Game loaded from {path}").format(path=file_path))
+                _print_state(session)
+                before_ai_cursor = session.history.cursor
+                if _auto_play_ai_until_human_or_end(session, ai_minimax_depth):
+                    if session.history.cursor != before_ai_cursor:
+                        has_unsaved_changes = True
+                    break
+                if session.history.cursor != before_ai_cursor:
+                    has_unsaved_changes = True
+            except ContestError as exc:
+                print(f"Invalid load file: {exc}")
+            except OSError as exc:
+                print(f"Cannot load file: {exc}")
+            except Exception as exc:
+                print(f"Invalid command: {exc}")
             continue
 
-        # 3) MOVES
+        if line.lower().startswith("save "):
+            file_path = line[5:].strip()
+            if not file_path:
+                print("Invalid format. Use: save FILE")
+                continue
+            try:
+                _save_session_to_file(file_path, session)
+                has_unsaved_changes = False
+                print(_("Game saved to {path}").format(path=file_path))
+            except OSError as exc:
+                print(f"Cannot save file: {exc}")
+            except Exception as exc:
+                print(f"Invalid command: {exc}")
+            continue
+
+        if line == "hint":
+            try:
+                current = session.state.current_player
+                move = choose_best_move_minimax(session.state, ai_player_id=current, depth=ai_minimax_depth)
+                from_node = session.state.player_positions[current]
+                best_hint = _format_hint_move(move, from_node=from_node, size=session.state.board_size)
+                print(f"Best hint action: {best_hint}")
+            except Exception as exc:
+                print(f"No hint available: {exc}")
+            continue
+
+        if line == "show board":
+            print(_render_ascii_board(session.state))
+            continue
+
         if line == "moves":
             _print_moves(session)
             continue
 
-        # 4) MOVE e2-e3
-        if line.startswith("move "):
+        if line.lower().startswith("move "):
             try:
-                move_token = line[5:].strip().lower()
-                if "-" not in move_token:
-                    print("Invalid format. Use: move e2-e3")
-                    continue
-
-                from_txt, to_txt = move_token.split("-", 1)
-                from_node = get_node_from_notation(from_txt, session.state.board_size)
-                to_node = get_node_from_notation(to_txt, session.state.board_size)
-
-                current = session.state.current_player
-                # verifier qu'il est valide et possible 
-                if session.state.player_positions[current] != from_node:
-                    print(f"Invalid move: current player pawn is not on {from_txt}")
-                    continue
-
-                valid, error = validate_pawn_move(
-                    session.state.graph,
-                    from_node,
-                    to_node,
-                    list(session.state.player_positions.values()),
-                    session.state.board_size,
-                )
-                if not valid:
-                    print(f"Invalid move: {error}")
-                    continue
-
-                session.play_pawn_move(current, to_node)
-
-                # vérification cas de victoire 
-                new_pos = session.state.player_positions[current]
-                if _has_player_won(current, new_pos, session.state.board_size):
-                    print(f"Player {current} wins!")
-                    _print_state(session)
+                if _play_pawn_move_from_token(session, line[5:]):
+                    has_unsaved_changes = True
                     break
 
-                _print_state(session)
+                has_unsaved_changes = True
+                before_ai_cursor = session.history.cursor
                 if _auto_play_ai_until_human_or_end(session, ai_minimax_depth):
+                    if session.history.cursor != before_ai_cursor:
+                        has_unsaved_changes = True
                     break
-            # commande invalid 
+                if session.history.cursor != before_ai_cursor:
+                    has_unsaved_changes = True
             except Exception as exc:
                 print(f"Invalid command: {exc}")
             continue
 
-        # 5) WALL e2h / e2v
-        if line.startswith("wall "):
+        if line.lower().startswith("wall "):
             try:
-                wall_token = line[5:].strip().lower()
-                if len(wall_token) < 3:
-                    print("Invalid format. Use: wall e2h or wall e2v")
-                    continue
-
-                ori_char = wall_token[-1]
-                if ori_char not in {"h", "v"}:
-                    print("Invalid wall orientation. Use h or v")
-                    continue
-
-                wall_edges = get_edges_for_wall(wall_token, session.state.board_size)
-                orientation = "horizontal" if ori_char == "h" else "vertical"
-
-                current = session.state.current_player
-                target_funcs = [
-                    (lambda pid: (lambda node: _has_player_won(pid, node, session.state.board_size)))(p)
-                    for p in session.state.player_positions
-                ]
-                valid, error = validate_wall(
-                    session.state.graph,
-                    list(session.state.player_positions.values()),
-                    wall_edges,
-                    target_funcs,
-                    session.state.remaining_walls,
-                    current
-                )
-                if not valid:
-                    print(f"Invalid wall: {error}")
-                    continue
-                session.place_wall(current, wall_edges, orientation)
-
-                _print_state(session)
+                _place_wall_from_token(session, line[5:])
+                has_unsaved_changes = True
+                before_ai_cursor = session.history.cursor
                 if _auto_play_ai_until_human_or_end(session, ai_minimax_depth):
+                    if session.history.cursor != before_ai_cursor:
+                        has_unsaved_changes = True
                     break
+                if session.history.cursor != before_ai_cursor:
+                    has_unsaved_changes = True
             except Exception as exc:
                 print(f"Invalid command: {exc}")
             continue
 
-        # 6) UNDO
-        if line == "undo":
+        if line == "undo" or line.lower().startswith("undo "):
             try:
                 current = session.state.current_player
-                undone = session.undo(requester_id=current)
-                print(f"Undone moves: {len(undone)}")
+                parts = line.split()
+                if len(parts) > 2:
+                    raise ValueError("Invalid format. Use: undo [N]")
+                count = 1
+                if len(parts) == 2:
+                    count = int(parts[1])
+                    if count <= 0:
+                        raise ValueError("N must be > 0")
+
+                total_undone = 0
+                groups_done = 0
+                for _step in range(count):
+                    undone = session.undo(requester_id=current)
+                    if not undone:
+                        break
+                    groups_done += 1
+                    total_undone += len(undone)
+
+                print(f"Undone groups: {groups_done}, moves: {total_undone}")
                 _print_state(session)
+                if total_undone > 0:
+                    has_unsaved_changes = True
             except Exception as exc:
                 print(f"Invalid command: {exc}")
             continue
 
-        # 7) REDO
-        if line == "redo":
+        if line == "redo" or line.lower().startswith("redo "):
             try:
                 current = session.state.current_player
-                redone = session.redo(requester_id=current)
-                print(f"Redone moves: {len(redone)}")
+                parts = line.split()
+                if len(parts) > 2:
+                    raise ValueError("Invalid format. Use: redo [N]")
+                count = 1
+                if len(parts) == 2:
+                    count = int(parts[1])
+                    if count <= 0:
+                        raise ValueError("N must be > 0")
+
+                total_redone = 0
+                groups_done = 0
+                for _step in range(count):
+                    redone = session.redo(requester_id=current)
+                    if not redone:
+                        break
+                    groups_done += 1
+                    total_redone += len(redone)
+
+                print(f"Redone groups: {groups_done}, moves: {total_redone}")
                 _print_state(session)
+                if total_redone > 0:
+                    has_unsaved_changes = True
             except Exception as exc:
                 print(f"Invalid command: {exc}")
             continue
 
-        # 8) QUIT
+        if "-" in line and " " not in line:
+            try:
+                if _play_pawn_move_from_token(session, line):
+                    has_unsaved_changes = True
+                    break
+                has_unsaved_changes = True
+                before_ai_cursor = session.history.cursor
+                if _auto_play_ai_until_human_or_end(session, ai_minimax_depth):
+                    if session.history.cursor != before_ai_cursor:
+                        has_unsaved_changes = True
+                    break
+                if session.history.cursor != before_ai_cursor:
+                    has_unsaved_changes = True
+            except Exception:
+                pass
+            else:
+                continue
+
+        if " " not in line and len(line) >= 3 and line[-1].lower() in {"h", "v"}:
+            try:
+                _place_wall_from_token(session, line)
+                has_unsaved_changes = True
+                before_ai_cursor = session.history.cursor
+                if _auto_play_ai_until_human_or_end(session, ai_minimax_depth):
+                    if session.history.cursor != before_ai_cursor:
+                        has_unsaved_changes = True
+                    break
+                if session.history.cursor != before_ai_cursor:
+                    has_unsaved_changes = True
+            except Exception:
+                pass
+            else:
+                continue
+
         if line == "quit":
+            if has_unsaved_changes:
+                _prompt_save_before_quit(session)
             print(_("Bye."))
             break
 
-        print(_("Unknown command: {cmd}").format(cmd=line))
+        print(_("Invalid command."))
 
 if __name__ == "__main__":
     raise SystemExit(main())

@@ -15,6 +15,18 @@ from .minimax_engine import choose_best_move_minimax
 WallOrientation = Literal["vertical", "horizontal"]
 
 
+def initial_player_positions(board_size: int, players: int) -> dict[int, int]:
+    """Return canonical starting positions for 2 to 4 players."""
+    mid = board_size // 2
+    all_positions = {
+        1: 0 * board_size + mid,
+        2: (board_size - 1) * board_size + mid,
+        3: mid * board_size + 0,
+        4: mid * board_size + (board_size - 1),
+    }
+    return {pid: all_positions[pid] for pid in range(1, players + 1)}
+
+
 class GameSession:
     """Apply moves on GameState and keep undo/redo history."""
 
@@ -51,6 +63,14 @@ class GameSession:
         )
         self.history.record_move(record)
         return record
+
+    def play_pawn_move_from_to(self, player_id: int, from_node: int, to_node: int) -> MoveRecord:
+        """Play a pawn move while enforcing the provided source node."""
+        self._ensure_current_player(player_id)
+        current_node = self.state.player_positions[player_id]
+        if current_node != from_node:
+            raise ValueError(f"player {player_id} pawn is not on node {from_node}")
+        return self.play_pawn_move(player_id, to_node)
 
     # utile pour la fonction is_wall_legal qui a besoin de savoir les objectif de chaque joueur
     def _build_player_target_funcs(self):
