@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from dataclasses import dataclass
 from typing import Literal, TypedDict
 
 
@@ -31,11 +30,6 @@ class GameSnapshot(TypedDict):
     horizontal_walls: list[tuple[int, int]]
 
 
-def _utcnow() -> datetime:
-    """Return a timezone-aware UTC timestamp."""
-    return datetime.now(timezone.utc)
-
-
 @dataclass
 class MoveRecord:
     """One recorded move with state before/after execution."""
@@ -45,4 +39,3 @@ class MoveRecord:
     action: ActionType
     before_state: GameSnapshot
     after_state: GameSnapshot
-    timestamp: datetime = field(default_factory=_utcnow)
