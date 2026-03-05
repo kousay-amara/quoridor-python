@@ -350,15 +350,16 @@ def _play_pawn_move_from_token(session: GameSession, move_token: str) -> bool:
     to_node = get_node_from_notation(to_txt, session.state.board_size)
 
     current = session.state.current_player
-    session.play_pawn_move_from_to(current, from_node, to_node)
-    new_pos = session.state.player_positions[current]
     all_positions = list(session.state.player_positions.values())
     ok, error_msg = validate_pawn_move(
         session.state.graph, from_node, to_node, all_positions, session.state.board_size
     )
     if not ok:
         raise ValueError(error_msg)
-    
+
+    session.play_pawn_move_from_to(current, from_node, to_node)
+    new_pos = session.state.player_positions[current]
+
     if has_player_won(current, new_pos, session.state.board_size):
         print(f"Player {current} wins!")
         _print_state(session)
