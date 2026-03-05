@@ -45,6 +45,9 @@ def apply_move(state: GameState, move: tuple) -> None:
         else:
             state.vertical_walls.extend(edges)
 
+        #for edge in edges:
+            #state.graph.remove_edge(*edge)
+
         state.remaining_walls[state.current_player] -= 1
 
     state._rebuild_graph()
@@ -85,89 +88,83 @@ def evaluate_state_default(state: GameState, ai_player_id: int) -> float:
     player_ids = sorted(state.player_positions.keys())
     targets = get_player_target_funcs(state.board_size, player_ids)
 
-    distances = {}
-    for i, pid in enumerate(player_ids):
-        pos = state.player_positions[pid]
-        dist = get_shortest_path_length(state.graph, pos, targets[i])
-        distances[pid] = dist
+    my_dist = get_shortest_path_length(state.graph, state.player_positions[ai_player_id], targets[player_ids.index(ai_player_id)])
+    opp_distances = [get_shortest_path_length(state.graph, state.player_positions[p], targets[i]) 
+                     for i, p in enumerate(player_ids) if p != ai_player_id]
+    min_opp_dist = min(opp_distances)
 
-    opponent_id = [pid for pid in player_ids if pid != ai_player_id][0]
+    if my_dist == 0: return 1000.0
+    if min_opp_dist == 0: return -1000.0   
+    if my_dist >= 999: return -1000.0
 
-    score = distances[opponent_id] - distances[ai_player_id]
+    score = min_opp_dist - my_dist
 
-    score += (
-        state.remaining_walls[ai_player_id] - state.remaining_walls[opponent_id]
-    ) * 0.5
+    wall_weight = 0.5 if len(player_ids) == 2 else 0.3
+    my_walls = state.remaining_walls[ai_player_id]
+    average_opp_walls = sum(state.remaining_walls[p] for p in player_ids if p != ai_player_id) / (len(player_ids) - 1)
+    wall_diff = my_walls - average_opp_walls
+
+    score += wall_diff * wall_weight
 
     return float(score)
 
 
-def evaluate_state_material(state: GameState, ai_player_id: id) -> float:
+def evaluate_state_material(state: GameState, ai_player_id: int) -> float:
     """
     Second heurisrtic, focused on maintaining the walls and blocking the opposing team.
     """
     player_ids = sorted(state.player_positions.keys())
     targets = get_player_target_funcs(state.board_size, player_ids)
-    opponent_id = [pid for pid in player_ids if pid != ai_player_id][0]
+    
+    my_dist = get_shortest_path_length(state.graph, state.player_positions[ai_player_id], targets[player_ids.index(ai_player_id)])
+    opponents_dist = [get_shortest_path_length(state.graph, state.player_positions[p], targets[i]) 
+                      for i, p in enumerate(player_ids) if p != ai_player_id]
+    min_opp_dist = min(opponents_dist)
 
-    my_pos = state.player_positions[ai_player_id]
-    opp_pos = state.player_positions[opponent_id]
+    if my_dist == 0: return 1000.0
+    if min_opp_dist == 0: return -1000.0
+    if my_dist >= 999: return -1000.0
 
-    my_dist = get_shortest_path_length(
-        state.graph, my_pos, targets[player_ids.index(ai_player_id)]
-    )
-    opp_dist = get_shortest_path_length(
-        state.graph, opp_pos, targets[player_ids.index(opponent_id)]
-    )
+    score = (min_opp_dist * 2.0) - my_dist
 
+    wall_weight = 2.0 if len(player_ids) == 2 else 1.2
+    
     my_walls = state.remaining_walls[ai_player_id]
-    opp_walls = state.remaining_walls[opponent_id]
-    wall_diff = my_walls - opp_walls
+    max_opp_walls = max(state.remaining_walls[p] for p in player_ids if p != ai_player_id)
+    wall_diff = my_walls - max_opp_walls
 
-    if my_dist >= 999:
-        return -1000.0
-    if opp_dist >= 999:
-        return 1000.0
-
-    score = (opp_dist * 1.5) - (my_dist * 0.5) + (wall_diff * 2.0)
+    score += wall_diff * wall_weight
 
     return float(score)
 
 
-def evaluate_state_hybrid(state: GameState, ai_player_id: id) -> float:
+def evaluate_state_hybrid(state: GameState, ai_player_id: int) -> float:
     """
     Third heuristic, a balanced mix of distance, remaining walls, and center control.
     Reduce the risk to being blocked by one oponent's wall. Try to control the center and maximise oportunities.
     """
     player_ids = sorted(state.player_positions.keys())
     targets = get_player_target_funcs(state.board_size, player_ids)
-    opponent_id = [pid for pid in player_ids if pid != ai_player_id][0]
 
-    my_dist = get_shortest_path_length(
-        state.graph,
-        state.player_positions[ai_player_id],
-        targets[player_ids.index(ai_player_id)],
-    )
-    opp_dist = get_shortest_path_length(
-        state.graph,
-        state.player_positions[opponent_id],
-        targets[player_ids.index(opponent_id)],
-    )
+    my_dist = get_shortest_path_length(state.graph, state.player_positions[ai_player_id], targets[player_ids.index(ai_player_id)])
+    opp_distances = [get_shortest_path_length(state.graph, state.player_positions[p], targets[i]) 
+                     for i, p in enumerate(player_ids) if p != ai_player_id]
+    min_opp_dist = min(opp_distances)
 
-    if my_dist >= 999:
-        return -1000.0
-    if opp_dist >= 999:
-        return 1000.0
+    if my_dist == 0: return 1000.0
+    if min_opp_dist == 0: return -1000.0
+    if my_dist >= 999: return -1000.0
 
     center = state.board_size // 2
-    my_col = state.player_positions[ai_player_id] % state.board_size
+    my_pos = state.player_positions[ai_player_id]
+    my_row, my_col = divmod(my_pos, state.board_size)
+    dist_to_center = abs(my_row - center) + abs(my_col - center)
+    
+    centrality_bonus = -dist_to_center * 0.15
+    my_walls = state.remaining_walls[ai_player_id]
+    opp_walls_avg = sum(state.remaining_walls[p] for p in player_ids if p != ai_player_id) / (len(player_ids) - 1)
 
-    centrality_bonus = -abs(my_col - center) * 0.2
-
-    wall_bonus = (
-        state.remaining_walls[ai_player_id] - state.remaining_walls[opponent_id]
-    ) * 0.3
-
-    score = (opp_dist * 2.0) - (my_dist * 1.0) + centrality_bonus + wall_bonus
-
+    current_wall_weight = 0.4 if my_walls > 2 else 0.8
+    
+    score = (min_opp_dist * 2.5) - (my_dist * 1.5) + centrality_bonus + ((my_walls - opp_walls_avg) * current_wall_weight)
     return float(score)
