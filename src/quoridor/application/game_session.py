@@ -9,9 +9,22 @@ from ..core.move_record import MoveRecord, PlayerType
 from ..rules.pawn_rules import get_all_legal_pawn_moves
 from ..rules.wall_rules import is_wall_legal
 from .history_manager import HistoryManager
+from .minimax_engine import choose_best_move_minimax
 
 
 WallOrientation = Literal["vertical", "horizontal"]
+
+
+def initial_player_positions(board_size: int, players: int) -> dict[int, int]:
+    """Return canonical starting positions for 2 to 4 players."""
+    mid = board_size // 2
+    all_positions = {
+        1: 0 * board_size + mid,
+        2: (board_size - 1) * board_size + mid,
+        3: mid * board_size + 0,
+        4: mid * board_size + (board_size - 1),
+    }
+    return {pid: all_positions[pid] for pid in range(1, players + 1)}
 
 
 class GameSession:
@@ -51,6 +64,32 @@ class GameSession:
         self.history.record_move(record)
         return record
 
+    def play_pawn_move_from_to(self, player_id: int, from_node: int, to_node: int) -> MoveRecord:
+        """Play a pawn move while enforcing the provided source node."""
+        self._ensure_current_player(player_id)
+        current_node = self.state.player_positions[player_id]
+        if current_node != from_node:
+            raise ValueError(f"player {player_id} pawn is not on node {from_node}")
+        return self.play_pawn_move(player_id, to_node)
+
+    # utile pour la fonction is_wall_legal qui a besoin de savoir les objectif de chaque joueur
+    def _build_player_target_funcs(self):
+        size = self.state.board_size
+        player_ids = sorted(self.state.player_positions.keys())
+        funcs = []
+
+        for idx, _pid in enumerate(player_ids):
+            if idx == 0:      # joueur 1 -> dernière ligne
+                funcs.append(lambda n, s=size: (n // s) == s - 1)
+            elif idx == 1:    # joueur 2 -> première ligne
+                funcs.append(lambda n, s=size: (n // s) == 0)
+            elif idx == 2:    # joueur 3 -> dernière colonne
+                funcs.append(lambda n, s=size: (n % s) == s - 1)
+            elif idx == 3:    # joueur 4 -> première colonne
+                funcs.append(lambda n, s=size: (n % s) == 0)
+
+        return funcs
+
     def place_wall(
         self,
         player_id: int,
@@ -58,13 +97,15 @@ class GameSession:
         orientation: WallOrientation,
     ) -> MoveRecord:
         self._ensure_current_player(player_id)
-        if self.state.remaining_walls.get(player_id, 0) <= 0:
+        walls_left = self.state.remaining_walls.get(player_id, 0)
+        if walls_left == 0:
             raise ValueError(f"player {player_id} has no walls left")
         if not wall_edges:
             raise ValueError("wall_edges must not be empty")
 
         positions = [self.state.player_positions[p] for p in sorted(self.state.player_positions)]
-        if not is_wall_legal(self.state.graph, positions, wall_edges):
+        target_funcs = self._build_player_target_funcs()
+        if not is_wall_legal(self.state.graph, positions, wall_edges, target_funcs):
             raise ValueError(f"illegal wall placement: {wall_edges}")
 
         before = self.state.to_snapshot()
@@ -74,7 +115,8 @@ class GameSession:
             self.state.vertical_walls.extend(wall_edges)
         else:
             self.state.horizontal_walls.extend(wall_edges)
-        self.state.remaining_walls[player_id] = self.state.remaining_walls[player_id] - 1
+        if walls_left > 0:
+            self.state.remaining_walls[player_id] = walls_left - 1
         self._advance_turn()
         after = self.state.to_snapshot()
 
@@ -101,6 +143,26 @@ class GameSession:
             self.state.restore,
             requester_type=requester_type,
         )
+
+    def play_ai_turn(self, depth: int = 2) -> MoveRecord:
+        """Compute and play the current AI player's move with minimax."""
+        player_id = self.state.current_player
+        if self._player_type(player_id) != "ai":
+            raise ValueError(f"player {player_id} is not an AI player")
+
+        move = choose_best_move_minimax(self.state, ai_player_id=player_id, depth=depth)
+        move_type = move[0]
+
+        if move_type == "pawn":
+            return self.play_pawn_move(player_id, move[1])
+
+        if move_type == "wall":
+            edges = move[1]
+            orientation_token = move[2]
+            orientation: WallOrientation = "horizontal" if orientation_token in {"h", "horizontal"} else "vertical"
+            return self.place_wall(player_id, edges, orientation)
+
+        raise ValueError(f"unsupported AI move type: {move_type}")
 
     def _ensure_current_player(self, player_id: int) -> None:
         if player_id != self.state.current_player:
