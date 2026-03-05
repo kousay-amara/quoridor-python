@@ -1,4 +1,4 @@
-from utils.graph import Graph
+from src.utils.graph import Graph
 from ..rules.pawn_rules import get_all_legal_pawn_moves
 from ..rules.wall_rules import is_wall_legal
 

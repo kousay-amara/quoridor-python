@@ -28,11 +28,6 @@ class GameSnapshot(TypedDict):
     remaining_walls: dict[int, int]
     vertical_walls: list[tuple[int, int]]
     horizontal_walls: list[tuple[int, int]]
-
-<<<<<<< HEAD
-
-=======
->>>>>>> 547970239cfd9ad93f40bdddfe6cc8e3bbf5c887
 @dataclass
 class MoveRecord:
     """One recorded move with state before/after execution."""

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from utils.graph import Graph
+from src.utils.graph import Graph
 from .move_record import GameSnapshot
 from .board import QuoridorBoard
 
