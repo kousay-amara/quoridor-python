@@ -22,6 +22,7 @@ from ..core.notation import (
 )
 from ..rules.pawn_rules import get_all_legal_pawn_moves
 from ..rules.win_rules import has_player_won
+from ..core.validators import validate_pawn_move, validate_wall
 
 _ = gettext.gettext
 LOGGER = logging.getLogger(__name__)
@@ -351,6 +352,13 @@ def _play_pawn_move_from_token(session: GameSession, move_token: str) -> bool:
     current = session.state.current_player
     session.play_pawn_move_from_to(current, from_node, to_node)
     new_pos = session.state.player_positions[current]
+    all_positions = list(session.state.player_positions.values())
+    ok, error_msg = validate_pawn_move(
+        session.state.graph, from_node, to_node, all_positions, session.state.board_size
+    )
+    if not ok:
+        raise ValueError(error_msg)
+    
     if has_player_won(current, new_pos, session.state.board_size):
         print(f"Player {current} wins!")
         _print_state(session)
@@ -373,6 +381,21 @@ def _place_wall_from_token(session: GameSession, wall_token: str) -> None:
     orientation = "horizontal" if ori_char == "h" else "vertical"
 
     current = session.state.current_player
+    positions = [
+        session.state.player_positions[p]
+        for p in sorted(session.state.player_positions)
+    ]
+    target_funcs = session._build_player_target_funcs()
+    ok, error_msg = validate_wall(
+        session.state.graph,
+        positions,
+        wall_edges,
+        target_funcs,
+        session.state.remaining_walls,
+        current,
+    )
+    if not ok:
+        raise ValueError(error_msg)
     session.place_wall(current, wall_edges, orientation)
     _print_state(session)
 
