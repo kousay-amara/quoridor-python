@@ -11,7 +11,6 @@ from ..rules.wall_rules import is_wall_legal
 from .history_manager import HistoryManager
 from .minimax_engine import choose_best_move_minimax
 
-
 WallOrientation = Literal["vertical", "horizontal"]
 
 
@@ -64,7 +63,9 @@ class GameSession:
         self.history.record_move(record)
         return record
 
-    def play_pawn_move_from_to(self, player_id: int, from_node: int, to_node: int) -> MoveRecord:
+    def play_pawn_move_from_to(
+        self, player_id: int, from_node: int, to_node: int
+    ) -> MoveRecord:
         """Play a pawn move while enforcing the provided source node."""
         self._ensure_current_player(player_id)
         current_node = self.state.player_positions[player_id]
@@ -79,13 +80,13 @@ class GameSession:
         funcs = []
 
         for idx, _pid in enumerate(player_ids):
-            if idx == 0:      # joueur 1 -> dernière ligne
+            if idx == 0:  # joueur 1 -> dernière ligne
                 funcs.append(lambda n, s=size: (n // s) == s - 1)
-            elif idx == 1:    # joueur 2 -> première ligne
+            elif idx == 1:  # joueur 2 -> première ligne
                 funcs.append(lambda n, s=size: (n // s) == 0)
-            elif idx == 2:    # joueur 3 -> dernière colonne
+            elif idx == 2:  # joueur 3 -> dernière colonne
                 funcs.append(lambda n, s=size: (n % s) == s - 1)
-            elif idx == 3:    # joueur 4 -> première colonne
+            elif idx == 3:  # joueur 4 -> première colonne
                 funcs.append(lambda n, s=size: (n % s) == 0)
 
         return funcs
@@ -103,7 +104,9 @@ class GameSession:
         if not wall_edges:
             raise ValueError("wall_edges must not be empty")
 
-        positions = [self.state.player_positions[p] for p in sorted(self.state.player_positions)]
+        positions = [
+            self.state.player_positions[p] for p in sorted(self.state.player_positions)
+        ]
         target_funcs = self._build_player_target_funcs()
         if not is_wall_legal(self.state.graph, positions, wall_edges, target_funcs):
             raise ValueError(f"illegal wall placement: {wall_edges}")
@@ -159,7 +162,9 @@ class GameSession:
         if move_type == "wall":
             edges = move[1]
             orientation_token = move[2]
-            orientation: WallOrientation = "horizontal" if orientation_token in {"h", "horizontal"} else "vertical"
+            orientation: WallOrientation = (
+                "horizontal" if orientation_token in {"h", "horizontal"} else "vertical"
+            )
             return self.place_wall(player_id, edges, orientation)
 
         raise ValueError(f"unsupported AI move type: {move_type}")

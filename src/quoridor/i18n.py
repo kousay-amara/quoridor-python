@@ -2,6 +2,7 @@
 Internationalization (i18n) support using gettext.
 The software must support English (default) and French.
 """
+
 import gettext
 import os
 import sys
@@ -33,10 +34,10 @@ def _detect_environment_language() -> str:
 def setup_i18n(language: str | None = None) -> gettext.NullTranslations:
     """
     Setup internationalization for the application.
-    
+
     Args:
         language: Language code ('en' or 'fr'). If None, uses system default.
-        
+
     Returns:
         Translation object for the specified language.
     """

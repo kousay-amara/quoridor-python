@@ -9,7 +9,7 @@ import gi
 gi.require_version("Gtk", "4.0")
 from gi.repository import Gtk
 
-from src.utils.graph import Graph
+from ..utils.graph import Graph
 
 SIZE = 9
 MARGIN = 30

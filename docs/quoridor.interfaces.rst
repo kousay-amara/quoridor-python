@@ -9,29 +9,29 @@ quoridor.interfaces.cli module
 
 .. automodule:: quoridor.interfaces.cli
    :members:
-   :show-inheritance:
    :undoc-members:
+   :show-inheritance:
 
 quoridor.interfaces.contest\_parser module
 ------------------------------------------
 
 .. automodule:: quoridor.interfaces.contest_parser
    :members:
-   :show-inheritance:
    :undoc-members:
+   :show-inheritance:
 
 quoridor.interfaces.gui module
 ------------------------------
 
 .. automodule:: quoridor.interfaces.gui
    :members:
-   :show-inheritance:
    :undoc-members:
+   :show-inheritance:
 
 Module contents
 ---------------
 
 .. automodule:: quoridor.interfaces
    :members:
-   :show-inheritance:
    :undoc-members:
+   :show-inheritance:

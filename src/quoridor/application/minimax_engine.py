@@ -9,7 +9,6 @@ from ..core.game_state import GameState
 from ..rules.wall_rules import get_player_target_funcs
 from .ai_logic import apply_move, clone_state, evaluate_state, get_all_legal_moves
 
-
 Move = tuple[Any, ...]
 
 
@@ -55,7 +54,9 @@ def minimax_alpha_beta(
         for move in legal_moves:
             child = clone_state(state)
             apply_move(child, move)
-            value = max(value, minimax_alpha_beta(child, depth - 1, alpha, beta, ai_player_id))
+            value = max(
+                value, minimax_alpha_beta(child, depth - 1, alpha, beta, ai_player_id)
+            )
             alpha = max(alpha, value)
             if beta <= alpha:
                 break
@@ -65,14 +66,18 @@ def minimax_alpha_beta(
     for move in legal_moves:
         child = clone_state(state)
         apply_move(child, move)
-        value = min(value, minimax_alpha_beta(child, depth - 1, alpha, beta, ai_player_id))
+        value = min(
+            value, minimax_alpha_beta(child, depth - 1, alpha, beta, ai_player_id)
+        )
         beta = min(beta, value)
         if beta <= alpha:
             break
     return value
 
 
-def choose_best_move_minimax(state: GameState, ai_player_id: int, depth: int = 2) -> Move:
+def choose_best_move_minimax(
+    state: GameState, ai_player_id: int, depth: int = 2
+) -> Move:
     """Choose the best legal move for ai_player_id with minimax alpha-beta."""
     legal_moves = get_all_legal_moves(state)
     if not legal_moves:

@@ -5,7 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal, TypedDict
 
-
 PlayerType = Literal["human", "ai"]
 ActionType = Literal["move_pawn", "place_wall"]
 
@@ -28,6 +27,8 @@ class GameSnapshot(TypedDict):
     remaining_walls: dict[int, int]
     vertical_walls: list[tuple[int, int]]
     horizontal_walls: list[tuple[int, int]]
+
+
 @dataclass
 class MoveRecord:
     """One recorded move with state before/after execution."""

@@ -1,4 +1,5 @@
 """Command-line interface for Quoridor."""
+
 from __future__ import annotations
 
 import argparse
@@ -7,14 +8,18 @@ import logging
 import sys
 from importlib import metadata
 
-from src.i18n import setup_i18n
+from ..i18n import setup_i18n
 from ..application.contest import run_contest
 from ..application.minimax_engine import choose_best_move_minimax
 from ..config import DEFAULTS, load_or_init_config
 from .contest_parser import ContestError, parse_contest_file
 from ..application.game_session import GameSession, initial_player_positions
 from ..core.game_state import GameState
-from ..core.notation import get_edges_for_wall, get_node_from_notation, get_notation_from_node
+from ..core.notation import (
+    get_edges_for_wall,
+    get_node_from_notation,
+    get_notation_from_node,
+)
 from ..rules.pawn_rules import get_all_legal_pawn_moves
 from ..rules.win_rules import has_player_won
 
@@ -71,9 +76,15 @@ def _build_parser(defaults: dict[str, bool | int]) -> argparse.ArgumentParser:
     parser.add_argument(
         "-V", "--version", action="store_true", help=_("show program version and exit")
     )
-    parser.add_argument("-v", "--verbose", action="store_true", help=_("increase program verbosity"))
-    parser.add_argument("-d", "--debug", action="store_true", help=_("show debug messages"))
-    parser.add_argument("-b", "--blitz", action="store_true", help=_("enable blitz mode"))
+    parser.add_argument(
+        "-v", "--verbose", action="store_true", help=_("increase program verbosity")
+    )
+    parser.add_argument(
+        "-d", "--debug", action="store_true", help=_("show debug messages")
+    )
+    parser.add_argument(
+        "-b", "--blitz", action="store_true", help=_("enable blitz mode")
+    )
     parser.add_argument(
         "-c",
         "--contest",
@@ -133,7 +144,9 @@ def _build_parser(defaults: dict[str, bool | int]) -> argparse.ArgumentParser:
         default=2,
         help=_("minimax search depth"),
     )
-    parser.set_defaults(verbose=bool(defaults["verbose"]), blitz=bool(defaults["blitz"]))
+    parser.set_defaults(
+        verbose=bool(defaults["verbose"]), blitz=bool(defaults["blitz"])
+    )
     return parser
 
 
@@ -158,7 +171,9 @@ def _is_contest_on_cli(argv: list[str]) -> bool:
 
 
 def _is_time_passed_on_cli(argv: list[str]) -> bool:
-    return any(token in {"-t", "--time"} or token.startswith("--time=") for token in argv)
+    return any(
+        token in {"-t", "--time"} or token.startswith("--time=") for token in argv
+    )
 
 
 def _configure_logging(verbose: bool, debug: bool) -> None:
@@ -231,15 +246,11 @@ def _main_interactive(argv: list[str]) -> int:
     return 0
 
 
-
-
-
 def main(argv: list[str] | None = None) -> int:
     cli_argv = sys.argv[1:] if argv is None else argv
     if _is_contest_on_cli(cli_argv):
         return _main_contest(cli_argv)
     return _main_interactive(cli_argv)
-
 
 
 def _node(row: int, col: int, size: int) -> int:
@@ -290,7 +301,6 @@ def _render_ascii_board(state) -> str:
             lines.append("    " + " ".join(sep_tokens))
 
     return "\n".join(lines)
-    
 
 
 def _print_state(session: GameSession) -> None:
@@ -320,8 +330,12 @@ def _print_moves(session: GameSession) -> None:
 
     from_node = session.state.player_positions[current]
     all_positions = list(session.state.player_positions.values())
-    legal_nodes = get_all_legal_pawn_moves(session.state.graph, from_node, all_positions)
-    legal_notation = [get_notation_from_node(n, session.state.board_size) for n in sorted(legal_nodes)]
+    legal_nodes = get_all_legal_pawn_moves(
+        session.state.graph, from_node, all_positions
+    )
+    legal_notation = [
+        get_notation_from_node(n, session.state.board_size) for n in sorted(legal_nodes)
+    ]
     print(f"Legal pawn moves for player {current}: {legal_notation}")
 
 
@@ -385,14 +399,8 @@ def _load_session_from_file(
 ) -> GameSession:
     position = parse_contest_file(path)
     players = sorted(position.positions.keys())
-    remaining_walls = {
-        pid: fallback_walls_per_player.get(pid, 20)
-        for pid in players
-    }
-    player_types = {
-        pid: fallback_player_types.get(pid, "human")
-        for pid in players
-    }
+    remaining_walls = {pid: fallback_walls_per_player.get(pid, 20) for pid in players}
+    player_types = {pid: fallback_player_types.get(pid, "human") for pid in players}
     state = GameState(
         board_size=position.size,
         current_player=position.current_player,
@@ -529,7 +537,9 @@ def _run_interactive_shell(
     wall_count = walls_per_player if walls_per_player >= 0 else -1
     remaining_walls = {pid: wall_count for pid in player_positions}
     ai_set = set(ai_players)
-    player_types = {pid: ("ai" if pid in ai_set else "human") for pid in player_positions}
+    player_types = {
+        pid: ("ai" if pid in ai_set else "human") for pid in player_positions
+    }
 
     state = GameState(
         board_size=board_size,
@@ -543,7 +553,11 @@ def _run_interactive_shell(
     has_unsaved_changes = False
 
     if blitz:
-        print(_("New game started (blitz: {minutes} min/player).").format(minutes=time_limit))
+        print(
+            _("New game started (blitz: {minutes} min/player).").format(
+                minutes=time_limit
+            )
+        )
     else:
         print(_("New game started with default options."))
     if players == 3:
@@ -551,7 +565,9 @@ def _run_interactive_shell(
 
     print(_("Type 'help' for available commands."))
     if ai_set:
-        print(f"AI players: {sorted(ai_set)} (mode={ai_mode}, depth={ai_minimax_depth}, time={ai_time}s)")
+        print(
+            f"AI players: {sorted(ai_set)} (mode={ai_mode}, depth={ai_minimax_depth}, time={ai_time}s)"
+        )
     _print_state(session)
 
     if _auto_play_ai_until_human_or_end(session, ai_minimax_depth):
@@ -584,7 +600,9 @@ def _run_interactive_shell(
 
             parts = line.split(maxsplit=1)
             if len(parts) == 1:
-                print("Commands: help [CMD], load, save, hint, show board, moves, move, wall, undo, redo, quit")
+                print(
+                    "Commands: help [CMD], load, save, hint, show board, moves, move, wall, undo, redo, quit"
+                )
                 print("Use: help <command>")
                 continue
 
@@ -642,9 +660,13 @@ def _run_interactive_shell(
         if line == "hint":
             try:
                 current = session.state.current_player
-                move = choose_best_move_minimax(session.state, ai_player_id=current, depth=ai_minimax_depth)
+                move = choose_best_move_minimax(
+                    session.state, ai_player_id=current, depth=ai_minimax_depth
+                )
                 from_node = session.state.player_positions[current]
-                best_hint = _format_hint_move(move, from_node=from_node, size=session.state.board_size)
+                best_hint = _format_hint_move(
+                    move, from_node=from_node, size=session.state.board_size
+                )
                 print(f"Best hint action: {best_hint}")
             except Exception as exc:
                 print(f"No hint available: {exc}")
@@ -790,6 +812,7 @@ def _run_interactive_shell(
             break
 
         print(_("Invalid command."))
+
 
 if __name__ == "__main__":
     raise SystemExit(main())

@@ -7,8 +7,12 @@ REM Command file for Sphinx documentation
 if "%SPHINXBUILD%" == "" (
 	set SPHINXBUILD=sphinx-build
 )
+if "%SPHINXAPIDOC%" == "" (
+	set SPHINXAPIDOC=sphinx-apidoc
+)
 set SOURCEDIR=.
 set BUILDDIR=_build
+set APIDOCSRC=..\src\quoridor
 
 %SPHINXBUILD% >NUL 2>NUL
 if errorlevel 9009 (
@@ -25,7 +29,14 @@ if errorlevel 9009 (
 
 if "%1" == "" goto help
 
+if "%1" == "html" goto apidoc_html
+
 %SPHINXBUILD% -M %1 %SOURCEDIR% %BUILDDIR% %SPHINXOPTS% %O%
+goto end
+
+:apidoc_html
+%SPHINXAPIDOC% -f -o %SOURCEDIR% %APIDOCSRC%
+%SPHINXBUILD% -M html %SOURCEDIR% %BUILDDIR% %SPHINXOPTS% %O%
 goto end
 
 :help

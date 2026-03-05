@@ -29,4 +29,3 @@ def has_path(
                 queue.append(neighbor)
 
     return False
-

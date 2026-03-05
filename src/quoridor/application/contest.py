@@ -5,7 +5,11 @@ from __future__ import annotations
 from pathlib import Path
 
 from ..core.board import QuoridorBoard
-from ..interfaces.contest_parser import ContestError, ContestPosition, parse_contest_file
+from ..interfaces.contest_parser import (
+    ContestError,
+    ContestPosition,
+    parse_contest_file,
+)
 from ..rules.pawn_rules import get_all_legal_pawn_moves
 
 
