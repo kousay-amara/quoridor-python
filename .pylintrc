@@ -1,5 +1,2 @@
 [MAIN]
 recursive = yes
-
-[MESSAGES CONTROL]
-disable = docstring-first-line-empty

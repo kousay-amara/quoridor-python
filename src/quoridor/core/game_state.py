@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from src.utils.graph import Graph
+from ..utils.graph import Graph
 from .move_record import GameSnapshot
 from .board import QuoridorBoard
 
@@ -31,7 +31,7 @@ class GameState:
     def _rebuild_graph(self) -> None:
         board = QuoridorBoard(size=self.board_size)
         self.graph = board.graph
-    
+
         for edge in self.vertical_walls:
             self.graph.remove_edge(*edge)
         for edge in self.horizontal_walls:

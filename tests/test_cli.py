@@ -50,7 +50,10 @@ def test_hint_uses_best_hint_action_format(monkeypatch, capsys):
     monkeypatch.setattr(
         cli_mod,
         "choose_best_move_minimax",
-        lambda state, ai_player_id, depth: ("pawn", state.player_positions[ai_player_id] + state.board_size),
+        lambda state, ai_player_id, depth: (
+            "pawn",
+            state.player_positions[ai_player_id] + state.board_size,
+        ),
     )
     _run_shell(monkeypatch, ["hint", "quit"])
 
@@ -202,7 +205,14 @@ def test_main_interactive_version_and_validation(monkeypatch, capsys):
     monkeypatch.setattr(
         cli_mod,
         "load_or_init_config",
-        lambda: {"time": 30, "players": 2, "walls": 20, "size": 9, "verbose": False, "blitz": False},
+        lambda: {
+            "time": 30,
+            "players": 2,
+            "walls": 20,
+            "size": 9,
+            "verbose": False,
+            "blitz": False,
+        },
     )
     monkeypatch.setattr(cli_mod, "_get_version", lambda: "9.9.9")
     monkeypatch.setattr(cli_mod, "_run_interactive_shell", lambda **kwargs: None)
@@ -225,14 +235,26 @@ def test_main_interactive_time_behavior(monkeypatch, capsys):
     monkeypatch.setattr(
         cli_mod,
         "load_or_init_config",
-        lambda: {"time": 42, "players": 2, "walls": 20, "size": 9, "verbose": False, "blitz": False},
+        lambda: {
+            "time": 42,
+            "players": 2,
+            "walls": 20,
+            "size": 9,
+            "verbose": False,
+            "blitz": False,
+        },
     )
     monkeypatch.setattr(cli_mod, "_configure_logging", lambda *_args: None)
-    monkeypatch.setattr(cli_mod, "_run_interactive_shell", lambda **kwargs: captured.append(kwargs))
+    monkeypatch.setattr(
+        cli_mod, "_run_interactive_shell", lambda **kwargs: captured.append(kwargs)
+    )
 
     assert cli_mod._main_interactive(["--time", "7"]) == 0
     assert captured[-1]["time_limit"] == 42
-    assert "warning: --time is ignored unless --blitz is enabled" in capsys.readouterr().err
+    assert (
+        "warning: --time is ignored unless --blitz is enabled"
+        in capsys.readouterr().err
+    )
 
     assert cli_mod._main_interactive(["--blitz", "--time", "7"]) == 0
     assert captured[-1]["time_limit"] == 7
@@ -241,7 +263,10 @@ def test_main_interactive_time_behavior(monkeypatch, capsys):
 def test_format_hint_move_wall_and_other():
     wall_move = ("wall", [(10, 11), (19, 20)], "horizontal")
     assert cli_mod._format_hint_move(wall_move, from_node=0, size=9).endswith("h")
-    assert cli_mod._format_hint_move(("other", 123), from_node=0, size=9) == "('other', 123)"
+    assert (
+        cli_mod._format_hint_move(("other", 123), from_node=0, size=9)
+        == "('other', 123)"
+    )
 
 
 def test_load_session_and_save_helpers(monkeypatch, tmp_path: Path):
@@ -309,7 +334,9 @@ def test_configure_logging_and_helpers_output(monkeypatch, capsys):
     cli_mod._configure_logging(verbose=True, debug=False)
     cli_mod._configure_logging(verbose=False, debug=True)
 
-    _run_shell(monkeypatch, ["help unknown", "moves", "move z9-z8", "wall a1x", "blah", "quit"])
+    _run_shell(
+        monkeypatch, ["help unknown", "moves", "move z9-z8", "wall a1x", "blah", "quit"]
+    )
     out = capsys.readouterr().out
     assert "Invalid command." in out
     assert "Legal pawn moves for player 1" in out
@@ -317,15 +344,27 @@ def test_configure_logging_and_helpers_output(monkeypatch, capsys):
 
 
 def test_load_and_save_error_paths(monkeypatch, capsys):
-    monkeypatch.setattr(cli_mod, "_load_session_from_file", lambda *args, **kwargs: (_ for _ in ()).throw(cli_mod.ContestError("bad")))
+    monkeypatch.setattr(
+        cli_mod,
+        "_load_session_from_file",
+        lambda *args, **kwargs: (_ for _ in ()).throw(cli_mod.ContestError("bad")),
+    )
     _run_shell(monkeypatch, ["load bad.txt", "quit"])
     assert "Invalid load file: bad" in capsys.readouterr().out
 
-    monkeypatch.setattr(cli_mod, "_load_session_from_file", lambda *args, **kwargs: (_ for _ in ()).throw(OSError("io")))
+    monkeypatch.setattr(
+        cli_mod,
+        "_load_session_from_file",
+        lambda *args, **kwargs: (_ for _ in ()).throw(OSError("io")),
+    )
     _run_shell(monkeypatch, ["load bad.txt", "quit"])
     assert "Cannot load file: io" in capsys.readouterr().out
 
-    monkeypatch.setattr(cli_mod, "_save_session_to_file", lambda *args, **kwargs: (_ for _ in ()).throw(OSError("disk")))
+    monkeypatch.setattr(
+        cli_mod,
+        "_save_session_to_file",
+        lambda *args, **kwargs: (_ for _ in ()).throw(OSError("disk")),
+    )
     _run_shell(monkeypatch, ["save out.txt", "quit"])
     assert "Cannot save file: disk" in capsys.readouterr().out
 
@@ -388,7 +427,9 @@ def test_auto_play_ai_and_startup_messages(monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "AI player 1 played." in out
 
-    monkeypatch.setattr(cli_mod, "_auto_play_ai_until_human_or_end", lambda *_args, **_kwargs: False)
+    monkeypatch.setattr(
+        cli_mod, "_auto_play_ai_until_human_or_end", lambda *_args, **_kwargs: False
+    )
     iterator = iter(["quit"])
 
     def fake_input(_prompt: str = "") -> str:

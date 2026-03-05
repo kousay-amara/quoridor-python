@@ -20,10 +20,7 @@ def test_load_or_init_config_creates_minimal_file_when_missing(tmp_path: Path):
 def test_load_or_init_config_reads_valid_values(tmp_path: Path):
     config_path = tmp_path / ".qoridorrc"
     config_path.write_text(
-        "[defaults]\n"
-        "verbose = true\n"
-        "blitz = true\n"
-        "time = 12\n",
+        "[defaults]\n" "verbose = true\n" "blitz = true\n" "time = 12\n",
         encoding="utf-8",
     )
 

@@ -9,45 +9,45 @@ quoridor.application.ai\_logic module
 
 .. automodule:: quoridor.application.ai_logic
    :members:
-   :show-inheritance:
    :undoc-members:
+   :show-inheritance:
 
 quoridor.application.contest module
 -----------------------------------
 
 .. automodule:: quoridor.application.contest
    :members:
-   :show-inheritance:
    :undoc-members:
+   :show-inheritance:
 
 quoridor.application.game\_session module
 -----------------------------------------
 
 .. automodule:: quoridor.application.game_session
    :members:
-   :show-inheritance:
    :undoc-members:
+   :show-inheritance:
 
 quoridor.application.history\_manager module
 --------------------------------------------
 
 .. automodule:: quoridor.application.history_manager
    :members:
-   :show-inheritance:
    :undoc-members:
+   :show-inheritance:
 
 quoridor.application.minimax\_engine module
 -------------------------------------------
 
 .. automodule:: quoridor.application.minimax_engine
    :members:
-   :show-inheritance:
    :undoc-members:
+   :show-inheritance:
 
 Module contents
 ---------------
 
 .. automodule:: quoridor.application
    :members:
-   :show-inheritance:
    :undoc-members:
+   :show-inheritance:

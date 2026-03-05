@@ -9,53 +9,61 @@ quoridor.core.board module
 
 .. automodule:: quoridor.core.board
    :members:
-   :show-inheritance:
    :undoc-members:
+   :show-inheritance:
 
 quoridor.core.game\_state module
 --------------------------------
 
 .. automodule:: quoridor.core.game_state
    :members:
-   :show-inheritance:
    :undoc-members:
+   :show-inheritance:
+
+quoridor.core.graph module
+--------------------------
+
+.. automodule:: quoridor.core.graph
+   :members:
+   :undoc-members:
+   :show-inheritance:
 
 quoridor.core.move\_record module
 ---------------------------------
 
 .. automodule:: quoridor.core.move_record
    :members:
-   :show-inheritance:
    :undoc-members:
+   :show-inheritance:
 
 quoridor.core.notation module
 -----------------------------
 
 .. automodule:: quoridor.core.notation
    :members:
-   :show-inheritance:
    :undoc-members:
+   :show-inheritance:
 
 quoridor.core.player module
 ---------------------------
 
 .. automodule:: quoridor.core.player
    :members:
-   :show-inheritance:
    :undoc-members:
+   :show-inheritance:
 
 quoridor.core.validators module
 -------------------------------
 
 .. automodule:: quoridor.core.validators
    :members:
-   :show-inheritance:
    :undoc-members:
+   :show-inheritance:
 
 Module contents
 ---------------
 
 .. automodule:: quoridor.core
    :members:
-   :show-inheritance:
    :undoc-members:
+   :show-inheritance:

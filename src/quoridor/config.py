@@ -1,10 +1,10 @@
 """Configuration file support for Quoridor CLI defaults."""
+
 from __future__ import annotations
 
 import configparser
 import sys
 from pathlib import Path
-
 
 DEFAULTS: dict[str, bool | int] = {
     "verbose": False,
@@ -52,12 +52,12 @@ def load_or_init_config(path: Path | None = None) -> dict[str, bool | int]:
 
         section = parser["defaults"]
         return {
-            "verbose": section.getboolean("verbose", fallback=bool(DEFAULTS["verbose"])),
+            "verbose": section.getboolean(
+                "verbose", fallback=bool(DEFAULTS["verbose"])
+            ),
             "blitz": section.getboolean("blitz", fallback=bool(DEFAULTS["blitz"])),
             "time": section.getint("time", fallback=int(DEFAULTS["time"])),
         }
     except (OSError, configparser.Error, ValueError) as exc:
-        sys.stderr.write(
-            f"warning: invalid config file '{config_path}': {exc}\n"
-        )
+        sys.stderr.write(f"warning: invalid config file '{config_path}': {exc}\n")
         return DEFAULTS.copy()
