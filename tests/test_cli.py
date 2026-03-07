@@ -8,6 +8,7 @@ import pytest
 from src.quoridor.application.game_session import GameSession
 from src.quoridor.core.game_state import GameState
 from src.quoridor.interfaces import cli as cli_mod
+from src.quoridor.interfaces import cli_shell
 
 
 def _run_shell(monkeypatch, commands: list[str], **kwargs) -> None:
@@ -22,19 +23,20 @@ def _run_shell(monkeypatch, commands: list[str], **kwargs) -> None:
             raise EOFError from exc
 
     monkeypatch.setattr("builtins.input", fake_input)
-    cli_mod._run_interactive_shell(
-        blitz=False,
-        time_limit=30,
-        save_file=None,
-        players=2,
-        walls_per_player=20,
-        board_size=9,
-        ai_players=[],
-        ai_mode="minimax",
-        ai_time=5,
-        ai_minimax_depth=2,
-        **kwargs,
-    )
+    params = {
+        "blitz": False,
+        "time_limit": 30,
+        "save_file": None,
+        "players": 2,
+        "walls_per_player": 20,
+        "board_size": 9,
+        "ai_players": [],
+        "ai_mode": "minimax",
+        "ai_time": 5,
+        "ai_minimax_depth": 2,
+    }
+    params.update(kwargs)
+    cli_mod._run_interactive_shell(**params)
 
 
 def test_help_and_help_cmd(monkeypatch, capsys):
@@ -258,6 +260,54 @@ def test_main_interactive_time_behavior(monkeypatch, capsys):
 
     assert cli_mod._main_interactive(["--blitz", "--time", "7"]) == 0
     assert captured[-1]["time_limit"] == 7
+
+
+def test_show_configuration_command(monkeypatch, capsys):
+    _run_shell(
+        monkeypatch,
+        ["show configuration", "quit"],
+        blitz=True,
+        time_limit=7,
+        players=4,
+        walls_per_player=-1,
+        board_size=11,
+        ai_players=[2, 4],
+        ai_mode="minimax",
+        ai_time=9,
+        ai_minimax_depth=3,
+    )
+
+    out = capsys.readouterr().out
+    assert "Current configuration:" in out
+    assert "players=4" in out
+    assert "walls_per_player=unlimited" in out
+    assert "board_size=11" in out
+    assert "ai_players=[2, 4]" in out
+    assert "blitz=True" in out
+    assert "time_limit=7" in out
+
+
+def test_show_time_and_pause_commands(monkeypatch, capsys):
+    moments = iter([0.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0])
+    monkeypatch.setattr(cli_shell.time, "monotonic", lambda: next(moments))
+
+    _run_shell(monkeypatch, ["show time", "pause", "show time", "quit"], blitz=True, time_limit=1)
+
+    out = capsys.readouterr().out
+    assert "Blitz time -> Player 1: 00:50, Player 2: 01:00" in out
+    assert "Blitz timer paused." in out
+    assert "Timer paused: yes" in out
+
+
+def test_blitz_timeout_causes_loss(monkeypatch, capsys):
+    moments = iter([0.0, 61.0])
+    monkeypatch.setattr(cli_shell.time, "monotonic", lambda: next(moments))
+
+    _run_shell(monkeypatch, ["quit"], blitz=True, time_limit=1)
+
+    out = capsys.readouterr().out
+    assert "Player 1 ran out of time and loses." in out
+    assert "Player 2 wins!" in out
 
 
 def test_format_hint_move_wall_and_other():
