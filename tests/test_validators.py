@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from src.quoridor.core.graph import Graph
+from src.quoridor.utils.graph import Graph
 from src.quoridor.core.validators import validate_pawn_move, validate_wall
 
 SIZE = 9

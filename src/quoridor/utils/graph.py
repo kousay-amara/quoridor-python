@@ -7,8 +7,28 @@ from collections import deque
 class Graph:
     """Graph."""
 
-    def __init__(self, size: int = 9) -> None:
+    def __init__(self, size: int = 9, *, build_grid: bool = True) -> None:
+        self.size = size
+        self.nodes = size * size
         self.adj: dict[int, list[int]] = {}
+        if build_grid:
+            for i in range(self.nodes):
+                self.adj[i] = self.get_initial_neighbors(i)
+
+    def get_initial_neighbors(self, node: int) -> list[int]:
+        neighbors: list[int] = []
+        row, col = divmod(node, self.size)
+
+        if row > 0:
+            neighbors.append(node - self.size)
+        if row < self.size - 1:
+            neighbors.append(node + self.size)
+        if col > 0:
+            neighbors.append(node - 1)
+        if col < self.size - 1:
+            neighbors.append(node + 1)
+
+        return neighbors
 
     def add_node(self, node: int) -> None:
         if node not in self.adj:
