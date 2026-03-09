@@ -6,6 +6,11 @@ import gettext
 from dataclasses import dataclass
 from typing import Callable
 
+try:  # readline enables in-session history navigation with arrow keys.
+    import readline  # type: ignore
+except ImportError:  # pragma: no cover - platform-dependent
+    readline = None
+
 from ..application.game_session import GameSession, initial_player_positions
 from ..core.game_state import GameState
 from ..core.notation import get_edges_for_wall, get_node_from_notation
@@ -16,6 +21,29 @@ from .cli_render import _format_hint_move, _print_moves, _print_state, _render_a
 from .contest_parser import ContestError
 
 _ = gettext.gettext
+
+MAX_HISTORY_SIZE = 1000
+
+
+def _get_last_history_match(term: str) -> str | None:
+    if readline is None:
+        return None
+
+    length = readline.get_current_history_length()
+    for index in range(length, 0, -1):
+        item = readline.get_history_item(index)
+        if item and term in item:
+            return item
+    return None
+
+
+def _maybe_remove_last_history_item() -> None:
+    if readline is None:
+        return
+
+    length = readline.get_current_history_length()
+    if length > 0:
+        readline.remove_history_item(length - 1)
 
 
 def _play_pawn_move_from_token(session: GameSession, move_token: str) -> bool:
@@ -111,6 +139,7 @@ def _show_help(line: str) -> bool:
         "undo": "undo [N]\n  Undo the last move-group (or N groups).",
         "redo": "redo [N]\n  Redo the last undone move-group (or N groups).",
         "quit": "quit\n  Exit the program.",
+        "history": "history\n  Use Up/Down arrows to navigate command history. Use +TERM to search the last command matching TERM.",
     }
 
     if line == "help" or line.startswith("help "):
@@ -583,12 +612,36 @@ def _run_interactive_shell(
         _Command(matches=_match_quit, run=_command_quit),
     ]
 
+    if readline is not None:
+        readline.set_history_length(MAX_HISTORY_SIZE)
+
     while True:
         try:
             line = input(">> ").strip()
         except (EOFError, KeyboardInterrupt):
             print()
             break
+
+        if line.startswith("+"):
+            if readline is not None:
+                _maybe_remove_last_history_item()
+            term = line[1:].strip()
+            if not term:
+                try:
+                    term = input("Search history: ").strip()
+                except (EOFError, KeyboardInterrupt):
+                    print()
+                    break
+                if readline is not None:
+                    _maybe_remove_last_history_item()
+            if not term:
+                continue
+            match = _get_last_history_match(term)
+            if match is None:
+                print(_("No command found in history."))
+                continue
+            line = match
+            print(_("History match: {command}").format(command=line))
 
         if not line:
             continue

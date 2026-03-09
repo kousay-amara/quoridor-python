@@ -8,6 +8,7 @@ import pytest
 from src.quoridor.application.game_session import GameSession
 from src.quoridor.core.game_state import GameState
 from src.quoridor.interfaces import cli as cli_mod
+from src.quoridor.interfaces import cli_shell as shell_mod
 
 
 def _run_shell(monkeypatch, commands: list[str], **kwargs) -> None:
@@ -459,3 +460,61 @@ def test_auto_play_ai_and_startup_messages(monkeypatch, capsys):
     assert "blitz: 30 min/player" in out
     assert "3-player mode can be unbalanced" in out
     assert "AI players: [1]" in out
+
+
+class _FakeReadline:
+    def __init__(self, history: list[str] | None = None):
+        self.history = [] if history is None else list(history)
+        self.history_length = None
+
+    def set_history_length(self, value: int) -> None:
+        self.history_length = value
+
+    def get_current_history_length(self) -> int:
+        return len(self.history)
+
+    def get_history_item(self, index: int) -> str | None:
+        if 1 <= index <= len(self.history):
+            return self.history[index - 1]
+        return None
+
+    def remove_history_item(self, index: int) -> None:
+        del self.history[index]
+
+
+def test_history_plus_term_executes_matching_command(monkeypatch, capsys):
+    fake_readline = _FakeReadline(["older", "+mov"])
+    monkeypatch.setattr(shell_mod, "readline", fake_readline)
+    monkeypatch.setattr(shell_mod, "_get_last_history_match", lambda term: "moves")
+
+    _run_shell(monkeypatch, ["+mov", "quit"])
+
+    out = capsys.readouterr().out
+    assert "History match: moves" in out
+    assert "Legal pawn moves for player 1" in out
+    assert fake_readline.history == ["older"]
+
+
+def test_history_plus_without_term_prompts_and_executes(monkeypatch, capsys):
+    fake_readline = _FakeReadline(["older", "+"])
+    monkeypatch.setattr(shell_mod, "readline", fake_readline)
+    monkeypatch.setattr(shell_mod, "_get_last_history_match", lambda term: "help")
+
+    _run_shell(monkeypatch, ["+", "help", "quit"])
+
+    out = capsys.readouterr().out
+    assert "Search history:" in out
+    assert "History match: help" in out
+    assert "Commands: help [CMD], load, save, hint, show board" in out
+    assert fake_readline.history == []
+
+
+def test_history_plus_no_match_prints_message(monkeypatch, capsys):
+    fake_readline = _FakeReadline(["older", "+abc"])
+    monkeypatch.setattr(shell_mod, "readline", fake_readline)
+    monkeypatch.setattr(shell_mod, "_get_last_history_match", lambda term: None)
+
+    _run_shell(monkeypatch, ["+abc", "quit"])
+
+    out = capsys.readouterr().out
+    assert "No command found in history." in out
