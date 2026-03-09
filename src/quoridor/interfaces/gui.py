@@ -1,7 +1,7 @@
 """GTK GUI for Quoridor demo."""
-
 from __future__ import annotations
 
+import math
 import sys
 
 import gi
@@ -9,34 +9,69 @@ import gi
 gi.require_version("Gtk", "4.0")
 from gi.repository import Gtk
 
-from ..utils.graph import Graph
+from ..core.game_state import GameState
+from ..application.game_session import GameSession, initial_player_positions
 
 SIZE = 9
 MARGIN = 30
-SYMBOLS = ["X", "O"]
+GAP = 6
+CELL = 46
+PLAYER_COLORS = {1: (0.2, 0.4, 0.8), 2: (0.8, 0.2, 0.2)}
 
 
 class QuoridorWindow(Gtk.ApplicationWindow):
     def __init__(self, app: Gtk.Application):
         super().__init__(application=app, title="Quoridor")
-        self.graph = Graph(SIZE)
-        self.positions = [4, 76]
+        positions = initial_player_positions(SIZE, 2)
+        state = GameState(
+            board_size=SIZE, current_player=1,
+            player_positions=positions,
+            remaining_walls={p: 10 for p in positions},
+            vertical_walls=[], horizontal_walls=[],
+        )
+        self.session = GameSession(state=state, player_types={p: "human" for p in positions})
+
+        total = SIZE * CELL + (SIZE - 1) * GAP + 2 * MARGIN
         self.area = Gtk.DrawingArea(hexpand=True, vexpand=True)
-        self.area.set_content_width(SIZE * 52 + 2 * MARGIN)
-        self.area.set_content_height(SIZE * 52 + 2 * MARGIN)
+        self.area.set_content_width(total)
+        self.area.set_content_height(total)
         self.area.set_draw_func(self._draw)
         self.set_child(self.area)
 
+        click = Gtk.GestureClick()
+        click.connect("pressed", self._on_click)
+        self.area.add_controller(click)
+        self._ox = self._oy = MARGIN
+
     def _cell_size(self):
-        w, h = self.area.get_width(), self.area.get_height()
-        return max((min(w, h) - 2 * MARGIN) / SIZE, 1)
+        available = min(self.area.get_width(), self.area.get_height()) - 2 * MARGIN
+        return max((available - (SIZE - 1) * GAP) / SIZE, 1)
 
     def _cell_xy(self, row, col):
         cs = self._cell_size()
-        return MARGIN + col * cs, MARGIN + row * cs
+        return self._ox + col * (cs + GAP), self._oy + row * (cs + GAP)
+
+    def _xy_to_cell(self, x, y):
+        """Convert pixel coordinates to (row, col), or None if outside the grid."""
+        cs = self._cell_size()
+        col = int((x - self._ox) / (cs + GAP))
+        row = int((y - self._oy) / (cs + GAP))
+        if 0 <= row < SIZE and 0 <= col < SIZE:
+            return row, col
+        return None
+
+    def _on_click(self, _gesture, _n, x, y):
+        cell = self._xy_to_cell(x, y)
+        if cell:
+            row, col = cell
+            print(f"Clic sur case ({row}, {col}) = node {row * SIZE + col}")
 
     def _draw(self, _area, cr, _w, _h):
         cs = self._cell_size()
+        board = SIZE * cs + (SIZE - 1) * GAP
+        self._ox = (self.area.get_width() - board) / 2
+        self._oy = (self.area.get_height() - board) / 2
+
         cr.set_source_rgb(0.86, 0.82, 0.73)
         cr.paint()
 
@@ -51,15 +86,26 @@ class QuoridorWindow(Gtk.ApplicationWindow):
                 cr.rectangle(x, y, cs, cs)
                 cr.stroke()
 
-        cr.set_source_rgb(0, 0, 0)
-        cr.select_font_face("Sans", 0, 1)
-        cr.set_font_size(cs * 0.6)
+        cr.set_source_rgb(0.55, 0.27, 0.07)
+        for walls, vertical in [(self.session.state.vertical_walls, True),
+                                (self.session.state.horizontal_walls, False)]:
+            for n1, n2 in walls:
+                r1, c1 = divmod(n1, SIZE)
+                r2, c2 = divmod(n2, SIZE)
+                row, col = min(r1, r2), min(c1, c2)
+                if vertical:
+                    cr.rectangle(self._ox + col * (cs + GAP) + cs,
+                                 self._oy + row * (cs + GAP), GAP, cs)
+                else:
+                    cr.rectangle(self._ox + col * (cs + GAP),
+                                 self._oy + row * (cs + GAP) + cs, cs, GAP)
+                cr.fill()
 
-        for i, pos in enumerate(self.positions):
-            r, c = divmod(pos, SIZE)
-            x, y = self._cell_xy(r, c)
-            cr.move_to(x + cs / 4, y + cs / 1.4)
-            cr.show_text(SYMBOLS[i])
+        for pid, pos in self.session.state.player_positions.items():
+            x, y = self._cell_xy(*divmod(pos, SIZE))
+            cr.set_source_rgb(*PLAYER_COLORS[pid])
+            cr.arc(x + cs / 2, y + cs / 2, cs * 0.35, 0, math.pi * 2)
+            cr.fill()
 
 
 def main():

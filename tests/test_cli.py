@@ -9,6 +9,7 @@ from src.quoridor.application.game_session import GameSession
 from src.quoridor.core.game_state import GameState
 from src.quoridor.interfaces import cli as cli_mod
 from src.quoridor.interfaces import cli_shell
+from src.quoridor.interfaces import cli_shell as shell_mod
 
 
 def _run_shell(monkeypatch, commands: list[str], **kwargs) -> None:
@@ -40,12 +41,13 @@ def _run_shell(monkeypatch, commands: list[str], **kwargs) -> None:
 
 
 def test_help_and_help_cmd(monkeypatch, capsys):
-    _run_shell(monkeypatch, ["help", "help hint", "quit"])
+    _run_shell(monkeypatch, ["help", "help hint", "help history", "quit"])
 
     out = capsys.readouterr().out
-    assert "Commands: help [CMD], load, save, hint, show board" in out
+    assert "Commands: help [CMD], history, load, save, hint, show board" in out
     assert "hint" in out
     assert "Show a suggested move for the current player." in out
+    assert "Show the played moves grouped by turns." in out
 
 
 def test_hint_uses_best_hint_action_format(monkeypatch, capsys):
@@ -92,8 +94,10 @@ def test_save_then_load_roundtrip(monkeypatch, tmp_path: Path, capsys):
         monkeypatch,
         [
             "e1-e2",
+            "e9-e8",
             f"save {save_path}",
             f"load {save_path}",
+            "history",
             "quit",
             "n",
         ],
@@ -103,7 +107,13 @@ def test_save_then_load_roundtrip(monkeypatch, tmp_path: Path, capsys):
     assert f"Game saved to {save_path}" in out
     assert f"Game loaded from {save_path}" in out
     assert "Player 1: e2, Player 2: e9" in out
+    assert "Player 1: e2, Player 2: e8" in out
+    assert "[history]" in out
+    assert "1 e1-e2; 2 e9-e8;" in out
     assert save_path.exists()
+    saved = save_path.read_text(encoding="utf-8")
+    assert "[history]" in saved
+    assert "1 e1-e2; 2 e9-e8;" in saved
 
 
 def test_quit_without_changes_does_not_prompt_save(monkeypatch, capsys):
@@ -138,6 +148,14 @@ def test_undo_redo_with_invalid_count(monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "Invalid command: N must be > 0" in out
     assert "Invalid command: invalid literal for int() with base 10: 'abc'" in out
+
+
+def test_history_command_prints_turns(monkeypatch, capsys):
+    _run_shell(monkeypatch, ["e1-e2", "e9-e8", "history", "quit", "n"])
+
+    out = capsys.readouterr().out
+    assert "[history]" in out
+    assert "1 e1-e2; 2 e9-e8;" in out
 
 
 def test_cli_type_helpers_and_flags():
@@ -320,17 +338,20 @@ def test_format_hint_move_wall_and_other():
 
 
 def test_load_session_and_save_helpers(monkeypatch, tmp_path: Path):
+    dummy_path = tmp_path / "dummy.txt"
+    dummy_path.write_text("[game]\n2\n_ 1 _\n. . .\n_ _ _\n. . .\n_ 2 _\nwalls: 20 10\n", encoding="utf-8")
     parsed = SimpleNamespace(
         size=9,
         current_player=2,
         positions={1: 4, 2: 76},
+        remaining_walls={1: 20, 2: 10},
         vertical_walls=[(4, 5), (13, 14)],
         horizontal_walls=[(40, 49), (41, 50)],
     )
     monkeypatch.setattr(cli_mod, "parse_contest_file", lambda _p: parsed)
 
     session = cli_mod._load_session_from_file(
-        "dummy.txt",
+        str(dummy_path),
         fallback_player_types={1: "human", 2: "ai"},
         fallback_walls_per_player={1: 20, 2: 10},
     )
@@ -345,6 +366,40 @@ def test_load_session_and_save_helpers(monkeypatch, tmp_path: Path):
     save_path = tmp_path / "s.txt"
     cli_mod._save_session_to_file(str(save_path), session)
     assert save_path.exists()
+
+
+def test_load_session_replays_history(monkeypatch, tmp_path: Path):
+    save_path = tmp_path / "history_save.txt"
+    save_path.write_text(
+        """[game]
+1
+_ _ _ _ _
+. . . . .
+_ _ 1 _ _
+. . . . .
+_ _ _ _ _
+. . . . .
+_ _ 2 _ _
+. . . . .
+_ _ _ _ _
+walls: 20 20
+
+[history]
+1 c1-c2;
+2 c5-c4;
+""",
+        encoding="utf-8",
+    )
+
+    session = cli_mod._load_session_from_file(
+        str(save_path),
+        fallback_player_types={1: "human", 2: "human"},
+        fallback_walls_per_player={1: 20, 2: 20},
+    )
+
+    assert session.state.player_positions == {1: 7, 2: 17}
+    assert session.state.current_player == 1
+    assert len(session.history.records) == 2
 
 
 def test_prompt_save_before_quit_paths(monkeypatch, tmp_path: Path, capsys):
@@ -480,6 +535,22 @@ def test_auto_play_ai_and_startup_messages(monkeypatch, capsys):
     monkeypatch.setattr(
         cli_mod, "_auto_play_ai_until_human_or_end", lambda *_args, **_kwargs: False
     )
+    startup_state = GameState(
+        board_size=9,
+        current_player=1,
+        player_positions={1: 4, 2: 76, 3: 36},
+        remaining_walls={1: 20, 2: 20, 3: 20},
+        vertical_walls=[],
+        horizontal_walls=[],
+    )
+    monkeypatch.setattr(
+        cli_mod,
+        "_load_session_from_file",
+        lambda *_args, **_kwargs: GameSession(
+            state=startup_state,
+            player_types={1: "ai", 2: "human", 3: "human"},
+        ),
+    )
     iterator = iter(["quit"])
 
     def fake_input(_prompt: str = "") -> str:
@@ -505,7 +576,64 @@ def test_auto_play_ai_and_startup_messages(monkeypatch, capsys):
     )
     out = capsys.readouterr().out
     assert "Loading game from seed.txt" in out
-    assert "warning: save/load not implemented yet" in out
     assert "blitz: 30 min/player" in out
     assert "3-player mode can be unbalanced" in out
     assert "AI players: [1]" in out
+
+
+class _FakeReadline:
+    def __init__(self, history: list[str] | None = None):
+        self.history = [] if history is None else list(history)
+        self.history_length = None
+
+    def set_history_length(self, value: int) -> None:
+        self.history_length = value
+
+    def get_current_history_length(self) -> int:
+        return len(self.history)
+
+    def get_history_item(self, index: int) -> str | None:
+        if 1 <= index <= len(self.history):
+            return self.history[index - 1]
+        return None
+
+    def remove_history_item(self, index: int) -> None:
+        del self.history[index]
+
+
+def test_history_plus_term_executes_matching_command(monkeypatch, capsys):
+    fake_readline = _FakeReadline(["older", "+mov"])
+    monkeypatch.setattr(shell_mod, "readline", fake_readline)
+    monkeypatch.setattr(shell_mod, "_get_last_history_match", lambda term: "moves")
+
+    _run_shell(monkeypatch, ["+mov", "quit"])
+
+    out = capsys.readouterr().out
+    assert "History match: moves" in out
+    assert "Legal pawn moves for player 1" in out
+    assert fake_readline.history == ["older"]
+
+
+def test_history_plus_without_term_prompts_and_executes(monkeypatch, capsys):
+    fake_readline = _FakeReadline(["older", "+"])
+    monkeypatch.setattr(shell_mod, "readline", fake_readline)
+    monkeypatch.setattr(shell_mod, "_get_last_history_match", lambda term: "help")
+
+    _run_shell(monkeypatch, ["+", "help", "quit"])
+
+    out = capsys.readouterr().out
+    assert "Search history:" in out
+    assert "History match: help" in out
+    assert "Commands: help [CMD], history, load, save, hint, show board" in out
+    assert fake_readline.history == []
+
+
+def test_history_plus_no_match_prints_message(monkeypatch, capsys):
+    fake_readline = _FakeReadline(["older", "+abc"])
+    monkeypatch.setattr(shell_mod, "readline", fake_readline)
+    monkeypatch.setattr(shell_mod, "_get_last_history_match", lambda term: None)
+
+    _run_shell(monkeypatch, ["+abc", "quit"])
+
+    out = capsys.readouterr().out
+    assert "No command found in history." in out

@@ -1,4 +1,5 @@
 from src.quoridor.application.game_session import GameSession
+from src.quoridor.application.game_session_builder import GameSessionBuilder
 from src.quoridor.core.game_state import GameState
 
 
@@ -58,6 +59,35 @@ def test_game_session_undo_redo_forbidden_for_ai_requester():
         assert False, "PermissionError expected"
     except PermissionError:
         pass
+
+
+def test_game_session_builder_requires_state_and_player_types():
+    builder = GameSessionBuilder()
+    try:
+        builder.build()
+        assert False, "ValueError expected"
+    except ValueError:
+        pass
+
+    state = GameState(
+        board_size=9,
+        current_player=1,
+        player_positions={1: 0, 2: 80},
+        remaining_walls={1: 10, 2: 10},
+    )
+    try:
+        builder.with_state(state).build()
+        assert False, "ValueError expected"
+    except ValueError:
+        pass
+
+    session = (
+        builder.with_player_types({1: "human", 2: "ai"})
+        .with_state(state)
+        .build()
+    )
+    assert isinstance(session, GameSession)
+    assert session.player_types == {1: "human", 2: "ai"}
 
     session.undo(requester_id=1)
     try:

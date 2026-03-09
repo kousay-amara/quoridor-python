@@ -7,6 +7,11 @@ import time
 from dataclasses import dataclass
 from typing import Callable
 
+try:  # readline enables in-session history navigation with arrow keys.
+    import readline  # type: ignore
+except ImportError:  # pragma: no cover - platform-dependent
+    readline = None
+
 from ..application.game_session import GameSession, initial_player_positions
 from ..core.game_state import GameState
 from ..core.notation import get_edges_for_wall, get_node_from_notation
@@ -17,6 +22,29 @@ from .cli_render import _format_hint_move, _print_moves, _print_state, _render_a
 from .contest_parser import ContestError
 
 _ = gettext.gettext
+
+MAX_HISTORY_SIZE = 1000
+
+
+def _get_last_history_match(term: str) -> str | None:
+    if readline is None:
+        return None
+
+    length = readline.get_current_history_length()
+    for index in range(length, 0, -1):
+        item = readline.get_history_item(index)
+        if item and term in item:
+            return item
+    return None
+
+
+def _maybe_remove_last_history_item() -> None:
+    if readline is None:
+        return
+
+    length = readline.get_current_history_length()
+    if length > 0:
+        readline.remove_history_item(length - 1)
 
 
 def _play_pawn_move_from_token(session: GameSession, move_token: str) -> bool:
@@ -111,6 +139,7 @@ def _auto_play_ai_until_human_or_end(
 def _show_help(line: str) -> bool:
     help_by_command = {
         "help": "help [CMD]\n  Show shell help, or help for CMD.",
+        "history": "history\n  Show the played moves grouped by turns. Use Up/Down arrows to navigate command history. Use +TERM to search the last command matching TERM.",
         "load": "load FILE\n  Load a game position from FILE.",
         "save": "save FILE\n  Save the current game position to FILE.",
         "hint": "hint\n  Show a suggested move for the current player.",
@@ -130,7 +159,7 @@ def _show_help(line: str) -> bool:
         parts = line.split(maxsplit=1)
         if len(parts) == 1:
             print(
-                "Commands: help [CMD], load, save, hint, show board, show configuration, show time, pause, moves, move, wall, undo, redo, quit"
+                "Commands: help [CMD], history, load, save, hint, show board, show configuration, show time, pause, moves, move, wall, undo, redo, quit"
             )
             print("Use: help <command>")
             return True
@@ -201,6 +230,12 @@ def _handle_save(session: GameSession, file_path: str) -> bool:
     cli_mod._save_session_to_file(file_path, session)
     print(_("Game saved to {path}").format(path=file_path))
     return False
+
+
+def _handle_history(session: GameSession) -> None:
+    from . import cli as cli_mod
+
+    print(cli_mod._serialize_history_section(session), end="")
 
 
 def _handle_hint(session: GameSession, ai_minimax_depth: int) -> None:
@@ -381,6 +416,11 @@ def _command_load(state: _ShellState, line: str) -> bool:
         return False
 
 
+def _command_history(state: _ShellState, _line: str) -> bool:
+    _handle_history(state.session)
+    return False
+
+
 def _command_save(state: _ShellState, line: str) -> bool:
     file_path = line[5:].strip()
     if not file_path:
@@ -549,6 +589,10 @@ def _match_load(line: str) -> bool:
     return line.lower().startswith("load ")
 
 
+def _match_history(line: str) -> bool:
+    return line == "history"
+
+
 def _match_save(line: str) -> bool:
     return line.lower().startswith("save ")
 
@@ -638,7 +682,6 @@ def _run_interactive_shell(
 ) -> None:
     if save_file:
         print(_("Loading game from {path}").format(path=save_file))
-        print(_("warning: save/load not implemented yet, starting a new game."))
 
     player_positions = initial_player_positions(board_size, players)
     wall_count = walls_per_player if walls_per_player >= 0 else -1
@@ -648,16 +691,26 @@ def _run_interactive_shell(
         pid: ("ai" if pid in ai_set else "human") for pid in player_positions
     }
 
-    state = GameState(
-        board_size=board_size,
-        current_player=1,
-        player_positions=player_positions,
-        remaining_walls=remaining_walls,
-        vertical_walls=[],
-        horizontal_walls=[],
-    )
-    session = GameSession(state=state, player_types=player_types)
-    has_unsaved_changes = False
+    if save_file:
+        from . import cli as cli_mod
+
+        session = cli_mod._load_session_from_file(
+            save_file,
+            fallback_player_types=player_types,
+            fallback_walls_per_player=remaining_walls,
+        )
+        has_unsaved_changes = False
+    else:
+        state = GameState(
+            board_size=board_size,
+            current_player=1,
+            player_positions=player_positions,
+            remaining_walls=remaining_walls,
+            vertical_walls=[],
+            horizontal_walls=[],
+        )
+        session = GameSession(state=state, player_types=player_types)
+        has_unsaved_changes = False
     remaining_times: dict[int, float] | None = None
     blitz_paused = False
     if blitz:
@@ -711,6 +764,7 @@ def _run_interactive_shell(
 
     commands = [
         _Command(matches=_match_help, run=_command_help),
+        _Command(matches=_match_history, run=_command_history),
         _Command(
             matches=_match_load,
             run=_command_load,
@@ -764,6 +818,9 @@ def _run_interactive_shell(
         _Command(matches=_match_quit, run=_command_quit),
     ]
 
+    if readline is not None:
+        readline.set_history_length(MAX_HISTORY_SIZE)
+
     while True:
         timed_player = state.session.state.current_player
         turn_started = time.monotonic()
@@ -778,6 +835,27 @@ def _run_interactive_shell(
             if state.blitz_remaining_times[timed_player] <= 0:
                 _handle_timeout(state.session, timed_player)
                 break
+
+        if line.startswith("+"):
+            if readline is not None:
+                _maybe_remove_last_history_item()
+            term = line[1:].strip()
+            if not term:
+                try:
+                    term = input("Search history: ").strip()
+                except (EOFError, KeyboardInterrupt):
+                    print()
+                    break
+                if readline is not None:
+                    _maybe_remove_last_history_item()
+            if not term:
+                continue
+            match = _get_last_history_match(term)
+            if match is None:
+                print(_("No command found in history."))
+                continue
+            line = match
+            print(_("History match: {command}").format(command=line))
 
         if not line:
             continue
