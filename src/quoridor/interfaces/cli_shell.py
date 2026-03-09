@@ -137,6 +137,7 @@ def _auto_play_ai_until_human_or_end(
 
 
 def _show_help(line: str) -> bool:
+    line_lower = line.lower()
     help_by_command = {
         "help": "help [CMD]\n  Show shell help, or help for CMD.",
         "history": "history\n  Show the played moves grouped by turns. Use Up/Down arrows to navigate command history. Use +TERM to search the last command matching TERM.",
@@ -155,7 +156,7 @@ def _show_help(line: str) -> bool:
         "quit": "quit\n  Exit the program.",
     }
 
-    if line == "help" or line.startswith("help "):
+    if line_lower == "help" or line_lower.startswith("help "):
         parts = line.split(maxsplit=1)
         if len(parts) == 1:
             print(
@@ -582,7 +583,8 @@ def _error_passthrough(
 
 
 def _match_help(line: str) -> bool:
-    return line == "help" or line.startswith("help ")
+    line_lower = line.lower()
+    return line_lower == "help" or line_lower.startswith("help ")
 
 
 def _match_load(line: str) -> bool:
@@ -590,7 +592,7 @@ def _match_load(line: str) -> bool:
 
 
 def _match_history(line: str) -> bool:
-    return line == "history"
+    return line.lower() == "history"
 
 
 def _match_save(line: str) -> bool:
@@ -598,27 +600,27 @@ def _match_save(line: str) -> bool:
 
 
 def _match_hint(line: str) -> bool:
-    return line == "hint"
+    return line.lower() == "hint"
 
 
 def _match_show_board(line: str) -> bool:
-    return line == "show board"
+    return line.lower() == "show board"
 
 
 def _match_show_configuration(line: str) -> bool:
-    return line == "show configuration"
+    return line.lower() == "show configuration"
 
 
 def _match_show_time(line: str) -> bool:
-    return line == "show time"
+    return line.lower() == "show time"
 
 
 def _match_pause(line: str) -> bool:
-    return line == "pause"
+    return line.lower() == "pause"
 
 
 def _match_moves(line: str) -> bool:
-    return line == "moves"
+    return line.lower() == "moves"
 
 
 def _match_move(line: str) -> bool:
@@ -630,11 +632,13 @@ def _match_wall(line: str) -> bool:
 
 
 def _match_undo(line: str) -> bool:
-    return line == "undo" or line.lower().startswith("undo ")
+    line_lower = line.lower()
+    return line_lower == "undo" or line_lower.startswith("undo ")
 
 
 def _match_redo(line: str) -> bool:
-    return line == "redo" or line.lower().startswith("redo ")
+    line_lower = line.lower()
+    return line_lower == "redo" or line_lower.startswith("redo ")
 
 
 def _match_shorthand_move(line: str) -> bool:
@@ -646,7 +650,7 @@ def _match_shorthand_wall(line: str) -> bool:
 
 
 def _match_quit(line: str) -> bool:
-    return line == "quit"
+    return line.lower() == "quit"
 
 
 def _run_command_loop(

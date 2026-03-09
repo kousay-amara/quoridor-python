@@ -88,6 +88,15 @@ def test_show_board_prints_board_only(monkeypatch, capsys):
     assert out.count("Current player:") == 1
 
 
+def test_commands_are_case_insensitive(monkeypatch, capsys):
+    _run_shell(monkeypatch, ["SHOW TIME", "HeLp HiStoRy", "QUIT"])
+
+    out = capsys.readouterr().out
+    assert "Blitz mode is not enabled." in out
+    assert "Show the played moves grouped by turns." in out
+    assert "Bye." in out
+
+
 def test_save_then_load_roundtrip(monkeypatch, tmp_path: Path, capsys):
     save_path = tmp_path / "game.txt"
     _run_shell(
