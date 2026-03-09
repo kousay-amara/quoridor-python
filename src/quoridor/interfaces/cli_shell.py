@@ -129,6 +129,7 @@ def _auto_play_ai_until_human_or_end(
 def _show_help(line: str) -> bool:
     help_by_command = {
         "help": "help [CMD]\n  Show shell help, or help for CMD.",
+        "history": "history\n  Show the played moves grouped by turns.",
         "load": "load FILE\n  Load a game position from FILE.",
         "save": "save FILE\n  Save the current game position to FILE.",
         "hint": "hint\n  Show a suggested move for the current player.",
@@ -146,7 +147,7 @@ def _show_help(line: str) -> bool:
         parts = line.split(maxsplit=1)
         if len(parts) == 1:
             print(
-                "Commands: help [CMD], load, save, hint, show board, moves, move, wall, undo, redo, quit"
+                "Commands: help [CMD], history, load, save, hint, show board, moves, move, wall, undo, redo, quit"
             )
             print("Use: help <command>")
             return True
@@ -202,6 +203,12 @@ def _handle_save(session: GameSession, file_path: str) -> bool:
     cli_mod._save_session_to_file(file_path, session)
     print(_("Game saved to {path}").format(path=file_path))
     return False
+
+
+def _handle_history(session: GameSession) -> None:
+    from . import cli as cli_mod
+
+    print(cli_mod._serialize_history_section(session), end="")
 
 
 def _handle_hint(session: GameSession, ai_minimax_depth: int) -> None:
@@ -314,6 +321,11 @@ def _command_load(state: _ShellState, line: str) -> bool:
     except OSError as exc:
         print(f"Cannot load file: {exc}")
         return False
+
+
+def _command_history(state: _ShellState, _line: str) -> bool:
+    _handle_history(state.session)
+    return False
 
 
 def _command_save(state: _ShellState, line: str) -> bool:
@@ -435,6 +447,10 @@ def _match_load(line: str) -> bool:
     return line.lower().startswith("load ")
 
 
+def _match_history(line: str) -> bool:
+    return line == "history"
+
+
 def _match_save(line: str) -> bool:
     return line.lower().startswith("save ")
 
@@ -512,7 +528,6 @@ def _run_interactive_shell(
 ) -> None:
     if save_file:
         print(_("Loading game from {path}").format(path=save_file))
-        print(_("warning: save/load not implemented yet, starting a new game."))
 
     player_positions = initial_player_positions(board_size, players)
     wall_count = walls_per_player if walls_per_player >= 0 else -1
@@ -522,16 +537,26 @@ def _run_interactive_shell(
         pid: ("ai" if pid in ai_set else "human") for pid in player_positions
     }
 
-    state = GameState(
-        board_size=board_size,
-        current_player=1,
-        player_positions=player_positions,
-        remaining_walls=remaining_walls,
-        vertical_walls=[],
-        horizontal_walls=[],
-    )
-    session = GameSession(state=state, player_types=player_types)
-    has_unsaved_changes = False
+    if save_file:
+        from . import cli as cli_mod
+
+        session = cli_mod._load_session_from_file(
+            save_file,
+            fallback_player_types=player_types,
+            fallback_walls_per_player=remaining_walls,
+        )
+        has_unsaved_changes = False
+    else:
+        state = GameState(
+            board_size=board_size,
+            current_player=1,
+            player_positions=player_positions,
+            remaining_walls=remaining_walls,
+            vertical_walls=[],
+            horizontal_walls=[],
+        )
+        session = GameSession(state=state, player_types=player_types)
+        has_unsaved_changes = False
 
     if blitz:
         print(
@@ -562,6 +587,7 @@ def _run_interactive_shell(
 
     commands = [
         _Command(matches=_match_help, run=_command_help),
+        _Command(matches=_match_history, run=_command_history),
         _Command(
             matches=_match_load,
             run=_command_load,

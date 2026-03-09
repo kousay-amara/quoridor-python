@@ -20,6 +20,7 @@ class ContestPosition:
     size: int
     current_player: int
     positions: dict[int, int]
+    remaining_walls: dict[int, int]
     vertical_walls: list[tuple[int, int]]
     horizontal_walls: list[tuple[int, int]]
 
@@ -153,6 +154,28 @@ def _parse_board_lines(
     return size, positions, vertical_walls, horizontal_walls
 
 
+def _parse_walls_line(
+    line: str,
+    *,
+    player_ids: list[int],
+    line_no: int,
+) -> dict[int, int]:
+    if not line.lower().startswith("walls:"):
+        raise ContestError(f"invalid walls line at line {line_no}")
+
+    tokens = _tokenize(line.split(":", 1)[1])
+    if len(tokens) != len(player_ids):
+        raise ContestError(
+            f"invalid walls count at line {line_no}: "
+            f"expected {len(player_ids)} values, got {len(tokens)}"
+        )
+
+    try:
+        return {pid: int(token) for pid, token in zip(player_ids, tokens, strict=True)}
+    except ValueError as exc:
+        raise ContestError(f"invalid walls value at line {line_no}") from exc
+
+
 def parse_contest_file(path: str | Path) -> ContestPosition:
     raw = Path(path).read_text(encoding="utf-8")
     text = _strip_block_comments(raw)
@@ -195,10 +218,19 @@ def parse_contest_file(path: str | Path) -> ContestPosition:
     if current_player not in positions:
         raise ContestError(f"current player {current_player} not on board")
 
+    remaining_walls: dict[int, int] = {}
+    if cursor < len(lines) and lines[cursor][1].lower().startswith("walls:"):
+        remaining_walls = _parse_walls_line(
+            lines[cursor][1],
+            player_ids=sorted(positions),
+            line_no=lines[cursor][0],
+        )
+
     return ContestPosition(
         size=size,
         current_player=current_player,
         positions=positions,
+        remaining_walls=remaining_walls,
         vertical_walls=vertical_walls,
         horizontal_walls=horizontal_walls,
     )

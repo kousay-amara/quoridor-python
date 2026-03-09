@@ -33,6 +33,7 @@ from .cli_io import (
     _prompt_save_before_quit,
     _save_session_to_file,
     _serialize_game_section,
+    _serialize_history_section,
 )
 from .cli_shell import (
     _auto_play_ai_until_human_or_end,
