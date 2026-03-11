@@ -95,3 +95,31 @@ def test_game_session_builder_requires_state_and_player_types():
         assert False, "PermissionError expected"
     except PermissionError:
         pass
+
+
+def test_play_ai_turn_uses_iterative_search_when_depth_is_omitted(monkeypatch):
+    state = GameState(
+        board_size=9,
+        current_player=2,
+        player_positions={1: 0, 2: 80},
+        remaining_walls={1: 10, 2: 10},
+    )
+    session = GameSession(state=state, player_types={1: "human", 2: "ai"})
+
+    called = {"iterative": False}
+
+    def fake_iterative(state, ai_player_id, time_limit_sec, max_depth):
+        del state, ai_player_id, time_limit_sec
+        called["iterative"] = True
+        assert max_depth is None
+        return ("pawn", 71)
+
+    monkeypatch.setattr(
+        "src.quoridor.application.game_session.find_best_move_iterative",
+        fake_iterative,
+    )
+
+    record = session.play_ai_turn(mode="minimax", depth=None, time_limit_sec=1.0)
+
+    assert called["iterative"] is True
+    assert record.action == "move_pawn"

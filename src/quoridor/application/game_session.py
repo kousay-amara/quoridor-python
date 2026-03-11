@@ -9,7 +9,10 @@ from ..core.move_record import MoveRecord, PlayerType
 from ..rules.pawn_rules import get_all_legal_pawn_moves
 from ..rules.wall_rules import is_wall_legal
 from .history_manager import HistoryManager
-from .minimax_engine import choose_best_move_minimax
+from .minimax_engine import (
+    choose_best_move_minimax,
+    find_best_move_iterative,
+)
 
 WallOrientation = Literal["vertical", "horizontal"]
 
@@ -147,13 +150,34 @@ class GameSession:
             requester_type=requester_type,
         )
 
-    def play_ai_turn(self, depth: int = 2) -> MoveRecord:
-        """Compute and play the current AI player's move with minimax."""
+    def play_ai_turn(
+        self,
+        *,
+        mode: str = "minimax",
+        depth: int | None = None,
+        time_limit_sec: float = 5.0,
+    ) -> MoveRecord:
+        """Compute and play the current AI player's move."""
         player_id = self.state.current_player
         if self._player_type(player_id) != "ai":
             raise ValueError(f"player {player_id} is not an AI player")
 
-        move = choose_best_move_minimax(self.state, ai_player_id=player_id, depth=depth)
+        if mode == "iterative" or depth is None:
+            move = find_best_move_iterative(
+                self.state,
+                ai_player_id=player_id,
+                time_limit_sec=time_limit_sec,
+                max_depth=depth,
+            )
+        elif mode == "minimax":
+            move = choose_best_move_minimax(
+                self.state,
+                ai_player_id=player_id,
+                depth=depth,
+            )
+        else:
+            raise ValueError(f"unsupported AI mode: {mode}")
+
         move_type = move[0]
 
         if move_type == "pawn":
