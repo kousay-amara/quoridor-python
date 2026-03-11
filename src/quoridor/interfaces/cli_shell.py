@@ -25,6 +25,32 @@ _ = gettext.gettext
 
 MAX_HISTORY_SIZE = 1000
 
+QUORIDOR_COMMANDS = [
+    "help",
+    "history",
+    "hint",
+    "load ",
+    "save ",
+    "show board",
+    "show configuration",
+    "show time",
+    "pause",
+    "moves",
+    "move ",
+    "wall ",
+    "undo",
+    "redo",
+    "quit",
+]
+
+def completer(text: str, state: int) -> str | None:
+    matches = []
+    for cmd in QUORIDOR_COMMANDS:
+        if cmd.startswith(text):
+            matches.append(cmd)
+    if state < len(matches):
+        return matches[state]
+    return None
 
 def _get_last_history_match(term: str) -> str | None:
     if readline is None:
@@ -820,6 +846,10 @@ def _run_interactive_shell(
 
     if readline is not None:
         readline.set_history_length(MAX_HISTORY_SIZE)
+        readline.set_completer_delims("")
+        readline.set_completer(completer)
+        readline.parse_and_bind("tab: complete")
+
 
     while True:
         timed_player = state.session.state.current_player

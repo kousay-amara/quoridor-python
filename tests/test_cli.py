@@ -589,6 +589,15 @@ class _FakeReadline:
     def set_history_length(self, value: int) -> None:
         self.history_length = value
 
+    def set_completer_delims(self, delims: str) -> None:
+        pass
+
+    def set_completer(self, func) -> None:
+        pass
+
+    def parse_and_bind(self, binding: str) -> None:
+        pass
+
     def get_current_history_length(self) -> int:
         return len(self.history)
 
@@ -637,3 +646,34 @@ def test_history_plus_no_match_prints_message(monkeypatch, capsys):
 
     out = capsys.readouterr().out
     assert "No command found in history." in out
+
+def test_completer_no_match():
+    assert shell_mod.completer("xyz", 0) is None
+
+def test_completer_unique_prefix():
+    assert shell_mod.completer("pa", 0) == "pause"
+    assert shell_mod.completer("pa", 1) is None
+
+def test_completer_ambiguous_prefix():
+    assert shell_mod.completer("h", 0) == "help"
+    assert shell_mod.completer("h", 1) == "history" 
+    assert shell_mod.completer("h", 2) == "hint"
+    assert shell_mod.completer("h", 3) is None
+    
+def test_completer_empty_prefix():
+    all_cmds = shell_mod.QUORIDOR_COMMANDS
+    for i, cmd in enumerate(all_cmds):
+        assert shell_mod.completer("", i) == cmd
+    assert shell_mod.completer("", len(all_cmds)) is None
+
+def test_completer_exact_match():
+    assert shell_mod.completer("quit", 0) == "quit"
+    assert shell_mod.completer("quit", 1) is None
+
+def test_completer_multiword_prefix():
+    assert shell_mod.completer("show ", 0) == "show board"
+    assert shell_mod.completer("show ", 1) == "show configuration"
+    assert shell_mod.completer("show ", 2) == "show time"
+    assert shell_mod.completer("show ", 3) is None
+    assert shell_mod.completer("show b", 0) == "show board"
+    assert shell_mod.completer("show b", 1) is None
