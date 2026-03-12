@@ -9,7 +9,7 @@ from importlib import metadata
 from ..i18n import setup_i18n
 from ..application.contest import run_contest
 from ..application.minimax_engine import (
-    choose_best_move_minimax,
+    find_best_move_minimax,
     find_best_move_iterative,
 )
 from ..config import DEFAULTS, load_or_init_config

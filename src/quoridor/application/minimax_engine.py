@@ -29,19 +29,9 @@ def winner_id(state: GameState) -> int | None:
     return None
 
 
-def get_winner_id(state: GameState) -> int | None:
-    """Backward-compatible alias for winner lookup."""
-    return winner_id(state)
-
-
 def is_terminal(state: GameState) -> bool:
     """A state is terminal when a winner exists."""
     return winner_id(state) is not None
-
-
-def is_terminal_state(state: GameState) -> bool:
-    """Backward-compatible alias for terminal-state checks."""
-    return is_terminal(state)
 
 
 def _check_deadline(deadline_ts: float | None) -> None:
@@ -191,17 +181,3 @@ def find_best_move_iterative(
         depth += 1
 
     return best_move
-
-
-def choose_best_move_minimax(
-    state: GameState,
-    ai_player_id: int,
-    depth: int = 2,
-) -> Move:
-    """Backward-compatible wrapper around fixed-depth minimax."""
-    return find_best_move_minimax(
-        state=state,
-        ai_player_id=ai_player_id,
-        depth=depth,
-        eval_fn=evaluate_state,
-    )

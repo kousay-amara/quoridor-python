@@ -302,7 +302,7 @@ def _handle_hint(
             max_depth=None,
         )
     else:
-        move = cli_mod.choose_best_move_minimax(
+        move = cli_mod.find_best_move_minimax(
             session.state, ai_player_id=current, depth=ai_minimax_depth
         )
     from_node = session.state.player_positions[current]

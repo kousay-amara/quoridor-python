@@ -10,8 +10,8 @@ from ..rules.pawn_rules import get_all_legal_pawn_moves
 from ..rules.wall_rules import is_wall_legal
 from .history_manager import HistoryManager
 from .minimax_engine import (
-    choose_best_move_minimax,
     find_best_move_iterative,
+    find_best_move_minimax,
 )
 
 WallOrientation = Literal["vertical", "horizontal"]
@@ -170,7 +170,7 @@ class GameSession:
                 max_depth=depth,
             )
         elif mode == "minimax":
-            move = choose_best_move_minimax(
+            move = find_best_move_minimax(
                 self.state,
                 ai_player_id=player_id,
                 depth=depth,

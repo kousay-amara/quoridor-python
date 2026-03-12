@@ -53,7 +53,7 @@ def test_help_and_help_cmd(monkeypatch, capsys):
 def test_hint_uses_best_hint_action_format(monkeypatch, capsys):
     monkeypatch.setattr(
         cli_mod,
-        "choose_best_move_minimax",
+        "find_best_move_minimax",
         lambda state, ai_player_id, depth: (
             "pawn",
             state.player_positions[ai_player_id] + state.board_size,
