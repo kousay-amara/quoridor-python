@@ -582,7 +582,9 @@ def test_auto_play_ai_and_startup_messages(monkeypatch, capsys):
     assert "AI player 1 played." in out
 
     monkeypatch.setattr(
-        cli_mod, "_auto_play_ai_until_human_or_end", lambda *_args, **_kwargs: False
+        shell_mod,
+        "_auto_play_ai_until_human_or_end",
+        lambda *_args, **_kwargs: False,
     )
     startup_state = GameState(
         board_size=9,
