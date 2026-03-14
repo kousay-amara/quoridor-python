@@ -8,7 +8,10 @@ from importlib import metadata
 
 from ..i18n import setup_i18n
 from ..application.contest import run_contest
-from ..application.minimax_engine import choose_best_move_minimax
+from ..application.minimax_engine import (
+    find_best_move_minimax,
+    find_best_move_iterative,
+)
 from ..config import DEFAULTS, load_or_init_config
 from .contest_parser import ContestError, parse_contest_file
 from .cli_parser import (
@@ -84,7 +87,7 @@ def _main_interactive(argv: list[str]) -> int:
         parser.error("--ai-player id must be <= --players")
     if args.ai_time <= 0:
         parser.error("--ai-time must be > 0")
-    if args.ai_minimax_depth <= 0:
+    if args.ai_minimax_depth is not None and args.ai_minimax_depth <= 0:
         parser.error("--ai-minimax-depth must be > 0")
 
     if args.version:

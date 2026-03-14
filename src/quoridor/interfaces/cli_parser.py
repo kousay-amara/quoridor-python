@@ -9,6 +9,7 @@ import sys
 from .cli_constants import (
     AI_MINIMAX_DEPTH_DEFAULT,
     AI_MODE_DEFAULT,
+    AI_MODE_ITERATIVE,
     AI_TIME_DEFAULT,
     BOARD_SIZE_DEFAULT,
     BOARD_SIZE_MAX,
@@ -132,21 +133,21 @@ def _build_parser(defaults: dict[str, bool | int]) -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--ai-mode",
-        choices=[AI_MODE_DEFAULT],
+        choices=[AI_MODE_DEFAULT, AI_MODE_ITERATIVE],
         default=AI_MODE_DEFAULT,
-        help=_("AI mode (currently only minimax is available)"),
+        help=_("AI mode"),
     )
     parser.add_argument(
         "--ai-time",
         type=int,
         default=AI_TIME_DEFAULT,
-        help=_("AI thinking time in seconds (reserved for iterative mode)"),
+        help=_("AI thinking time in seconds"),
     )
     parser.add_argument(
         "--ai-minimax-depth",
         type=int,
         default=AI_MINIMAX_DEPTH_DEFAULT,
-        help=_("minimax search depth"),
+        help=_("maximum minimax search depth"),
     )
     parser.set_defaults(
         verbose=bool(defaults["verbose"]), blitz=bool(defaults["blitz"])
