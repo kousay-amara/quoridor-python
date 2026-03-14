@@ -41,15 +41,17 @@ class GameState:
 
     def to_snapshot(self) -> GameSnapshot:
         """Return a serializable snapshot of the current state."""
-        return {
+        snapshot: GameSnapshot = {
             "board_size": self.board_size,
             "current_player": self.current_player,
             "player_positions": dict(self.player_positions),
             "remaining_walls": dict(self.remaining_walls),
             "vertical_walls": list(self.vertical_walls),
             "horizontal_walls": list(self.horizontal_walls),
-            "inactive_players": sorted(self.inactive_players),
         }
+        if self.inactive_players:
+            snapshot["inactive_players"] = sorted(self.inactive_players)
+        return snapshot
 
     def restore(self, snapshot: GameSnapshot) -> None:
         """Restore state from a previously captured snapshot."""

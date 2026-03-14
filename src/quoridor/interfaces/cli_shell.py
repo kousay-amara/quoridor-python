@@ -14,6 +14,7 @@ try:  # readline enables in-session history navigation with arrow keys.
 except ImportError:  # pragma: no cover - platform-dependent
     readline = None
 
+from ..application.blitz import Blitz
 from ..application.game_session import GameSession, initial_player_positions
 from ..core.game_state import GameState
 from ..core.notation import get_edges_for_wall, get_node_from_notation
@@ -169,9 +170,11 @@ def _auto_play_ai_until_human_or_end(
     ai_time: int,
     ai_minimax_depth: int | None,
     *,
-    blitz_remaining_times: dict[int, float] | None = None,
-    blitz_paused: bool = False,
+    blitz: Blitz | None = None,
 ) -> bool:
+    if blitz is None:
+        blitz = Blitz.disabled()
+
     while session.player_types.get(session.state.current_player) == "ai":
         current_ai = session.state.current_player
         started = time.time()
@@ -181,12 +184,10 @@ def _auto_play_ai_until_human_or_end(
             time_limit_sec=ai_time,
         )
         elapsed = time.time() - started
-        if blitz_remaining_times is not None and not blitz_paused:
-            blitz_remaining_times[current_ai] -= elapsed
-            if blitz_remaining_times[current_ai] <= 0:
-                if _handle_timeout(session, current_ai):
-                    return True
-                continue
+        if blitz.consume_time(current_ai, elapsed):
+            if _handle_timeout(session, current_ai):
+                return True
+            continue
         print(f"AI player {current_ai} played.")
 
         new_pos = session.state.player_positions[current_ai]
@@ -244,8 +245,7 @@ def _apply_and_maybe_auto_play(
     ai_time: int,
     ai_minimax_depth: int | None,
     *,
-    blitz_remaining_times: dict[int, float] | None = None,
-    blitz_paused: bool = False,
+    blitz: Blitz,
 ) -> tuple[bool, bool]:
     has_unsaved_changes = True
     before_ai_cursor = session.history.cursor
@@ -254,8 +254,7 @@ def _apply_and_maybe_auto_play(
         ai_mode,
         ai_time,
         ai_minimax_depth,
-        blitz_remaining_times=blitz_remaining_times,
-        blitz_paused=blitz_paused,
+        blitz=blitz,
     ):
         if session.history.cursor != before_ai_cursor:
             has_unsaved_changes = True
@@ -272,8 +271,7 @@ def _auto_play_pending_ai(state: "_ShellState") -> bool:
         state.ai_mode,
         state.ai_time,
         state.ai_minimax_depth,
-        blitz_remaining_times=state.blitz_remaining_times,
-        blitz_paused=state.blitz_paused,
+        blitz=state.blitz,
     ):
         if state.session.history.cursor != before_ai_cursor:
             state.has_unsaved_changes = True
@@ -291,8 +289,7 @@ def _handle_load(
     ai_time: int,
     ai_minimax_depth: int | None,
     *,
-    blitz_remaining_times: dict[int, float] | None = None,
-    blitz_paused: bool = False,
+    blitz: Blitz,
 ) -> tuple[GameSession, bool, bool]:
     from . import cli as cli_mod
 
@@ -309,8 +306,7 @@ def _handle_load(
         ai_mode,
         ai_time,
         ai_minimax_depth,
-        blitz_remaining_times=blitz_remaining_times,
-        blitz_paused=blitz_paused,
+        blitz=blitz,
     )
     return session, has_unsaved_changes, should_break
 
@@ -370,8 +366,7 @@ def _handle_move(
     ai_time: int,
     ai_minimax_depth: int | None,
     *,
-    blitz_remaining_times: dict[int, float] | None = None,
-    blitz_paused: bool = False,
+    blitz: Blitz,
 ) -> tuple[bool, bool]:
     if _play_pawn_move_from_token(session, move_token):
         return True, True
@@ -380,8 +375,7 @@ def _handle_move(
         ai_mode,
         ai_time,
         ai_minimax_depth,
-        blitz_remaining_times=blitz_remaining_times,
-        blitz_paused=blitz_paused,
+        blitz=blitz,
     )
 
 
@@ -392,8 +386,7 @@ def _handle_wall(
     ai_time: int,
     ai_minimax_depth: int | None,
     *,
-    blitz_remaining_times: dict[int, float] | None = None,
-    blitz_paused: bool = False,
+    blitz: Blitz,
 ) -> tuple[bool, bool]:
     _place_wall_from_token(session, wall_token)
     return _apply_and_maybe_auto_play(
@@ -401,8 +394,7 @@ def _handle_wall(
         ai_mode,
         ai_time,
         ai_minimax_depth,
-        blitz_remaining_times=blitz_remaining_times,
-        blitz_paused=blitz_paused,
+        blitz=blitz,
     )
 
 
@@ -470,7 +462,8 @@ def _format_blitz_time(seconds_left: float) -> str:
     return f"{minutes:02d}:{seconds:02d}"
 
 
-def _print_blitz_times(remaining_times: dict[int, float]) -> None:
+def _print_blitz_times(blitz: Blitz) -> None:
+    remaining_times = blitz.remaining_times()
     ordered = sorted(remaining_times)
     text = ", ".join(
         f"Player {pid}: {_format_blitz_time(remaining_times[pid])}" for pid in ordered
@@ -487,40 +480,21 @@ def _handle_timeout(session: GameSession, loser_id: int) -> bool:
     return winner is not None
 
 
-def _consume_blitz_time(
-    state: "_ShellState",
-    player_id: int,
-    elapsed: float,
-    *,
-    expired: bool = False,
-) -> bool:
-    if state.blitz_remaining_times is None or state.blitz_paused:
-        return False
-
-    if expired:
-        state.blitz_remaining_times[player_id] = 0.0
-    else:
-        state.blitz_remaining_times[player_id] -= elapsed
-    return state.blitz_remaining_times[player_id] <= 0
-
-
 def _read_shell_input(state: "_ShellState", prompt: str) -> tuple[str | None, bool]:
     timed_player = state.session.state.current_player
-    timeout_sec: float | None = None
-    if state.blitz_remaining_times is not None and not state.blitz_paused:
-        timeout_sec = state.blitz_remaining_times[timed_player]
-        if timeout_sec <= 0:
-            state.has_unsaved_changes = True
-            if _handle_timeout(state.session, timed_player):
-                return None, True
-            return "", False
+    timeout_sec = state.blitz.input_timeout_for(timed_player)
+    if timeout_sec is not None and timeout_sec <= 0:
+        state.has_unsaved_changes = True
+        if _handle_timeout(state.session, timed_player):
+            return None, True
+        return "", False
 
     started = time.time()
     try:
         with _blitz_input_alarm(timeout_sec):
             line = input(prompt).strip()
     except _BlitzInputTimeout:
-        _consume_blitz_time(state, timed_player, 0.0, expired=True)
+        state.blitz.expire_player(timed_player)
         state.has_unsaved_changes = True
         if _handle_timeout(state.session, timed_player):
             return None, True
@@ -530,7 +504,7 @@ def _read_shell_input(state: "_ShellState", prompt: str) -> tuple[str | None, bo
         return None, True
 
     elapsed = time.time() - started
-    if _consume_blitz_time(state, timed_player, elapsed):
+    if state.blitz.consume_time(timed_player, elapsed):
         state.has_unsaved_changes = True
         if _handle_timeout(state.session, timed_player):
             return None, True
@@ -552,9 +526,9 @@ def _print_configuration(state: "_ShellState") -> None:
     print(f"ai_mode={state.ai_mode}")
     print(f"ai_time={state.ai_time}")
     print(f"ai_minimax_depth={state.ai_minimax_depth}")
-    print(f"blitz={state.blitz_enabled}")
-    print(f"time_limit={state.time_limit}")
-    print(f"timer_paused={state.blitz_paused}")
+    print(f"blitz={state.blitz.is_enabled()}")
+    print(f"time_limit={state.blitz.time_limit_minutes}")
+    print(f"timer_paused={state.blitz.paused}")
 
 
 def _command_help(_state: _ShellState, line: str) -> bool:
@@ -574,8 +548,7 @@ def _command_load(state: _ShellState, line: str) -> bool:
             state.ai_mode,
             state.ai_time,
             state.ai_minimax_depth,
-            blitz_remaining_times=state.blitz_remaining_times,
-            blitz_paused=state.blitz_paused,
+            blitz=state.blitz,
         )
         state.session = session
         state.has_unsaved_changes = has_unsaved_changes
@@ -630,20 +603,20 @@ def _command_show_configuration(state: _ShellState, _line: str) -> bool:
 
 
 def _command_show_time(state: _ShellState, _line: str) -> bool:
-    if state.blitz_remaining_times is None:
+    if not state.blitz.is_enabled():
         print("Blitz mode is not enabled.")
     else:
-        _print_blitz_times(state.blitz_remaining_times)
-        print(f"Timer paused: {'yes' if state.blitz_paused else 'no'}")
+        _print_blitz_times(state.blitz)
+        print(f"Timer paused: {'yes' if state.blitz.paused else 'no'}")
     return False
 
 
 def _command_pause(state: _ShellState, _line: str) -> bool:
-    if state.blitz_remaining_times is None:
+    if not state.blitz.is_enabled():
         print("Blitz mode is not enabled.")
         return False
-    state.blitz_paused = not state.blitz_paused
-    print("Blitz timer paused." if state.blitz_paused else "Blitz timer resumed.")
+    is_paused = state.blitz.toggle_pause()
+    print("Blitz timer paused." if is_paused else "Blitz timer resumed.")
     return False
 
 
@@ -659,8 +632,7 @@ def _command_move(state: _ShellState, line: str) -> bool:
         state.ai_mode,
         state.ai_time,
         state.ai_minimax_depth,
-        blitz_remaining_times=state.blitz_remaining_times,
-        blitz_paused=state.blitz_paused,
+        blitz=state.blitz,
     )
     state.has_unsaved_changes = has_unsaved_changes
     return should_break
@@ -673,8 +645,7 @@ def _command_wall(state: _ShellState, line: str) -> bool:
         state.ai_mode,
         state.ai_time,
         state.ai_minimax_depth,
-        blitz_remaining_times=state.blitz_remaining_times,
-        blitz_paused=state.blitz_paused,
+        blitz=state.blitz,
     )
     state.has_unsaved_changes = has_unsaved_changes
     return should_break
@@ -699,8 +670,7 @@ def _command_shorthand_move(state: _ShellState, line: str) -> bool:
         state.ai_mode,
         state.ai_time,
         state.ai_minimax_depth,
-        blitz_remaining_times=state.blitz_remaining_times,
-        blitz_paused=state.blitz_paused,
+        blitz=state.blitz,
     )
     state.has_unsaved_changes = has_unsaved_changes
     return should_break
@@ -713,8 +683,7 @@ def _command_shorthand_wall(state: _ShellState, line: str) -> bool:
         state.ai_mode,
         state.ai_time,
         state.ai_minimax_depth,
-        blitz_remaining_times=state.blitz_remaining_times,
-        blitz_paused=state.blitz_paused,
+        blitz=state.blitz,
     )
     state.has_unsaved_changes = has_unsaved_changes
     return should_break
@@ -736,10 +705,7 @@ class _ShellState:
     walls_per_player: int
     board_size: int
     ai_players: list[int]
-    blitz_enabled: bool
-    time_limit: int
-    blitz_remaining_times: dict[int, float] | None
-    blitz_paused: bool
+    blitz: Blitz
 
 
 @dataclass
@@ -899,12 +865,12 @@ def _run_interactive_shell(
         )
         session = GameSession(state=state, player_types=player_types)
         has_unsaved_changes = False
-    remaining_times: dict[int, float] | None = None
-    blitz_paused = False
+    blitz_state = Blitz.disabled(time_limit_minutes=time_limit)
     if blitz:
-        remaining_times = {
-            pid: float(time_limit * 60) for pid in sorted(session.state.player_positions)
-        }
+        blitz_state = Blitz.for_players(
+            session.state.player_positions,
+            time_limit_minutes=time_limit,
+        )
 
     if blitz:
         print(
@@ -923,8 +889,8 @@ def _run_interactive_shell(
         print(
             f"AI players: {sorted(ai_set)} (mode={ai_mode}, depth={depth_label}, time={ai_time}s)"
         )
-    if remaining_times is not None:
-        _print_blitz_times(remaining_times)
+    if blitz_state.is_enabled():
+        _print_blitz_times(blitz_state)
     _print_state(session)
 
     if _auto_play_ai_until_human_or_end(
@@ -932,8 +898,7 @@ def _run_interactive_shell(
         ai_mode,
         ai_time,
         ai_minimax_depth,
-        blitz_remaining_times=remaining_times,
-        blitz_paused=blitz_paused,
+        blitz=blitz_state,
     ):
         return
 
@@ -947,10 +912,7 @@ def _run_interactive_shell(
         walls_per_player=walls_per_player,
         board_size=board_size,
         ai_players=ai_players,
-        blitz_enabled=blitz,
-        time_limit=time_limit,
-        blitz_remaining_times=remaining_times,
-        blitz_paused=blitz_paused,
+        blitz=blitz_state,
     )
 
     commands = [
