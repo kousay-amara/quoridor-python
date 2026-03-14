@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import gettext
+import signal
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Callable
 
@@ -24,6 +26,35 @@ from .contest_parser import ContestError
 _ = gettext.gettext
 
 MAX_HISTORY_SIZE = 1000
+
+
+class _BlitzInputTimeout(Exception):
+    """Raised when a blitz timer interrupts a blocking CLI input."""
+
+
+def _raise_blitz_input_timeout(_signum: int, _frame: object) -> None:
+    raise _BlitzInputTimeout
+
+
+@contextmanager
+def _blitz_input_alarm(timeout_sec: float | None):
+    if timeout_sec is None or timeout_sec <= 0:
+        yield
+        return
+
+    try:
+        previous_handler = signal.getsignal(signal.SIGALRM)
+        signal.signal(signal.SIGALRM, _raise_blitz_input_timeout)
+        signal.setitimer(signal.ITIMER_REAL, timeout_sec)
+    except (AttributeError, ValueError):
+        yield
+        return
+
+    try:
+        yield
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0.0)
+        signal.signal(signal.SIGALRM, previous_handler)
 
 QUORIDOR_COMMANDS = [
     "help",
@@ -436,6 +467,52 @@ def _handle_timeout(session: GameSession, loser_id: int) -> bool:
         print(f"Player {winner} wins!")
     _print_state(session)
     return True
+
+
+def _consume_blitz_time(
+    state: "_ShellState",
+    player_id: int,
+    elapsed: float,
+    *,
+    expired: bool = False,
+) -> bool:
+    if state.blitz_remaining_times is None or state.blitz_paused:
+        return False
+
+    if expired:
+        state.blitz_remaining_times[player_id] = 0.0
+    else:
+        state.blitz_remaining_times[player_id] -= elapsed
+    return state.blitz_remaining_times[player_id] <= 0
+
+
+def _read_shell_input(state: "_ShellState", prompt: str) -> tuple[str | None, bool]:
+    timed_player = state.session.state.current_player
+    timeout_sec: float | None = None
+    if state.blitz_remaining_times is not None and not state.blitz_paused:
+        timeout_sec = state.blitz_remaining_times[timed_player]
+        if timeout_sec <= 0:
+            _handle_timeout(state.session, timed_player)
+            return None, True
+
+    started = time.monotonic()
+    try:
+        with _blitz_input_alarm(timeout_sec):
+            line = input(prompt).strip()
+    except _BlitzInputTimeout:
+        _consume_blitz_time(state, timed_player, 0.0, expired=True)
+        _handle_timeout(state.session, timed_player)
+        return None, True
+    except (EOFError, KeyboardInterrupt):
+        print()
+        return None, True
+
+    elapsed = time.monotonic() - started
+    if _consume_blitz_time(state, timed_player, elapsed):
+        _handle_timeout(state.session, timed_player)
+        return None, True
+
+    return line, False
 
 
 def _print_configuration(state: "_ShellState") -> None:
@@ -916,29 +993,17 @@ def _run_interactive_shell(
 
 
     while True:
-        timed_player = state.session.state.current_player
-        turn_started = time.monotonic()
-        try:
-            line = input(">> ").strip()
-        except (EOFError, KeyboardInterrupt):
-            print()
+        line, should_break = _read_shell_input(state, ">> ")
+        if should_break:
             break
-        elapsed = time.monotonic() - turn_started
-        if state.blitz_remaining_times is not None and not state.blitz_paused:
-            state.blitz_remaining_times[timed_player] -= elapsed
-            if state.blitz_remaining_times[timed_player] <= 0:
-                _handle_timeout(state.session, timed_player)
-                break
 
         if line.startswith("+"):
             if readline is not None:
                 _maybe_remove_last_history_item()
             term = line[1:].strip()
             if not term:
-                try:
-                    term = input("Search history: ").strip()
-                except (EOFError, KeyboardInterrupt):
-                    print()
+                term, should_break = _read_shell_input(state, "Search history: ")
+                if should_break:
                     break
                 if readline is not None:
                     _maybe_remove_last_history_item()
