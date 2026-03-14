@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Literal, TypedDict
 
 PlayerType = Literal["human", "ai"]
-ActionType = Literal["move_pawn", "place_wall"]
+ActionType = Literal["move_pawn", "place_wall", "timeout_loss"]
 
 
 class GameSnapshot(TypedDict):
@@ -19,6 +19,7 @@ class GameSnapshot(TypedDict):
     - remaining_walls: dict[int, int]
     - vertical_walls: list[tuple[int, int]]
     - horizontal_walls: list[tuple[int, int]]
+    - inactive_players: list[int]
     """
 
     board_size: int
@@ -27,6 +28,7 @@ class GameSnapshot(TypedDict):
     remaining_walls: dict[int, int]
     vertical_walls: list[tuple[int, int]]
     horizontal_walls: list[tuple[int, int]]
+    inactive_players: list[int]
 
 
 @dataclass

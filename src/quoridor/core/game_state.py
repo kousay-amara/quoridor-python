@@ -19,6 +19,7 @@ class GameState:
     remaining_walls: dict[int, int]
     vertical_walls: list[tuple[int, int]] = field(default_factory=list)
     horizontal_walls: list[tuple[int, int]] = field(default_factory=list)
+    inactive_players: set[int] = field(default_factory=set)
     graph: Graph = field(init=False)
 
     def __post_init__(self) -> None:
@@ -26,6 +27,7 @@ class GameState:
         self.remaining_walls = dict(self.remaining_walls)
         self.vertical_walls = list(self.vertical_walls)
         self.horizontal_walls = list(self.horizontal_walls)
+        self.inactive_players = set(self.inactive_players)
         self._rebuild_graph()
 
     def _rebuild_graph(self) -> None:
@@ -46,6 +48,7 @@ class GameState:
             "remaining_walls": dict(self.remaining_walls),
             "vertical_walls": list(self.vertical_walls),
             "horizontal_walls": list(self.horizontal_walls),
+            "inactive_players": sorted(self.inactive_players),
         }
 
     def restore(self, snapshot: GameSnapshot) -> None:
@@ -56,6 +59,7 @@ class GameState:
         self.remaining_walls = dict(snapshot["remaining_walls"])
         self.vertical_walls = list(snapshot["vertical_walls"])
         self.horizontal_walls = list(snapshot["horizontal_walls"])
+        self.inactive_players = set(snapshot.get("inactive_players", []))
         self._rebuild_graph()
 
     @classmethod
@@ -68,4 +72,15 @@ class GameState:
             remaining_walls=dict(snapshot["remaining_walls"]),
             vertical_walls=list(snapshot["vertical_walls"]),
             horizontal_walls=list(snapshot["horizontal_walls"]),
+            inactive_players=set(snapshot.get("inactive_players", [])),
         )
+
+    def is_player_active(self, player_id: int) -> bool:
+        return player_id not in self.inactive_players
+
+    def active_player_ids(self) -> list[int]:
+        return [
+            player_id
+            for player_id in sorted(self.player_positions)
+            if self.is_player_active(player_id)
+        ]

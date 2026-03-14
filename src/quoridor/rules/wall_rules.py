@@ -58,7 +58,7 @@ def get_player_target_funcs(
 def get_all_legal_wall_placements(state: GameState):
     legal_walls = []
     size = state.board_size
-    player_ids = sorted(state.player_positions.keys())
+    player_ids = state.active_player_ids()
 
     targets = get_player_target_funcs(size, player_ids)
     positions = [state.player_positions[pid] for pid in player_ids]

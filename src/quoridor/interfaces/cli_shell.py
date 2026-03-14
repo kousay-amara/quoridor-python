@@ -146,10 +146,8 @@ def _place_wall_from_token(session: GameSession, wall_token: str) -> None:
     orientation = "horizontal" if ori_char == "h" else "vertical"
 
     current = session.state.current_player
-    positions = [
-        session.state.player_positions[p]
-        for p in sorted(session.state.player_positions)
-    ]
+    active_players = session.active_player_ids()
+    positions = [session.state.player_positions[player_id] for player_id in active_players]
     target_funcs = session._build_player_target_funcs()
     ok, error_msg = validate_wall(
         session.state.graph,
@@ -186,7 +184,9 @@ def _auto_play_ai_until_human_or_end(
         if blitz_remaining_times is not None and not blitz_paused:
             blitz_remaining_times[current_ai] -= elapsed
             if blitz_remaining_times[current_ai] <= 0:
-                return _handle_timeout(session, current_ai)
+                if _handle_timeout(session, current_ai):
+                    return True
+                continue
         print(f"AI player {current_ai} played.")
 
         new_pos = session.state.player_positions[current_ai]
@@ -263,6 +263,25 @@ def _apply_and_maybe_auto_play(
     if session.history.cursor != before_ai_cursor:
         has_unsaved_changes = True
     return has_unsaved_changes, False
+
+
+def _auto_play_pending_ai(state: "_ShellState") -> bool:
+    before_ai_cursor = state.session.history.cursor
+    if _auto_play_ai_until_human_or_end(
+        state.session,
+        state.ai_mode,
+        state.ai_time,
+        state.ai_minimax_depth,
+        blitz_remaining_times=state.blitz_remaining_times,
+        blitz_paused=state.blitz_paused,
+    ):
+        if state.session.history.cursor != before_ai_cursor:
+            state.has_unsaved_changes = True
+        return True
+
+    if state.session.history.cursor != before_ai_cursor:
+        state.has_unsaved_changes = True
+    return False
 
 
 def _handle_load(
@@ -460,13 +479,12 @@ def _print_blitz_times(remaining_times: dict[int, float]) -> None:
 
 
 def _handle_timeout(session: GameSession, loser_id: int) -> bool:
-    players = sorted(session.state.player_positions)
-    winner = next((pid for pid in players if pid != loser_id), None)
+    _record, winner = session.timeout_player(loser_id)
     print(f"Player {loser_id} ran out of time and loses.")
     if winner is not None:
         print(f"Player {winner} wins!")
     _print_state(session)
-    return True
+    return winner is not None
 
 
 def _consume_blitz_time(
@@ -492,8 +510,10 @@ def _read_shell_input(state: "_ShellState", prompt: str) -> tuple[str | None, bo
     if state.blitz_remaining_times is not None and not state.blitz_paused:
         timeout_sec = state.blitz_remaining_times[timed_player]
         if timeout_sec <= 0:
-            _handle_timeout(state.session, timed_player)
-            return None, True
+            state.has_unsaved_changes = True
+            if _handle_timeout(state.session, timed_player):
+                return None, True
+            return "", False
 
     started = time.time()
     try:
@@ -501,16 +521,20 @@ def _read_shell_input(state: "_ShellState", prompt: str) -> tuple[str | None, bo
             line = input(prompt).strip()
     except _BlitzInputTimeout:
         _consume_blitz_time(state, timed_player, 0.0, expired=True)
-        _handle_timeout(state.session, timed_player)
-        return None, True
+        state.has_unsaved_changes = True
+        if _handle_timeout(state.session, timed_player):
+            return None, True
+        return "", False
     except (EOFError, KeyboardInterrupt):
         print()
         return None, True
 
     elapsed = time.time() - started
     if _consume_blitz_time(state, timed_player, elapsed):
-        _handle_timeout(state.session, timed_player)
-        return None, True
+        state.has_unsaved_changes = True
+        if _handle_timeout(state.session, timed_player):
+            return None, True
+        return "", False
 
     return line, False
 
@@ -993,6 +1017,9 @@ def _run_interactive_shell(
 
 
     while True:
+        if _auto_play_pending_ai(state):
+            break
+
         line, should_break = _read_shell_input(state, ">> ")
         if should_break:
             break

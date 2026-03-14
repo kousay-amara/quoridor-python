@@ -29,6 +29,8 @@ def _record_to_notation(session: GameSession, record) -> str:
             f"{get_notation_from_node(from_node, size)}-"
             f"{get_notation_from_node(to_node, size)}"
         )
+    if record.action == "timeout_loss":
+        return "timeout"
 
     before_vertical = set(record.before_state["vertical_walls"])
     after_vertical = set(record.after_state["vertical_walls"])
@@ -140,7 +142,9 @@ def _replay_history(
     session = GameSession(state=state, player_types=player_types)
 
     for player_id, token in history_entries:
-        if "-" in token:
+        if token == "timeout":
+            session.timeout_player(player_id)
+        elif "-" in token:
             from_txt, to_txt = token.split("-", 1)
             from_node = get_node_from_notation(from_txt, position.size)
             to_node = get_node_from_notation(to_txt, position.size)

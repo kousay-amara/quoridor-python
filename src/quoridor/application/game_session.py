@@ -7,7 +7,8 @@ from typing import Literal
 from ..core.game_state import GameState
 from ..core.move_record import MoveRecord, PlayerType
 from ..rules.pawn_rules import get_all_legal_pawn_moves
-from ..rules.wall_rules import is_wall_legal
+from ..rules.wall_rules import get_player_target_funcs, is_wall_legal
+from ..rules.win_rules import has_player_won
 from .history_manager import HistoryManager
 from .minimax_engine import (
     find_best_move_iterative,
@@ -41,6 +42,20 @@ class GameSession:
         self.player_types = dict(player_types)
         self.history = HistoryManager()
         self._turn_order = sorted(self.state.player_positions.keys())
+
+    def active_player_ids(self) -> list[int]:
+        return self.state.active_player_ids()
+
+    def winner_id(self) -> int | None:
+        active_players = self.active_player_ids()
+        if len(active_players) == 1:
+            return active_players[0]
+
+        for player_id in active_players:
+            player_node = self.state.player_positions[player_id]
+            if has_player_won(player_id, player_node, self.state.board_size):
+                return player_id
+        return None
 
     def play_pawn_move(self, player_id: int, to_node: int) -> MoveRecord:
         self._ensure_current_player(player_id)
@@ -78,21 +93,7 @@ class GameSession:
 
     # utile pour la fonction is_wall_legal qui a besoin de savoir les objectif de chaque joueur
     def _build_player_target_funcs(self):
-        size = self.state.board_size
-        player_ids = sorted(self.state.player_positions.keys())
-        funcs = []
-
-        for idx, _pid in enumerate(player_ids):
-            if idx == 0:  # joueur 1 -> dernière ligne
-                funcs.append(lambda n, s=size: (n // s) == s - 1)
-            elif idx == 1:  # joueur 2 -> première ligne
-                funcs.append(lambda n, s=size: (n // s) == 0)
-            elif idx == 2:  # joueur 3 -> dernière colonne
-                funcs.append(lambda n, s=size: (n % s) == s - 1)
-            elif idx == 3:  # joueur 4 -> première colonne
-                funcs.append(lambda n, s=size: (n % s) == 0)
-
-        return funcs
+        return get_player_target_funcs(self.state.board_size, self.active_player_ids())
 
     def place_wall(
         self,
@@ -107,9 +108,8 @@ class GameSession:
         if not wall_edges:
             raise ValueError("wall_edges must not be empty")
 
-        positions = [
-            self.state.player_positions[p] for p in sorted(self.state.player_positions)
-        ]
+        active_players = self.active_player_ids()
+        positions = [self.state.player_positions[player_id] for player_id in active_players]
         target_funcs = self._build_player_target_funcs()
         if not is_wall_legal(self.state.graph, positions, wall_edges, target_funcs):
             raise ValueError(f"illegal wall placement: {wall_edges}")
@@ -135,6 +135,26 @@ class GameSession:
         )
         self.history.record_move(record)
         return record
+
+    def timeout_player(self, player_id: int) -> tuple[MoveRecord, int | None]:
+        self._ensure_current_player(player_id)
+        if not self.state.is_player_active(player_id):
+            raise ValueError(f"player {player_id} is already inactive")
+
+        before = self.state.to_snapshot()
+        self.state.inactive_players.add(player_id)
+        self._advance_turn()
+        after = self.state.to_snapshot()
+
+        record = MoveRecord(
+            player_id=player_id,
+            player_type=self._player_type(player_id),
+            action="timeout_loss",
+            before_state=before,
+            after_state=after,
+        )
+        self.history.record_move(record)
+        return record, self.winner_id()
 
     def undo(self, requester_id: int) -> list[MoveRecord]:
         requester_type = self._player_type(requester_id)
@@ -194,14 +214,29 @@ class GameSession:
         raise ValueError(f"unsupported AI move type: {move_type}")
 
     def _ensure_current_player(self, player_id: int) -> None:
+        if not self.state.is_player_active(player_id):
+            raise ValueError(f"player {player_id} is inactive")
         if player_id != self.state.current_player:
             raise ValueError(
                 f"not player {player_id}'s turn (current={self.state.current_player})"
             )
 
     def _advance_turn(self) -> None:
+        active_players = self.active_player_ids()
+        if not active_players:
+            return
+        if len(active_players) == 1:
+            self.state.current_player = active_players[0]
+            return
+
         idx = self._turn_order.index(self.state.current_player)
-        self.state.current_player = self._turn_order[(idx + 1) % len(self._turn_order)]
+        for offset in range(1, len(self._turn_order) + 1):
+            next_player = self._turn_order[(idx + offset) % len(self._turn_order)]
+            if next_player in active_players:
+                self.state.current_player = next_player
+                return
+
+        self.state.current_player = active_players[0]
 
     def _player_type(self, player_id: int) -> PlayerType:
         if player_id not in self.player_types:

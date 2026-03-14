@@ -20,7 +20,9 @@ class SearchTimeout(RuntimeError):
 
 def winner_id(state: GameState) -> int | None:
     """Return winner player id if any player reached their target edge."""
-    player_ids = sorted(state.player_positions.keys())
+    player_ids = state.active_player_ids()
+    if len(player_ids) == 1:
+        return player_ids[0]
     targets = get_player_target_funcs(state.board_size, player_ids)
 
     for index, player_id in enumerate(player_ids):
