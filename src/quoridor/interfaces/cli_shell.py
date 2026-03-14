@@ -176,13 +176,13 @@ def _auto_play_ai_until_human_or_end(
 ) -> bool:
     while session.player_types.get(session.state.current_player) == "ai":
         current_ai = session.state.current_player
-        started = time.monotonic()
+        started = time.time()
         session.play_ai_turn(
             mode=ai_mode,
             depth=ai_minimax_depth,
             time_limit_sec=ai_time,
         )
-        elapsed = time.monotonic() - started
+        elapsed = time.time() - started
         if blitz_remaining_times is not None and not blitz_paused:
             blitz_remaining_times[current_ai] -= elapsed
             if blitz_remaining_times[current_ai] <= 0:
@@ -495,7 +495,7 @@ def _read_shell_input(state: "_ShellState", prompt: str) -> tuple[str | None, bo
             _handle_timeout(state.session, timed_player)
             return None, True
 
-    started = time.monotonic()
+    started = time.time()
     try:
         with _blitz_input_alarm(timeout_sec):
             line = input(prompt).strip()
@@ -507,7 +507,7 @@ def _read_shell_input(state: "_ShellState", prompt: str) -> tuple[str | None, bo
         print()
         return None, True
 
-    elapsed = time.monotonic() - started
+    elapsed = time.time() - started
     if _consume_blitz_time(state, timed_player, elapsed):
         _handle_timeout(state.session, timed_player)
         return None, True

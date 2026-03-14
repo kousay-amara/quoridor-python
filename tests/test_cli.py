@@ -357,7 +357,7 @@ def test_show_configuration_command(monkeypatch, capsys):
 
 def test_show_time_and_pause_commands(monkeypatch, capsys):
     moments = iter([0.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0])
-    monkeypatch.setattr(cli_shell.time, "monotonic", lambda: next(moments))
+    monkeypatch.setattr(cli_shell.time, "time", lambda: next(moments))
 
     _run_shell(monkeypatch, ["show time", "pause", "show time", "quit"], blitz=True, time_limit=1)
 
@@ -369,7 +369,7 @@ def test_show_time_and_pause_commands(monkeypatch, capsys):
 
 def test_blitz_timeout_causes_loss(monkeypatch, capsys):
     moments = iter([0.0, 61.0])
-    monkeypatch.setattr(cli_shell.time, "monotonic", lambda: next(moments))
+    monkeypatch.setattr(cli_shell.time, "time", lambda: next(moments))
 
     _run_shell(monkeypatch, ["quit"], blitz=True, time_limit=1)
 
