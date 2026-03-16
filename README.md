@@ -54,7 +54,7 @@ pytest -q -p no:cov -o addopts= tests
 Tester uniquement le mode contest :
 
 ```bash
-PYTHONPATH=src pytest -q -p no:cov -o addopts= tests/test_contest.py
+PYTHONPATH=. pytest -q -p no:cov -o addopts= tests/test_contest.py
 ```
 
 ## Documentation
@@ -62,8 +62,15 @@ PYTHONPATH=src pytest -q -p no:cov -o addopts= tests/test_contest.py
 La documentation API est générée avec Sphinx. Après installation des dépendances de dev :
 
 ```bash
+pip install -r docs/requirements.txt
 cd docs
 make html
+```
+
+Si le thème RTD manque (`ThemeError: no theme named 'sphinx_rtd_theme'`) :
+
+```bash
+pip install sphinx-rtd-theme
 ```
 
 Ouvrir ensuite : **`docs/_build/html/index.html`** (ou [index.html](docs/_build/html/index.html) en relatif depuis la racine du dépôt).
@@ -71,5 +78,5 @@ Ouvrir ensuite : **`docs/_build/html/index.html`** (ou [index.html](docs/_build/
 ## Développement
 
 - Tester le mode contest à la main (exemple) :  
-  `PYTHONPATH=src python3 -m quoridor.interfaces.cli -c contest_example.txt`  
+  `PYTHONPATH=. python3 -m quoridor.interfaces.cli -c contest_example.txt`  
   (adapter le chemin du module si ton point d’entrée CLI est différent.)

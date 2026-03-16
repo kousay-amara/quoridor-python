@@ -12,7 +12,7 @@ if "%SPHINXAPIDOC%" == "" (
 )
 set SOURCEDIR=.
 set BUILDDIR=_build
-set APIDOCSRC=..\src\quoridor
+set APIDOCSRC=..\quoridor
 
 %SPHINXBUILD% >NUL 2>NUL
 if errorlevel 9009 (

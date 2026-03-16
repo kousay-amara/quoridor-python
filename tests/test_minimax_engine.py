@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from src.quoridor.application import minimax_engine as engine
-from src.quoridor.application.ai_logic import get_all_legal_moves
-from src.quoridor.core.game_state import GameState
+from quoridor.application import minimax_engine as engine
+from quoridor.application.ai_logic import get_all_legal_moves
+from quoridor.core.game_state import GameState
 
 
 def _build_state() -> GameState:

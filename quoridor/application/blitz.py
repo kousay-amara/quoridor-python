@@ -23,9 +23,7 @@ class Blitz:
         cls, player_ids: Iterable[int], *, time_limit_minutes: int
     ) -> "Blitz":
         seconds = float(time_limit_minutes * 60)
-        remaining_times = {
-            player_id: seconds for player_id in sorted(set(player_ids))
-        }
+        remaining_times = {player_id: seconds for player_id in sorted(set(player_ids))}
         return cls(
             time_limit_minutes=time_limit_minutes,
             paused=False,

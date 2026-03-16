@@ -5,11 +5,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from src.quoridor.application.game_session import GameSession
-from src.quoridor.core.game_state import GameState
-from src.quoridor.interfaces import cli as cli_mod
-from src.quoridor.interfaces import cli_shell
-from src.quoridor.interfaces import cli_shell as shell_mod
+from quoridor.application.game_session import GameSession
+from quoridor.core.game_state import GameState
+from quoridor.interfaces import cli as cli_mod
+from quoridor.interfaces import cli_shell
+from quoridor.interfaces import cli_shell as shell_mod
 
 
 def _run_shell(monkeypatch, commands: list[str], **kwargs) -> None:
@@ -359,7 +359,12 @@ def test_show_time_and_pause_commands(monkeypatch, capsys):
     moments = iter([0.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0, 10.0])
     monkeypatch.setattr(cli_shell.time, "time", lambda: next(moments))
 
-    _run_shell(monkeypatch, ["show time", "pause", "show time", "quit"], blitz=True, time_limit=1)
+    _run_shell(
+        monkeypatch,
+        ["show time", "pause", "show time", "quit"],
+        blitz=True,
+        time_limit=1,
+    )
 
     out = capsys.readouterr().out
     assert "Blitz time -> Player 1: 00:50, Player 2: 01:00" in out
@@ -389,7 +394,9 @@ def test_format_hint_move_wall_and_other():
 
 def test_load_session_and_save_helpers(monkeypatch, tmp_path: Path):
     dummy_path = tmp_path / "dummy.txt"
-    dummy_path.write_text("[game]\n2\n_ 1 _\n. . .\n_ _ _\n. . .\n_ 2 _\nwalls: 20 10\n", encoding="utf-8")
+    dummy_path.write_text(
+        "[game]\n2\n_ 1 _\n. . .\n_ _ _\n. . .\n_ 2 _\nwalls: 20 10\n", encoding="utf-8"
+    )
     parsed = SimpleNamespace(
         size=9,
         current_player=2,
@@ -707,28 +714,34 @@ def test_history_plus_no_match_prints_message(monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "No command found in history." in out
 
+
 def test_completer_no_match():
     assert shell_mod.completer("xyz", 0) is None
+
 
 def test_completer_unique_prefix():
     assert shell_mod.completer("pa", 0) == "pause"
     assert shell_mod.completer("pa", 1) is None
 
+
 def test_completer_ambiguous_prefix():
     assert shell_mod.completer("h", 0) == "help"
-    assert shell_mod.completer("h", 1) == "history" 
+    assert shell_mod.completer("h", 1) == "history"
     assert shell_mod.completer("h", 2) == "hint"
     assert shell_mod.completer("h", 3) is None
-    
+
+
 def test_completer_empty_prefix():
     all_cmds = shell_mod.QUORIDOR_COMMANDS
     for i, cmd in enumerate(all_cmds):
         assert shell_mod.completer("", i) == cmd
     assert shell_mod.completer("", len(all_cmds)) is None
 
+
 def test_completer_exact_match():
     assert shell_mod.completer("quit", 0) == "quit"
     assert shell_mod.completer("quit", 1) is None
+
 
 def test_completer_multiword_prefix():
     assert shell_mod.completer("show ", 0) == "show board"

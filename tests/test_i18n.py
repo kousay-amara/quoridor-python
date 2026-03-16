@@ -1,6 +1,6 @@
 import gettext
 
-from src.quoridor import i18n
+from quoridor import i18n
 
 
 def test_detect_language_prefers_lc_all_over_lang(monkeypatch):

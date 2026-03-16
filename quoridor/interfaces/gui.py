@@ -1,4 +1,5 @@
 """GTK GUI for Quoridor demo."""
+
 from __future__ import annotations
 
 import math
@@ -24,12 +25,16 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         super().__init__(application=app, title="Quoridor")
         positions = initial_player_positions(SIZE, 2)
         state = GameState(
-            board_size=SIZE, current_player=1,
+            board_size=SIZE,
+            current_player=1,
             player_positions=positions,
             remaining_walls={p: 10 for p in positions},
-            vertical_walls=[], horizontal_walls=[],
+            vertical_walls=[],
+            horizontal_walls=[],
         )
-        self.session = GameSession(state=state, player_types={p: "human" for p in positions})
+        self.session = GameSession(
+            state=state, player_types={p: "human" for p in positions}
+        )
 
         total = SIZE * CELL + (SIZE - 1) * GAP + 2 * MARGIN
         self.area = Gtk.DrawingArea(hexpand=True, vexpand=True)
@@ -87,18 +92,28 @@ class QuoridorWindow(Gtk.ApplicationWindow):
                 cr.stroke()
 
         cr.set_source_rgb(0.55, 0.27, 0.07)
-        for walls, vertical in [(self.session.state.vertical_walls, True),
-                                (self.session.state.horizontal_walls, False)]:
+        for walls, vertical in [
+            (self.session.state.vertical_walls, True),
+            (self.session.state.horizontal_walls, False),
+        ]:
             for n1, n2 in walls:
                 r1, c1 = divmod(n1, SIZE)
                 r2, c2 = divmod(n2, SIZE)
                 row, col = min(r1, r2), min(c1, c2)
                 if vertical:
-                    cr.rectangle(self._ox + col * (cs + GAP) + cs,
-                                 self._oy + row * (cs + GAP), GAP, cs)
+                    cr.rectangle(
+                        self._ox + col * (cs + GAP) + cs,
+                        self._oy + row * (cs + GAP),
+                        GAP,
+                        cs,
+                    )
                 else:
-                    cr.rectangle(self._ox + col * (cs + GAP),
-                                 self._oy + row * (cs + GAP) + cs, cs, GAP)
+                    cr.rectangle(
+                        self._ox + col * (cs + GAP),
+                        self._oy + row * (cs + GAP) + cs,
+                        cs,
+                        GAP,
+                    )
                 cr.fill()
 
         for pid, pos in self.session.state.player_positions.items():

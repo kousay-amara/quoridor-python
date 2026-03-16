@@ -1,6 +1,6 @@
-from src.quoridor.application.game_session import GameSession
-from src.quoridor.application.game_session_builder import GameSessionBuilder
-from src.quoridor.core.game_state import GameState
+from quoridor.application.game_session import GameSession
+from quoridor.application.game_session_builder import GameSessionBuilder
+from quoridor.core.game_state import GameState
 
 
 def _session() -> GameSession:
@@ -81,11 +81,7 @@ def test_game_session_builder_requires_state_and_player_types():
     except ValueError:
         pass
 
-    session = (
-        builder.with_player_types({1: "human", 2: "ai"})
-        .with_state(state)
-        .build()
-    )
+    session = builder.with_player_types({1: "human", 2: "ai"}).with_state(state).build()
     assert isinstance(session, GameSession)
     assert session.player_types == {1: "human", 2: "ai"}
 
@@ -115,7 +111,7 @@ def test_play_ai_turn_uses_iterative_search_when_depth_is_omitted(monkeypatch):
         return ("pawn", 71)
 
     monkeypatch.setattr(
-        "src.quoridor.application.game_session.find_best_move_iterative",
+        "quoridor.application.game_session.find_best_move_iterative",
         fake_iterative,
     )
 

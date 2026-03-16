@@ -21,7 +21,12 @@ from ..core.notation import get_edges_for_wall, get_node_from_notation
 from ..core.validators import validate_pawn_move, validate_wall
 from ..rules.win_rules import has_player_won
 from .cli_constants import UNBALANCED_PLAYERS_COUNT, WALL_TOKEN_MIN_LENGTH
-from .cli_render import _format_hint_move, _print_moves, _print_state, _render_ascii_board
+from .cli_render import (
+    _format_hint_move,
+    _print_moves,
+    _print_state,
+    _render_ascii_board,
+)
 from .contest_parser import ContestError
 
 _ = gettext.gettext
@@ -57,6 +62,7 @@ def _blitz_input_alarm(timeout_sec: float | None):
         signal.setitimer(signal.ITIMER_REAL, 0.0)
         signal.signal(signal.SIGALRM, previous_handler)
 
+
 QUORIDOR_COMMANDS = [
     "help",
     "history",
@@ -75,6 +81,7 @@ QUORIDOR_COMMANDS = [
     "quit",
 ]
 
+
 def completer(text: str, state: int) -> str | None:
     matches = []
     for cmd in QUORIDOR_COMMANDS:
@@ -83,6 +90,7 @@ def completer(text: str, state: int) -> str | None:
     if state < len(matches):
         return matches[state]
     return None
+
 
 def _get_last_history_match(term: str) -> str | None:
     if readline is None:
@@ -148,7 +156,9 @@ def _place_wall_from_token(session: GameSession, wall_token: str) -> None:
 
     current = session.state.current_player
     active_players = session.active_player_ids()
-    positions = [session.state.player_positions[player_id] for player_id in active_players]
+    positions = [
+        session.state.player_positions[player_id] for player_id in active_players
+    ]
     target_funcs = session._build_player_target_funcs()
     ok, error_msg = validate_wall(
         session.state.graph,
@@ -976,7 +986,6 @@ def _run_interactive_shell(
         readline.set_completer_delims("")
         readline.set_completer(completer)
         readline.parse_and_bind("tab: complete")
-
 
     while True:
         if _auto_play_pending_ai(state):

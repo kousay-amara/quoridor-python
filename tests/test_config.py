@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from src.quoridor.config import DEFAULTS, load_or_init_config
+from quoridor.config import DEFAULTS, load_or_init_config
 
 
 def test_load_or_init_config_creates_minimal_file_when_missing(tmp_path: Path):

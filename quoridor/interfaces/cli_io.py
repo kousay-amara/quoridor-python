@@ -244,8 +244,10 @@ def _serialize_game_section(state: GameState) -> str:
 
 
 def _save_session_to_file(path: str, session: GameSession) -> None:
-    content = _serialize_game_section(session.state) + "\n" + _serialize_history_section(
-        session
+    content = (
+        _serialize_game_section(session.state)
+        + "\n"
+        + _serialize_history_section(session)
     )
     with open(path, "w", encoding="utf-8") as stream:
         stream.write(content)

@@ -1,8 +1,8 @@
 """Tests for ai_logic"""
 
 import pytest
-from src.quoridor.core.game_state import GameState
-from src.quoridor.application.ai_logic import (
+from quoridor.core.game_state import GameState
+from quoridor.application.ai_logic import (
     evaluate_state,
     get_all_legal_moves,
     apply_move,

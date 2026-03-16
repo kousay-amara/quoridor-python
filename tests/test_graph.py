@@ -1,12 +1,12 @@
 import pytest
-from src.quoridor.utils.graph import Graph
-from src.quoridor.utils.graph import bfs_has_path
-from src.quoridor.core.board import QuoridorBoard
-from src.quoridor.rules.pawn_rules import is_walk_legal
-from src.quoridor.rules.pawn_rules import get_all_legal_pawn_moves
-from src.quoridor.rules.wall_rules import is_wall_legal
-from src.quoridor.core.notation import get_edges_for_wall
-from src.quoridor.core.notation import get_notation_from_node
+from quoridor.utils.graph import Graph
+from quoridor.utils.graph import bfs_has_path
+from quoridor.core.board import QuoridorBoard
+from quoridor.rules.pawn_rules import is_walk_legal
+from quoridor.rules.pawn_rules import get_all_legal_pawn_moves
+from quoridor.rules.wall_rules import is_wall_legal
+from quoridor.core.notation import get_edges_for_wall
+from quoridor.core.notation import get_notation_from_node
 
 # --- Définition des lambdas de victoire pour les tests ---
 TARGET_L8 = lambda n: (n // 9) == 8

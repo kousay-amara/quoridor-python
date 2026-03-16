@@ -47,6 +47,7 @@ from .cli_shell import (
 
 LOGGER = logging.getLogger(__name__)
 
+
 def _configure_logging(verbose: bool, debug: bool) -> None:
     level = logging.WARNING
     if debug:

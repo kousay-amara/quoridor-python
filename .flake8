@@ -1,0 +1,11 @@
+[flake8]
+max-line-length = 88
+extend-ignore = E203, W503, E501
+exclude = .git,__pycache__,build,dist,.venv,venv
+per-file-ignores =
+    docs/conf.py: E402
+    quoridor/interfaces/gui.py: E402
+    quoridor/interfaces/cli.py: F401
+    tests/test_ai_logic.py: F401,E402
+    tests/test_graph.py: F401,E731
+    tests/test_validators.py: F401

@@ -4,7 +4,7 @@ Architecture
 Overview
 --------
 
-The project is organized as a layered package under ``src/quoridor``:
+The project is organized as a layered package under ``quoridor``:
 
 - ``interfaces``: user-facing entry points (CLI, contest parser, GUI).
 - ``application``: orchestration of game flows (session lifecycle, AI, contest mode).

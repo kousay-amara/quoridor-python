@@ -42,10 +42,10 @@ dev = [
 ]
 
 [tool.setuptools]
-package-dir = {"" = "src"}
+
 
 [tool.setuptools.packages.find]
-where = ["src"]
+where = ["."]
 
 [tool.setuptools.package-data]
 "*" = ["*.txt", "*.md"]
@@ -56,7 +56,7 @@ python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
 addopts = [
-    "--cov=src",
+    "--cov=quoridor",
     "--cov-report=html",
     "--cov-report=term-missing",
     "--cov-fail-under=85",
@@ -64,7 +64,7 @@ addopts = [
 ]
 
 [tool.coverage.run]
-source = ["src"]
+source = ["quoridor"]
 omit = [
     "*/tests/*",
     "*/__pycache__/*",

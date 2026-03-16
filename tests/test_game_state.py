@@ -1,5 +1,5 @@
-from src.quoridor.core.game_state import GameState
-from src.quoridor.core.game_state_builder import GameStateBuilder
+from quoridor.core.game_state import GameState
+from quoridor.core.game_state_builder import GameStateBuilder
 
 
 def test_to_snapshot_returns_copied_data():

@@ -1,4 +1,4 @@
-from src.quoridor.application.blitz import Blitz
+from quoridor.application.blitz import Blitz
 
 
 def test_disabled_blitz_has_no_timer():

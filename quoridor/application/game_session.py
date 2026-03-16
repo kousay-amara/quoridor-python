@@ -109,7 +109,9 @@ class GameSession:
             raise ValueError("wall_edges must not be empty")
 
         active_players = self.active_player_ids()
-        positions = [self.state.player_positions[player_id] for player_id in active_players]
+        positions = [
+            self.state.player_positions[player_id] for player_id in active_players
+        ]
         target_funcs = self._build_player_target_funcs()
         if not is_wall_legal(self.state.graph, positions, wall_edges, target_funcs):
             raise ValueError(f"illegal wall placement: {wall_edges}")

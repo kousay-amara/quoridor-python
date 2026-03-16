@@ -1,5 +1,5 @@
-from src.quoridor.application.history_manager import HistoryManager
-from src.quoridor.core.move_record import MoveRecord, PlayerType
+from quoridor.application.history_manager import HistoryManager
+from quoridor.core.move_record import MoveRecord, PlayerType
 
 
 def _snap(turn: int) -> dict:
