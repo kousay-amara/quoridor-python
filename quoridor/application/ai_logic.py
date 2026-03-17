@@ -98,7 +98,8 @@ Highest is the score, better is the position
 
 def evaluate_state_default(state: GameState, ai_player_id: int) -> float:
     """
-    First heuristic, based on the distance from players to their target and the number of remaining wall
+    First heuristic, based on target distance and the number of
+    remaining walls.
     """
     player_ids = state.active_player_ids()
     if ai_player_id not in player_ids:
@@ -113,7 +114,9 @@ def evaluate_state_default(state: GameState, ai_player_id: int) -> float:
         targets[player_ids.index(ai_player_id)],
     )
     opp_distances = [
-        get_shortest_path_length(state.graph, state.player_positions[p], targets[i])
+        get_shortest_path_length(
+            state.graph, state.player_positions[p], targets[i]
+        )
         for i, p in enumerate(player_ids)
         if p != ai_player_id
     ]
@@ -142,7 +145,8 @@ def evaluate_state_default(state: GameState, ai_player_id: int) -> float:
 
 def evaluate_state_material(state: GameState, ai_player_id: int) -> float:
     """
-    Second heurisrtic, focused on maintaining the walls and blocking the opposing team.
+    Second heuristic, focused on preserving walls and blocking
+    opponents.
     """
     player_ids = state.active_player_ids()
     if ai_player_id not in player_ids:
@@ -157,7 +161,9 @@ def evaluate_state_material(state: GameState, ai_player_id: int) -> float:
         targets[player_ids.index(ai_player_id)],
     )
     opponents_dist = [
-        get_shortest_path_length(state.graph, state.player_positions[p], targets[i])
+        get_shortest_path_length(
+            state.graph, state.player_positions[p], targets[i]
+        )
         for i, p in enumerate(player_ids)
         if p != ai_player_id
     ]
@@ -187,8 +193,11 @@ def evaluate_state_material(state: GameState, ai_player_id: int) -> float:
 
 def evaluate_state_hybrid(state: GameState, ai_player_id: int) -> float:
     """
-    Third heuristic, a balanced mix of distance, remaining walls, and center control.
-    Reduce the risk to being blocked by one oponent's wall. Try to control the center and maximise oportunities.
+    Third heuristic, a balanced mix of distance, remaining walls, and
+    center control.
+
+    It reduces the risk of being blocked by an opponent wall while
+    favoring central control and future opportunities.
     """
     player_ids = state.active_player_ids()
     if ai_player_id not in player_ids:
@@ -203,7 +212,9 @@ def evaluate_state_hybrid(state: GameState, ai_player_id: int) -> float:
         targets[player_ids.index(ai_player_id)],
     )
     opp_distances = [
-        get_shortest_path_length(state.graph, state.player_positions[p], targets[i])
+        get_shortest_path_length(
+            state.graph, state.player_positions[p], targets[i]
+        )
         for i, p in enumerate(player_ids)
         if p != ai_player_id
     ]

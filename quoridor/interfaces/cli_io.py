@@ -56,7 +56,7 @@ def _serialize_history_section(session: GameSession) -> str:
     lines = ["[history]"]
 
     for idx in range(0, len(active_records), player_count):
-        turn = active_records[idx : idx + player_count]
+        turn = active_records[idx: idx + player_count]
         turn_text = " ".join(
             f"{record.player_id} {_record_to_notation(session, record)};"
             for record in turn
@@ -100,7 +100,9 @@ def _parse_history_section(raw_text: str) -> list[tuple[int, str]]:
             try:
                 player_id = int(parts[0])
             except ValueError as exc:
-                raise ValueError(f"invalid history player id: {parts[0]}") from exc
+                raise ValueError(
+                    f"invalid history player id: {parts[0]}"
+                ) from exc
             entries.append((player_id, parts[1].strip().lower()))
 
     return entries
@@ -123,13 +125,16 @@ def _replay_history(
             wall_counts[player_id] = wall_counts.get(player_id, 0) + 1
 
     remaining_walls = position.remaining_walls or {
-        pid: fallback_walls_per_player.get(pid, WALLS_DEFAULT) for pid in players
+        pid: fallback_walls_per_player.get(pid, WALLS_DEFAULT)
+        for pid in players
     }
     initial_walls = {
         pid: remaining_walls.get(pid, WALLS_DEFAULT) + wall_counts.get(pid, 0)
         for pid in players
     }
-    player_types = {pid: fallback_player_types.get(pid, "human") for pid in players}
+    player_types = {
+        pid: fallback_player_types.get(pid, "human") for pid in players
+    }
 
     state = GameState(
         board_size=position.size,
@@ -159,10 +164,14 @@ def _replay_history(
         final_state.current_player != position.current_player
         or final_state.player_positions != position.positions
         or final_state.remaining_walls != remaining_walls
-        or sorted(final_state.vertical_walls) != sorted(position.vertical_walls)
-        or sorted(final_state.horizontal_walls) != sorted(position.horizontal_walls)
+        or sorted(final_state.vertical_walls)
+        != sorted(position.vertical_walls)
+        or sorted(final_state.horizontal_walls)
+        != sorted(position.horizontal_walls)
     ):
-        raise ContestError(f"history does not match saved game state in {path}")
+        raise ContestError(
+            f"history does not match saved game state in {path}"
+        )
 
     return session
 
@@ -189,9 +198,12 @@ def _load_session_from_file(
 
     players = sorted(position.positions.keys())
     remaining_walls = position.remaining_walls or {
-        pid: fallback_walls_per_player.get(pid, WALLS_DEFAULT) for pid in players
+        pid: fallback_walls_per_player.get(pid, WALLS_DEFAULT)
+        for pid in players
     }
-    player_types = {pid: fallback_player_types.get(pid, "human") for pid in players}
+    player_types = {
+        pid: fallback_player_types.get(pid, "human") for pid in players
+    }
     state = GameState(
         board_size=position.size,
         current_player=position.current_player,
@@ -238,7 +250,9 @@ def _serialize_game_section(state: GameState) -> str:
             lines.append(" ".join(sep_tokens))
 
     ordered_players = sorted(state.remaining_walls.keys())
-    walls_part = " ".join(str(state.remaining_walls[pid]) for pid in ordered_players)
+    walls_part = " ".join(
+        str(state.remaining_walls[pid]) for pid in ordered_players
+    )
     lines.append(f"walls: {walls_part}")
     return "\n".join(lines) + "\n"
 

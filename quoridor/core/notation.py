@@ -1,8 +1,8 @@
 """
 Quoridor notation conversion utilities.
 
-This module acts as a bridge between standard algebraic notation (e.g., 'e4', 'e4h')
-and the integer indices used by the game graph.
+This module acts as a bridge between standard algebraic notation
+(e.g., 'e4', 'e4h') and the integer indices used by the game graph.
 The coordinate system uses (0,0) for the top-left cell (a1).
 """
 
@@ -49,8 +49,9 @@ def get_edges_for_wall(notation: str, size: int = 9) -> list[tuple[int, int]]:
     """
     Translates a wall notation (e.g., 'e4h') into graph edges to be removed.
 
-    An 'h' (horizontal) wall at 'e4' blocks vertical passages below 'e4' and 'f4'.
-    A 'v' (vertical) wall at 'e4' blocks horizontal passages to the right of 'e4' and 'e5'.
+    An 'h' (horizontal) wall at 'e4' blocks vertical passages below
+    'e4' and 'f4'. A 'v' (vertical) wall at 'e4' blocks horizontal
+    passages to the right of 'e4' and 'e5'.
 
     Args:
         notation: 3-character string (e.g., 'e4h', 'a1v').

@@ -8,7 +8,12 @@ from typing import Any, Callable
 
 from ..core.game_state import GameState
 from ..rules.wall_rules import get_player_target_funcs
-from .ai_logic import apply_move, clone_state, evaluate_state, get_all_legal_moves
+from .ai_logic import (
+    apply_move,
+    clone_state,
+    evaluate_state,
+    get_all_legal_moves,
+)
 
 Move = tuple[Any, ...]
 EvalFn = Callable[[GameState, int], float]

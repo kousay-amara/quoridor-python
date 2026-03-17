@@ -39,7 +39,9 @@ def _tokenize(line: str) -> list[str]:
     return [tok for tok in line.strip().split() if tok]
 
 
-def _parse_cell_token(token: str, *, line_no: int, col_no: int) -> tuple[bool, str]:
+def _parse_cell_token(
+    token: str, *, line_no: int, col_no: int
+) -> tuple[bool, str]:
     if not _CELL_TOKEN_PATTERN.match(token):
         raise ContestError(
             f"invalid cell token at line {line_no}, column {col_no}: {token}"
@@ -65,7 +67,9 @@ def _parse_cell_row(
             f"expected {size} tokens, got {len(tokens)}"
         )
     for col, tok in enumerate(tokens):
-        has_vwall, cell = _parse_cell_token(tok, line_no=line_no, col_no=col + 1)
+        has_vwall, cell = _parse_cell_token(
+            tok, line_no=line_no, col_no=col + 1
+        )
         if has_vwall and col > 0:
             left = row * size + (col - 1)
             right = row * size + col
@@ -74,7 +78,8 @@ def _parse_cell_row(
             player_id = int(cell)
             if player_id in positions:
                 raise ContestError(
-                    f"duplicate player id at line {line_no}, column {col + 1}: {player_id}"
+                    "duplicate player id at line "
+                    f"{line_no}, column {col + 1}: {player_id}"
                 )
             positions[player_id] = row * size + col
 
@@ -100,7 +105,8 @@ def _parse_separator_row(
             horizontal_walls.append((top, bottom))
         elif tok != ".":
             raise ContestError(
-                f"invalid separator token at line {line_no}, column {col + 1}: {tok}"
+                "invalid separator token at line "
+                f"{line_no}, column {col + 1}: {tok}"
             )
 
 
@@ -120,7 +126,8 @@ def _parse_board_lines(
     expected_lines = size * 2 - 1
     if len(lines) < expected_lines:
         raise ContestError(
-            f"incomplete board data: expected {expected_lines} lines, got {len(lines)}"
+            "incomplete board data: expected "
+            f"{expected_lines} lines, got {len(lines)}"
         )
 
     positions: dict[int, int] = {}
@@ -171,7 +178,10 @@ def _parse_walls_line(
         )
 
     try:
-        return {pid: int(token) for pid, token in zip(player_ids, tokens, strict=True)}
+        return {
+            pid: int(token)
+            for pid, token in zip(player_ids, tokens, strict=True)
+        }
     except ValueError as exc:
         raise ContestError(f"invalid walls value at line {line_no}") from exc
 
@@ -214,7 +224,9 @@ def parse_contest_file(path: str | Path) -> ContestPosition:
         board_lines.append(lines[cursor])
         cursor += 1
 
-    size, positions, vertical_walls, horizontal_walls = _parse_board_lines(board_lines)
+    size, positions, vertical_walls, horizontal_walls = _parse_board_lines(
+        board_lines
+    )
     if current_player not in positions:
         raise ContestError(f"current player {current_player} not on board")
 

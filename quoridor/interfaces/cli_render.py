@@ -62,14 +62,22 @@ def _print_state(session: GameSession) -> None:
     size = state.board_size
 
     ordered_ids = sorted(state.player_positions.keys())
+    player_positions = state.player_positions
     players_line = ", ".join(
-        f"Player {pid}: {get_notation_from_node(state.player_positions[pid], size)}"
+        f"Player {pid}: {get_notation_from_node(player_positions[pid], size)}"
+        for pid in ordered_ids
+    )
+    wall_counts = (
+        (
+            "unlimited"
+            if state.remaining_walls.get(pid, 0) < 0
+            else str(state.remaining_walls.get(pid, 0))
+        )
         for pid in ordered_ids
     )
     walls_line = ", ".join(
-        f"Player {pid}: "
-        f"{'unlimited' if state.remaining_walls.get(pid, 0) < 0 else state.remaining_walls.get(pid, 0)}"
-        for pid in ordered_ids
+        f"Player {pid}: {count}"
+        for pid, count in zip(ordered_ids, wall_counts)
     )
     print(_render_ascii_board(state))
     print()
@@ -88,7 +96,8 @@ def _print_moves(session: GameSession) -> None:
         session.state.graph, from_node, all_positions
     )
     legal_notation = [
-        get_notation_from_node(n, session.state.board_size) for n in sorted(legal_nodes)
+        get_notation_from_node(n, session.state.board_size)
+        for n in sorted(legal_nodes)
     ]
     print(f"Legal pawn moves for player {current}: {legal_notation}")
 
@@ -97,7 +106,10 @@ def _format_hint_move(move: tuple, *, from_node: int, size: int) -> str:
     move_type = move[0]
     if move_type == "pawn":
         to_node = int(move[1])
-        return f"{get_notation_from_node(from_node, size)}-{get_notation_from_node(to_node, size)}"
+        return (
+            f"{get_notation_from_node(from_node, size)}-"
+            f"{get_notation_from_node(to_node, size)}"
+        )
     if move_type == "wall":
         edges = move[1]
         orientation = move[2]

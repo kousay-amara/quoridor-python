@@ -8,10 +8,13 @@ import sys
 import gi
 
 gi.require_version("Gtk", "4.0")
-from gi.repository import Gtk
+from gi.repository import Gtk  # noqa: E402
 
-from ..core.game_state import GameState
-from ..application.game_session import GameSession, initial_player_positions
+from ..core.game_state import GameState  # noqa: E402
+from ..application.game_session import (  # noqa: E402
+    GameSession,
+    initial_player_positions,
+)
 
 SIZE = 9
 MARGIN = 30
@@ -49,7 +52,9 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         self._ox = self._oy = MARGIN
 
     def _cell_size(self):
-        available = min(self.area.get_width(), self.area.get_height()) - 2 * MARGIN
+        available = (
+            min(self.area.get_width(), self.area.get_height()) - 2 * MARGIN
+        )
         return max((available - (SIZE - 1) * GAP) / SIZE, 1)
 
     def _cell_xy(self, row, col):
@@ -57,7 +62,7 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         return self._ox + col * (cs + GAP), self._oy + row * (cs + GAP)
 
     def _xy_to_cell(self, x, y):
-        """Convert pixel coordinates to (row, col), or None if outside the grid."""
+        """Convert pixel coordinates to a board cell, if any."""
         cs = self._cell_size()
         col = int((x - self._ox) / (cs + GAP))
         row = int((y - self._oy) / (cs + GAP))

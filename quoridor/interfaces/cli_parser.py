@@ -40,7 +40,9 @@ def _players_type(raw: str) -> int:
         raise argparse.ArgumentTypeError("players must be an integer") from exc
     if value not in PLAYER_COUNT_SUPPORTED:
         supported = ", ".join(str(v) for v in sorted(PLAYER_COUNT_SUPPORTED))
-        raise argparse.ArgumentTypeError(f"players must be one of: {supported}")
+        raise argparse.ArgumentTypeError(
+            f"players must be one of: {supported}"
+        )
     return value
 
 
@@ -51,7 +53,8 @@ def _size_type(raw: str) -> int:
         raise argparse.ArgumentTypeError("size must be an integer") from exc
     if value < BOARD_SIZE_MIN or value > BOARD_SIZE_MAX or value % 2 == 0:
         raise argparse.ArgumentTypeError(
-            f"size must be odd and between {BOARD_SIZE_MIN} and {BOARD_SIZE_MAX}"
+            "size must be odd and between "
+            f"{BOARD_SIZE_MIN} and {BOARD_SIZE_MAX}"
         )
     return value
 
@@ -60,7 +63,9 @@ def _player_id_type(raw: str) -> int:
     try:
         value = int(raw)
     except ValueError as exc:
-        raise argparse.ArgumentTypeError("player id must be an integer") from exc
+        raise argparse.ArgumentTypeError(
+            "player id must be an integer"
+        ) from exc
     if value < PLAYER_ID_MIN or value > PLAYER_ID_MAX:
         raise argparse.ArgumentTypeError(
             f"player id must be between {PLAYER_ID_MIN} and {PLAYER_ID_MAX}"
@@ -74,12 +79,20 @@ def _build_parser(defaults: dict[str, bool | int]) -> argparse.ArgumentParser:
         description=_("Quoridor game command-line interface."),
         add_help=True,
     )
-    parser.add_argument("save_file", nargs="?", help=_("path to a saved game file"))
     parser.add_argument(
-        "-V", "--version", action="store_true", help=_("show program version and exit")
+        "save_file", nargs="?", help=_("path to a saved game file")
     )
     parser.add_argument(
-        "-v", "--verbose", action="store_true", help=_("increase program verbosity")
+        "-V",
+        "--version",
+        action="store_true",
+        help=_("show program version and exit"),
+    )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help=_("increase program verbosity"),
     )
     parser.add_argument(
         "-d", "--debug", action="store_true", help=_("show debug messages")
@@ -130,7 +143,9 @@ def _build_parser(defaults: dict[str, bool | int]) -> argparse.ArgumentParser:
         action="append",
         default=[],
         type=_player_id_type,
-        help=_("player id controlled by AI (repeat option for multiple players)"),
+        help=_(
+            "player id controlled by AI (repeat option for multiple players)"
+        ),
     )
     parser.add_argument(
         "--ai-mode",
@@ -162,7 +177,9 @@ def _build_contest_parser() -> argparse.ArgumentParser:
         description="Quoridor contest mode.",
         add_help=True,
     )
-    parser.add_argument("save_file", nargs="?", help="path to a saved game file")
+    parser.add_argument(
+        "save_file", nargs="?", help="path to a saved game file"
+    )
     parser.add_argument(
         "-c",
         "--contest",
@@ -178,5 +195,6 @@ def _is_contest_on_cli(argv: list[str]) -> bool:
 
 def _is_time_passed_on_cli(argv: list[str]) -> bool:
     return any(
-        token in {"-t", "--time"} or token.startswith("--time=") for token in argv
+        token in {"-t", "--time"} or token.startswith("--time=")
+        for token in argv
     )

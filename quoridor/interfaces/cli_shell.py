@@ -125,7 +125,11 @@ def _play_pawn_move_from_token(session: GameSession, move_token: str) -> bool:
     current = session.state.current_player
     all_positions = list(session.state.player_positions.values())
     ok, error_msg = validate_pawn_move(
-        session.state.graph, from_node, to_node, all_positions, session.state.board_size
+        session.state.graph,
+        from_node,
+        to_node,
+        all_positions,
+        session.state.board_size,
     )
     if not ok:
         raise ValueError(error_msg)
@@ -157,7 +161,8 @@ def _place_wall_from_token(session: GameSession, wall_token: str) -> None:
     current = session.state.current_player
     active_players = session.active_player_ids()
     positions = [
-        session.state.player_positions[player_id] for player_id in active_players
+        session.state.player_positions[player_id]
+        for player_id in active_players
     ]
     target_funcs = session._build_player_target_funcs()
     ok, error_msg = validate_wall(
@@ -214,17 +219,31 @@ def _show_help(line: str) -> bool:
     line_lower = line.lower()
     help_by_command = {
         "help": "help [CMD]\n  Show shell help, or help for CMD.",
-        "history": "history\n  Show the played moves grouped by turns. Use Up/Down arrows to navigate command history. Use +TERM to search the last command matching TERM.",
+        "history": (
+            "history\n  Show the played moves grouped by turns. "
+            "Use Up/Down arrows to navigate command history. "
+            "Use +TERM to search the last command matching TERM."
+        ),
         "load": "load FILE\n  Load a game position from FILE.",
         "save": "save FILE\n  Save the current game position to FILE.",
         "hint": "hint\n  Show a suggested move for the current player.",
         "show board": "show board\n  Display only the current board.",
-        "show configuration": "show configuration\n  Display current runtime configuration.",
-        "show time": "show time\n  Display remaining blitz time for each player.",
+        "show configuration": (
+            "show configuration\n  Display current runtime configuration."
+        ),
+        "show time": (
+            "show time\n  Display remaining blitz time for each player."
+        ),
         "pause": "pause\n  Toggle blitz timer pause/resume.",
         "moves": "moves\n  Display legal pawn moves for the current player.",
-        "move": "move <FROM-TO>\n  Move the current pawn (example: move e2-e3). Shorthand: e2-e3.",
-        "wall": "wall <POSh|POSv>\n  Place a wall (example: wall e2h or wall e2v). Shorthand: e2h/e2v.",
+        "move": (
+            "move <FROM-TO>\n  Move the current pawn "
+            "(example: move e2-e3). Shorthand: e2-e3."
+        ),
+        "wall": (
+            "wall <POSh|POSv>\n  Place a wall "
+            "(example: wall e2h or wall e2v). Shorthand: e2h/e2v."
+        ),
         "undo": "undo [N]\n  Undo the last move-group (or N groups).",
         "redo": "redo [N]\n  Redo the last undone move-group (or N groups).",
         "quit": "quit\n  Exit the program.",
@@ -234,7 +253,9 @@ def _show_help(line: str) -> bool:
         parts = line.split(maxsplit=1)
         if len(parts) == 1:
             print(
-                "Commands: help [CMD], history, load, save, hint, show board, show configuration, show time, pause, moves, move, wall, undo, redo, quit"
+                "Commands: help [CMD], history, load, save, hint, "
+                "show board, show configuration, show time, pause, "
+                "moves, move, wall, undo, redo, quit"
             )
             print("Use: help <command>")
             return True
@@ -476,7 +497,8 @@ def _print_blitz_times(blitz: Blitz) -> None:
     remaining_times = blitz.remaining_times()
     ordered = sorted(remaining_times)
     text = ", ".join(
-        f"Player {pid}: {_format_blitz_time(remaining_times[pid])}" for pid in ordered
+        f"Player {pid}: {_format_blitz_time(remaining_times[pid])}"
+        for pid in ordered
     )
     print(f"Blitz time -> {text}")
 
@@ -490,7 +512,9 @@ def _handle_timeout(session: GameSession, loser_id: int) -> bool:
     return winner is not None
 
 
-def _read_shell_input(state: "_ShellState", prompt: str) -> tuple[str | None, bool]:
+def _read_shell_input(
+    state: "_ShellState", prompt: str
+) -> tuple[str | None, bool]:
     timed_player = state.session.state.current_player
     timeout_sec = state.blitz.input_timeout_for(timed_player)
     if timeout_sec is not None and timeout_sec <= 0:
@@ -526,7 +550,9 @@ def _read_shell_input(state: "_ShellState", prompt: str) -> tuple[str | None, bo
 def _print_configuration(state: "_ShellState") -> None:
     ai_sorted = sorted(set(state.ai_players))
     walls_text = (
-        "unlimited" if state.walls_per_player < 0 else str(state.walls_per_player)
+        "unlimited"
+        if state.walls_per_player < 0
+        else str(state.walls_per_player)
     )
     print("Current configuration:")
     print(f"players={state.players}")
@@ -722,7 +748,9 @@ class _ShellState:
 class _Command:
     matches: Callable[[str], bool]
     run: Callable[["_ShellState", str], bool]
-    on_error: Callable[["_ShellState", str, Exception], tuple[bool, bool]] | None = None
+    on_error: (
+        Callable[["_ShellState", str, Exception], tuple[bool, bool]] | None
+    ) = None
 
 
 def _handle_invalid_command(exc: Exception) -> None:
@@ -806,7 +834,9 @@ def _match_shorthand_move(line: str) -> bool:
 
 
 def _match_shorthand_wall(line: str) -> bool:
-    return " " not in line and len(line) >= 3 and line[-1].lower() in {"h", "v"}
+    return (
+        " " not in line and len(line) >= 3 and line[-1].lower() in {"h", "v"}
+    )
 
 
 def _match_quit(line: str) -> bool:
@@ -897,7 +927,8 @@ def _run_interactive_shell(
     if ai_set:
         depth_label = "auto" if ai_minimax_depth is None else ai_minimax_depth
         print(
-            f"AI players: {sorted(ai_set)} (mode={ai_mode}, depth={depth_label}, time={ai_time}s)"
+            f"AI players: {sorted(ai_set)} "
+            f"(mode={ai_mode}, depth={depth_label}, time={ai_time}s)"
         )
     if blitz_state.is_enabled():
         _print_blitz_times(blitz_state)
@@ -944,7 +975,9 @@ def _run_interactive_shell(
             on_error=_error_as_invalid,
         ),
         _Command(matches=_match_show_board, run=_command_show_board),
-        _Command(matches=_match_show_configuration, run=_command_show_configuration),
+        _Command(
+            matches=_match_show_configuration, run=_command_show_configuration
+        ),
         _Command(matches=_match_show_time, run=_command_show_time),
         _Command(matches=_match_pause, run=_command_pause),
         _Command(matches=_match_moves, run=_command_moves),
@@ -1000,7 +1033,9 @@ def _run_interactive_shell(
                 _maybe_remove_last_history_item()
             term = line[1:].strip()
             if not term:
-                term, should_break = _read_shell_input(state, "Search history: ")
+                term, should_break = _read_shell_input(
+                    state, "Search history: "
+                )
                 if should_break:
                     break
                 if readline is not None:

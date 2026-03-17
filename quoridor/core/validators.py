@@ -3,7 +3,9 @@ from ..rules.pawn_rules import get_all_legal_pawn_moves
 from ..rules.wall_rules import is_wall_legal
 
 
-def validate_pawn_move(graph: Graph, from_node, to_node, all_positions, board_size):
+def validate_pawn_move(
+    graph: Graph, from_node, to_node, all_positions, board_size
+):
     legal = get_all_legal_pawn_moves(graph, from_node, all_positions)
     if to_node in legal:
         return True, None
@@ -12,9 +14,8 @@ def validate_pawn_move(graph: Graph, from_node, to_node, all_positions, board_si
     if to_node in all_positions:
         return False, "This cell is occupied by another player."
 
-    # (a ajouter dans le rapport commande ajouter par claude) pour pouvoir faire la difference entre les erreurs
-    # This move is not reachable from your position.
-    # l'erreur A wall is blocking that move.
+    # Distinguish a direct wall collision from a generally unreachable
+    # move to provide a clearer CLI error message.
     diff = abs(from_node - to_node)
     same_row = from_node // board_size == to_node // board_size
     naturally_adjacent = (diff == 1 and same_row) or diff == board_size

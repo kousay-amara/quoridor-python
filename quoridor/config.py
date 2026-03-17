@@ -38,7 +38,8 @@ def load_or_init_config(path: Path | None = None) -> dict[str, bool | int]:
             _write_minimal_config(config_path)
         except OSError as exc:
             sys.stderr.write(
-                f"warning: could not create config file '{config_path}': {exc}\n"
+                "warning: could not create config file "
+                f"'{config_path}': {exc}\n"
             )
         return DEFAULTS.copy()
 
@@ -55,9 +56,13 @@ def load_or_init_config(path: Path | None = None) -> dict[str, bool | int]:
             "verbose": section.getboolean(
                 "verbose", fallback=bool(DEFAULTS["verbose"])
             ),
-            "blitz": section.getboolean("blitz", fallback=bool(DEFAULTS["blitz"])),
+            "blitz": section.getboolean(
+                "blitz", fallback=bool(DEFAULTS["blitz"])
+            ),
             "time": section.getint("time", fallback=int(DEFAULTS["time"])),
         }
     except (OSError, configparser.Error, ValueError) as exc:
-        sys.stderr.write(f"warning: invalid config file '{config_path}': {exc}\n")
+        sys.stderr.write(
+            f"warning: invalid config file '{config_path}': {exc}\n"
+        )
         return DEFAULTS.copy()

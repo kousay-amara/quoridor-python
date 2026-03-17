@@ -53,7 +53,8 @@ def setup_i18n(language: str | None = None) -> gettext.NullTranslations:
         )
         language = DEFAULT_LANGUAGE
 
-    # Setup gettext. fallback=True avoids crashing when translation files are missing.
+    # Setup gettext. fallback=True avoids crashing when translation files
+    # are missing.
     translation = gettext.translation(
         "quoridor",
         localedir=str(LOCALE_DIR),

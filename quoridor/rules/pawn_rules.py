@@ -30,10 +30,12 @@ def get_all_legal_pawn_moves(
                 if jump_target not in opponents_pos:
                     legal_moves.append(jump_target)
                 else:
-                    # Cas très rare : deux adversaires à la suite, on ne peut pas sauter
+                    # Rare case: two opponents are consecutive, so jumping
+                    # over both is not allowed.
                     pass
             else:
-                # 3. Saut diagonal (si le saut direct est bloqué par un mur ou bord)
+                # Diagonal jump when the direct jump is blocked by a wall
+                # or by the board edge.
                 for lateral in graph.adj.get(neighbor, []):
                     if lateral != player_pos and lateral not in opponents_pos:
                         legal_moves.append(lateral)

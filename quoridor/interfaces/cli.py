@@ -45,6 +45,43 @@ from .cli_shell import (
     _run_interactive_shell,
 )
 
+__all__ = [
+    "ContestError",
+    "QuoridorArgumentParser",
+    "_auto_play_ai_until_human_or_end",
+    "_build_contest_parser",
+    "_build_parser",
+    "_configure_logging",
+    "_format_hint_move",
+    "_get_version",
+    "_is_contest_on_cli",
+    "_is_time_passed_on_cli",
+    "_load_session_from_file",
+    "_main_contest",
+    "_main_interactive",
+    "_node",
+    "_place_wall_from_token",
+    "_player_id_type",
+    "_players_type",
+    "_play_pawn_move_from_token",
+    "_print_moves",
+    "_print_state",
+    "_prompt_save_before_quit",
+    "_render_ascii_board",
+    "_run_interactive_shell",
+    "_save_session_to_file",
+    "_serialize_game_section",
+    "_serialize_history_section",
+    "_size_type",
+    "find_best_move_iterative",
+    "find_best_move_minimax",
+    "main",
+    "metadata",
+    "parse_contest_file",
+    "run_contest",
+    "setup_i18n",
+]
+
 LOGGER = logging.getLogger(__name__)
 
 
@@ -55,7 +92,9 @@ def _configure_logging(verbose: bool, debug: bool) -> None:
     elif verbose:
         level = logging.INFO
     logging.basicConfig(level=level, format="%(levelname)s: %(message)s")
-    LOGGER.debug("Logging configured with level=%s", logging.getLevelName(level))
+    LOGGER.debug(
+        "Logging configured with level=%s", logging.getLevelName(level)
+    )
 
 
 def _get_version() -> str:
@@ -101,7 +140,9 @@ def _main_interactive(argv: list[str]) -> int:
 
     time_limit = args.time
     if _is_time_passed_on_cli(argv) and not args.blitz:
-        sys.stderr.write("warning: --time is ignored unless --blitz is enabled\n")
+        sys.stderr.write(
+            "warning: --time is ignored unless --blitz is enabled\n"
+        )
         time_limit = int(defaults.get("time", DEFAULTS["time"]))
     _run_interactive_shell(
         blitz=args.blitz,

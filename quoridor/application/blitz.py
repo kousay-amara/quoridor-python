@@ -23,7 +23,9 @@ class Blitz:
         cls, player_ids: Iterable[int], *, time_limit_minutes: int
     ) -> "Blitz":
         seconds = float(time_limit_minutes * 60)
-        remaining_times = {player_id: seconds for player_id in sorted(set(player_ids))}
+        remaining_times = {
+            player_id: seconds for player_id in sorted(set(player_ids))
+        }
         return cls(
             time_limit_minutes=time_limit_minutes,
             paused=False,
@@ -59,7 +61,9 @@ class Blitz:
         if player_id not in remaining_times:
             raise ValueError(f"unknown blitz player: {player_id}")
 
-        remaining_times[player_id] = max(0.0, remaining_times[player_id] - elapsed)
+        remaining_times[player_id] = max(
+            0.0, remaining_times[player_id] - elapsed
+        )
         return remaining_times[player_id] <= 0
 
     def expire_player(self, player_id: int) -> None:

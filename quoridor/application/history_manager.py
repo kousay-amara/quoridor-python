@@ -88,4 +88,6 @@ class HistoryManager:
     @staticmethod
     def _ensure_human_requester(requester_type: PlayerType) -> None:
         if requester_type != "human":
-            raise PermissionError("undo/redo is allowed for human players only")
+            raise PermissionError(
+                "undo/redo is allowed for human players only"
+            )
