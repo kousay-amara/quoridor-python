@@ -19,7 +19,7 @@ help:
 apidoc:
 	@$(SPHINXAPIDOC) -f -o "$(SOURCEDIR)" "$(APIDOCSRC)"
 
-html: apidoc
+html:
 	@$(SPHINXBUILD) -M html "$(SOURCEDIR)" "$(BUILDDIR)" $(SPHINXOPTS) $(O)
 
 # Catch-all target: route all unknown targets to Sphinx using the new
