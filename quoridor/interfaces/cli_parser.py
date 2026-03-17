@@ -10,6 +10,7 @@ from .cli_constants import (
     AI_MINIMAX_DEPTH_DEFAULT,
     AI_MODE_DEFAULT,
     AI_MODE_ITERATIVE,
+    AI_MODE_MCTS,
     AI_TIME_DEFAULT,
     BOARD_SIZE_DEFAULT,
     BOARD_SIZE_MAX,
@@ -133,7 +134,7 @@ def _build_parser(defaults: dict[str, bool | int]) -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--ai-mode",
-        choices=[AI_MODE_DEFAULT, AI_MODE_ITERATIVE],
+        choices=[AI_MODE_DEFAULT, AI_MODE_ITERATIVE, AI_MODE_MCTS],
         default=AI_MODE_DEFAULT,
         help=_("AI mode"),
     )
