@@ -310,14 +310,14 @@ def _start_shell_session(
 ) -> tuple[Blitz, bool]:
     blitz_state = _create_blitz_state(config, session)
     _print_shell_startup(session, config, blitz_state=blitz_state)
-    should_break = _auto_play_ai_until_human_or_end(
+    should_break, interrupted = _run_auto_play_with_interrupt_handling(
         session,
         config.ai_mode,
         config.ai_time,
         config.ai_minimax_depth,
         blitz=blitz_state,
     )
-    return blitz_state, should_break
+    return blitz_state, should_break or interrupted
 
 
 def _build_new_argument_parser(
@@ -462,6 +462,30 @@ def _auto_play_ai_until_human_or_end(
     return False
 
 
+def _run_auto_play_with_interrupt_handling(
+    session: GameSession,
+    ai_mode: str,
+    ai_time: int,
+    ai_minimax_depth: int | None,
+    *,
+    blitz: Blitz,
+) -> tuple[bool, bool]:
+    try:
+        return (
+            _auto_play_ai_until_human_or_end(
+                session,
+                ai_mode,
+                ai_time,
+                ai_minimax_depth,
+                blitz=blitz,
+            ),
+            False,
+        )
+    except KeyboardInterrupt:
+        print()
+        return False, True
+
+
 def _show_help(line: str) -> bool:
     line_lower = line.lower()
     help_by_command = {
@@ -533,13 +557,18 @@ def _apply_and_maybe_auto_play(
 ) -> tuple[bool, bool]:
     has_unsaved_changes = True
     before_ai_cursor = session.history.cursor
-    if _auto_play_ai_until_human_or_end(
+    game_over, interrupted = _run_auto_play_with_interrupt_handling(
         session,
         ai_mode,
         ai_time,
         ai_minimax_depth,
         blitz=blitz,
-    ):
+    )
+    if interrupted:
+        if session.history.cursor != before_ai_cursor:
+            has_unsaved_changes = True
+        return has_unsaved_changes, True
+    if game_over:
         if session.history.cursor != before_ai_cursor:
             has_unsaved_changes = True
         return has_unsaved_changes, True
@@ -550,19 +579,19 @@ def _apply_and_maybe_auto_play(
 
 def _auto_play_pending_ai(state: "_ShellState") -> bool:
     before_ai_cursor = state.session.history.cursor
-    if _auto_play_ai_until_human_or_end(
+    game_over, interrupted = _run_auto_play_with_interrupt_handling(
         state.session,
         state.ai_mode,
         state.ai_time,
         state.ai_minimax_depth,
         blitz=state.blitz,
-    ):
+    )
+    if state.session.history.cursor != before_ai_cursor:
+        state.has_unsaved_changes = True
+    if game_over or interrupted:
         if state.session.history.cursor != before_ai_cursor:
             state.has_unsaved_changes = True
         return True
-
-    if state.session.history.cursor != before_ai_cursor:
-        state.has_unsaved_changes = True
     return False
 
 

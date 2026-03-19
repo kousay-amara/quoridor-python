@@ -765,6 +765,26 @@ def test_auto_play_ai_blitz_timeout_skips_move(monkeypatch, capsys):
     assert 1 in session.state.inactive_players
 
 
+def test_keyboard_interrupt_during_ai_turn_exits_cleanly(
+    monkeypatch, capsys
+):
+    def _raise_keyboard_interrupt(self, **_kwargs):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(
+        GameSession,
+        "compute_ai_move",
+        _raise_keyboard_interrupt,
+    )
+
+    _run_shell(monkeypatch, ["e1-e2"], ai_players=[2])
+
+    out = capsys.readouterr().out
+    assert "Player 1: e2, Player 2: e9" in out
+    assert "AI player 2 played." not in out
+    assert "Bye." not in out
+
+
 class _FakeReadline:
     def __init__(self, history: list[str] | None = None):
         self.history = [] if history is None else list(history)
