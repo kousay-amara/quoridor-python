@@ -1,0 +1,337 @@
+"""Generate AI-vs-AI Quoridor games for ML dataset creation."""
+
+from __future__ import annotations
+
+import csv
+import json
+import random
+from pathlib import Path
+from typing import Callable
+
+from ..application.ai_logic import (
+    evaluate_state_default,
+    evaluate_state_hybrid,
+    evaluate_state_material,
+)
+from ..application.game_session import GameSession, initial_player_positions
+from ..application.mcts_engine import mcts_search
+from ..application.minimax_engine import (
+    find_best_move_iterative,
+    find_best_move_minimax,
+)
+from ..core.game_state import GameState
+from ..core.game_state_builder import GameStateBuilder
+
+
+class BotConfig:
+    """Store the configuration of one bot used for self-play."""
+
+    def __init__(
+        self,
+        mode: str,
+        name: str,
+        time_limit_sec: float = 1.0,
+        depth: int | None = None,
+        scoring: str = "default",
+    ) -> None:
+        
+        self.mode = mode
+        self.name = name
+        self.time_limit_sec = time_limit_sec
+        self.depth = depth
+        self.scoring = scoring
+
+    def to_dict(self) -> dict:
+        bot_dict = {
+            "mode": self.mode,
+            "name": self.name,
+            "time_limit_sec": self.time_limit_sec,
+            "depth": self.depth,
+            "scoring": self.scoring,
+        }
+        return bot_dict
+
+
+class GameGenerator:
+    """Generate and save AI-vs-AI games for later ML processing."""
+
+    def __init__(
+        self,
+        output_dir: str | Path = "data/raw_games",
+        board_size: int = 9,
+        players: int = 2,
+        walls_per_player: int = 10,
+        max_turns: int = 300,
+    ) -> None:
+        self.output_dir = Path(output_dir)
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+
+        self.board_size = board_size
+        self.players = players
+        self.walls_per_player = walls_per_player
+        self.max_turns = max_turns
+
+        self.index_path = self.output_dir / "games_index.csv"
+
+    def generate_games(
+        self,
+        matchups: list[tuple[BotConfig, BotConfig]],
+        games_per_matchup: int,
+        seed: int | None = None,
+    ) -> list[dict]:
+        """Generate several games and save them to disk."""
+        if games_per_matchup <= 0:
+            raise ValueError("games_per_matchup must be > 0")
+
+        rng = random.Random(seed)
+        generated_games: list[dict] = []
+        game_counter = 1
+
+        for matchup in matchups:
+            bot_a = matchup[0]
+            bot_b = matchup[1]
+
+            for offset in range(games_per_matchup):
+                if offset % 2 == 0:
+                    player_bots = {1: bot_a, 2: bot_b}
+                else:
+                    player_bots = {1: bot_b, 2: bot_a}
+
+                game_seed = rng.randint(0, 10**9)
+                game_id = f"game_{game_counter:04d}"
+
+                game_data = self.play_game(
+                    player_bots=player_bots,
+                    seed=game_seed,
+                    game_id=game_id,
+                )
+
+                generated_games.append(game_data)
+                game_counter += 1
+
+        self._write_index(generated_games)
+        return generated_games
+
+    def play_game(
+        self,
+        player_bots: dict[int, BotConfig],
+        seed: int | None = None,
+        game_id: str = "game_0001",
+    ) -> dict:
+        """Play one full AI-vs-AI game and save it as JSON."""
+        self._validate_player_bots(player_bots)
+        random.seed(seed)
+
+        session = self._build_session()
+        turn_logs: list[dict] = []
+
+        winner_id = session.winner_id()
+        termination = "max_turns"
+
+        for turn_index in range(1, self.max_turns + 1):
+            if winner_id is not None:
+                termination = "winner"
+                break
+
+            player_id = session.state.current_player
+            bot = player_bots[player_id]
+
+            move = self._choose_move(session.state, bot)
+            self._apply_move(session, move)
+
+            winner_id = session.winner_id()
+
+            move_data = self._serialize_move(move)
+            turn_log = {
+                "turn": turn_index,
+                "player_id": player_id,
+                "move": move_data,
+            }
+            turn_logs.append(turn_log)
+
+        if winner_id is not None:
+            termination = "winner"
+
+        bots_data = {}
+        for player_id, bot in player_bots.items():
+            bots_data[str(player_id)] = bot.to_dict()
+
+        game_data = {
+            "game_id": game_id,
+            "seed": seed,
+            "board_size": self.board_size,
+            "players": self.players,
+            "walls_per_player": self.walls_per_player,
+            "bots": bots_data,
+            "winner_id": winner_id,
+            "termination": termination,
+            "turn_count": len(turn_logs),
+            "turns": turn_logs,
+        }
+
+        self._save_game(game_id, game_data)
+        return game_data
+
+    def _build_session(self) -> GameSession:
+        positions = initial_player_positions(self.board_size, self.players)
+
+        remaining_walls = {}
+        for player_id in positions:
+            remaining_walls[player_id] = self.walls_per_player
+
+        builder = GameStateBuilder(board_size=self.board_size)
+        builder = builder.with_current_player(1)
+        builder = builder.with_players(positions)
+        builder = builder.with_remaining_walls(remaining_walls)
+        state = builder.build()
+
+        player_types = {}
+        for player_id in positions:
+            player_types[player_id] = "ai"
+
+        session = GameSession(state=state, player_types=player_types)
+        return session
+
+    def _choose_move(self, state: GameState, bot: BotConfig) -> tuple:
+        if bot.mode == "minimax":
+            if bot.depth is None:
+                raise ValueError("minimax bot requires a fixed depth")
+
+            eval_fn = self._get_eval_fn(bot.scoring)
+            move = find_best_move_minimax(
+                state,
+                ai_player_id=state.current_player,
+                depth=bot.depth,
+                eval_fn=eval_fn,
+            )
+            return move
+
+        if bot.mode == "iterative":
+            eval_fn = self._get_eval_fn(bot.scoring)
+            move = find_best_move_iterative(
+                state,
+                ai_player_id=state.current_player,
+                eval_fn=eval_fn,
+                time_limit_sec=bot.time_limit_sec,
+                max_depth=bot.depth,
+            )
+            return move
+
+        if bot.mode == "mcts":
+            move = mcts_search(state, time_limit=bot.time_limit_sec)
+            if move is None:
+                raise ValueError("mcts_search returned no legal move")
+            return move
+
+        raise ValueError(f"unsupported bot mode: {bot.mode}")
+
+    def _apply_move(self, session: GameSession, move: tuple) -> None:
+        player_id = session.state.current_player
+        move_type = move[0]
+
+        if move_type == "pawn":
+            target_node = move[1]
+            session.play_pawn_move(player_id, target_node)
+            return
+
+        if move_type == "wall":
+            wall_edges = move[1]
+            orientation_token = move[2]
+
+            if orientation_token in {"h", "horizontal"}:
+                orientation = "horizontal"
+            else:
+                orientation = "vertical"
+
+            session.place_wall(player_id, wall_edges, orientation)
+            return
+
+        raise ValueError(f"unsupported move type: {move_type}")
+
+    def _get_eval_fn(
+        self, scoring: str
+    ) -> Callable[[GameState, int], float]:
+        scoring_name = scoring.lower()
+
+        if scoring_name == "default":
+            return evaluate_state_default
+
+        if scoring_name == "material":
+            return evaluate_state_material
+
+        if scoring_name == "hybrid":
+            return evaluate_state_hybrid
+
+        raise ValueError(f"unsupported scoring profile: {scoring}")
+
+    def _save_game(self, game_id: str, game_data: dict) -> None:
+        game_path = self.output_dir / f"{game_id}.json"
+        text = json.dumps(game_data, indent=2, ensure_ascii=False, sort_keys=True)
+        game_path.write_text(text, encoding="utf-8")
+
+    def _write_index(self, games: list[dict]) -> None:
+        fieldnames = [
+            "game_id",
+            "seed",
+            "winner_id",
+            "termination",
+            "turn_count",
+            "player_1_bot",
+            "player_2_bot",
+        ]
+
+        with self.index_path.open("w", newline="", encoding="utf-8") as handle:
+            writer = csv.DictWriter(handle, fieldnames=fieldnames)
+            writer.writeheader()
+
+            for game in games:
+                row = {
+                    "game_id": game["game_id"],
+                    "seed": game["seed"],
+                    "winner_id": game["winner_id"],
+                    "termination": game["termination"],
+                    "turn_count": game["turn_count"],
+                    "player_1_bot": game["bots"]["1"]["name"],
+                    "player_2_bot": game["bots"]["2"]["name"],
+                }
+                writer.writerow(row)
+
+    def _serialize_move(self, move: tuple) -> dict:
+        move_type = move[0]
+
+        if move_type == "pawn":
+            move_data = {
+                "type": "pawn",
+                "to_node": move[1],
+            }
+            return move_data
+
+        if move_type == "wall":
+            edges_data = []
+            for edge in move[1]:
+                edge_data = [edge[0], edge[1]]
+                edges_data.append(edge_data)
+
+            move_data = {
+                "type": "wall",
+                "edges": edges_data,
+                "orientation": move[2],
+            }
+            return move_data
+
+        move_data = {
+            "type": str(move_type),
+            "raw": repr(move),
+        }
+        return move_data
+
+    def _validate_player_bots(self, player_bots: dict[int, BotConfig]) -> None:
+        expected_ids = set(range(1, self.players + 1))
+        given_ids = set(player_bots.keys())
+
+        if given_ids != expected_ids:
+            expected_text = sorted(expected_ids)
+            raise ValueError(
+                "player_bots must define exactly players "
+                f"{expected_text}"
+            )

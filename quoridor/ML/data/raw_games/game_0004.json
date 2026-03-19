@@ -1,0 +1,580 @@
+{
+  "board_size": 9,
+  "bots": {
+    "1": {
+      "depth": null,
+      "mode": "mcts",
+      "name": "mcts_t1",
+      "scoring": "default",
+      "time_limit_sec": 1.0
+    },
+    "2": {
+      "depth": 2,
+      "mode": "iterative",
+      "name": "iterative_hybrid_t1",
+      "scoring": "hybrid",
+      "time_limit_sec": 1.0
+    }
+  },
+  "game_id": "game_0004",
+  "players": 2,
+  "seed": 796233790,
+  "termination": "winner",
+  "turn_count": 44,
+  "turns": [
+    {
+      "move": {
+        "edges": [
+          [
+            1,
+            2
+          ],
+          [
+            10,
+            11
+          ]
+        ],
+        "orientation": "v",
+        "type": "wall"
+      },
+      "player_id": 1,
+      "turn": 1
+    },
+    {
+      "move": {
+        "to_node": 67,
+        "type": "pawn"
+      },
+      "player_id": 2,
+      "turn": 2
+    },
+    {
+      "move": {
+        "edges": [
+          [
+            39,
+            40
+          ],
+          [
+            48,
+            49
+          ]
+        ],
+        "orientation": "v",
+        "type": "wall"
+      },
+      "player_id": 1,
+      "turn": 3
+    },
+    {
+      "move": {
+        "to_node": 58,
+        "type": "pawn"
+      },
+      "player_id": 2,
+      "turn": 4
+    },
+    {
+      "move": {
+        "edges": [
+          [
+            32,
+            41
+          ],
+          [
+            33,
+            42
+          ]
+        ],
+        "orientation": "h",
+        "type": "wall"
+      },
+      "player_id": 1,
+      "turn": 5
+    },
+    {
+      "move": {
+        "edges": [
+          [
+            3,
+            12
+          ],
+          [
+            4,
+            13
+          ]
+        ],
+        "orientation": "h",
+        "type": "wall"
+      },
+      "player_id": 2,
+      "turn": 6
+    },
+    {
+      "move": {
+        "edges": [
+          [
+            30,
+            39
+          ],
+          [
+            31,
+            40
+          ]
+        ],
+        "orientation": "h",
+        "type": "wall"
+      },
+      "player_id": 1,
+      "turn": 7
+    },
+    {
+      "move": {
+        "edges": [
+          [
+            2,
+            3
+          ],
+          [
+            11,
+            12
+          ]
+        ],
+        "orientation": "v",
+        "type": "wall"
+      },
+      "player_id": 2,
+      "turn": 8
+    },
+    {
+      "move": {
+        "edges": [
+          [
+            28,
+            29
+          ],
+          [
+            37,
+            38
+          ]
+        ],
+        "orientation": "v",
+        "type": "wall"
+      },
+      "player_id": 1,
+      "turn": 9
+    },
+    {
+      "move": {
+        "edges": [
+          [
+            42,
+            51
+          ],
+          [
+            43,
+            52
+          ]
+        ],
+        "orientation": "h",
+        "type": "wall"
+      },
+      "player_id": 2,
+      "turn": 10
+    },
+    {
+      "move": {
+        "edges": [
+          [
+            61,
+            70
+          ],
+          [
+            62,
+            71
+          ]
+        ],
+        "orientation": "h",
+        "type": "wall"
+      },
+      "player_id": 1,
+      "turn": 11
+    },
+    {
+      "move": {
+        "edges": [
+          [
+            5,
+            14
+          ],
+          [
+            6,
+            15
+          ]
+        ],
+        "orientation": "h",
+        "type": "wall"
+      },
+      "player_id": 2,
+      "turn": 12
+    },
+    {
+      "move": {
+        "edges": [
+          [
+            50,
+            51
+          ],
+          [
+            59,
+            60
+          ]
+        ],
+        "orientation": "v",
+        "type": "wall"
+      },
+      "player_id": 1,
+      "turn": 13
+    },
+    {
+      "move": {
+        "edges": [
+          [
+            34,
+            43
+          ],
+          [
+            35,
+            44
+          ]
+        ],
+        "orientation": "h",
+        "type": "wall"
+      },
+      "player_id": 2,
+      "turn": 14
+    },
+    {
+      "move": {
+        "edges": [
+          [
+            56,
+            57
+          ],
+          [
+            65,
+            66
+          ]
+        ],
+        "orientation": "v",
+        "type": "wall"
+      },
+      "player_id": 1,
+      "turn": 15
+    },
+    {
+      "move": {
+        "edges": [
+          [
+            28,
+            37
+          ],
+          [
+            29,
+            38
+          ]
+        ],
+        "orientation": "h",
+        "type": "wall"
+      },
+      "player_id": 2,
+      "turn": 16
+    },
+    {
+      "move": {
+        "edges": [
+          [
+            51,
+            52
+          ],
+          [
+            60,
+            61
+          ]
+        ],
+        "orientation": "v",
+        "type": "wall"
+      },
+      "player_id": 1,
+      "turn": 17
+    },
+    {
+      "move": {
+        "edges": [
+          [
+            12,
+            13
+          ],
+          [
+            21,
+            22
+          ]
+        ],
+        "orientation": "v",
+        "type": "wall"
+      },
+      "player_id": 2,
+      "turn": 18
+    },
+    {
+      "move": {
+        "edges": [
+          [
+            31,
+            32
+          ],
+          [
+            40,
+            41
+          ]
+        ],
+        "orientation": "v",
+        "type": "wall"
+      },
+      "player_id": 1,
+      "turn": 19
+    },
+    {
+      "move": {
+        "edges": [
+          [
+            14,
+            15
+          ],
+          [
+            23,
+            24
+          ]
+        ],
+        "orientation": "v",
+        "type": "wall"
+      },
+      "player_id": 2,
+      "turn": 20
+    },
+    {
+      "move": {
+        "to_node": 3,
+        "type": "pawn"
+      },
+      "player_id": 1,
+      "turn": 21
+    },
+    {
+      "move": {
+        "edges": [
+          [
+            15,
+            24
+          ],
+          [
+            16,
+            25
+          ]
+        ],
+        "orientation": "h",
+        "type": "wall"
+      },
+      "player_id": 2,
+      "turn": 22
+    },
+    {
+      "move": {
+        "to_node": 4,
+        "type": "pawn"
+      },
+      "player_id": 1,
+      "turn": 23
+    },
+    {
+      "move": {
+        "edges": [
+          [
+            18,
+            19
+          ],
+          [
+            27,
+            28
+          ]
+        ],
+        "orientation": "v",
+        "type": "wall"
+      },
+      "player_id": 2,
+      "turn": 24
+    },
+    {
+      "move": {
+        "to_node": 5,
+        "type": "pawn"
+      },
+      "player_id": 1,
+      "turn": 25
+    },
+    {
+      "move": {
+        "to_node": 57,
+        "type": "pawn"
+      },
+      "player_id": 2,
+      "turn": 26
+    },
+    {
+      "move": {
+        "to_node": 6,
+        "type": "pawn"
+      },
+      "player_id": 1,
+      "turn": 27
+    },
+    {
+      "move": {
+        "to_node": 48,
+        "type": "pawn"
+      },
+      "player_id": 2,
+      "turn": 28
+    },
+    {
+      "move": {
+        "to_node": 7,
+        "type": "pawn"
+      },
+      "player_id": 1,
+      "turn": 29
+    },
+    {
+      "move": {
+        "to_node": 47,
+        "type": "pawn"
+      },
+      "player_id": 2,
+      "turn": 30
+    },
+    {
+      "move": {
+        "to_node": 8,
+        "type": "pawn"
+      },
+      "player_id": 1,
+      "turn": 31
+    },
+    {
+      "move": {
+        "to_node": 46,
+        "type": "pawn"
+      },
+      "player_id": 2,
+      "turn": 32
+    },
+    {
+      "move": {
+        "to_node": 7,
+        "type": "pawn"
+      },
+      "player_id": 1,
+      "turn": 33
+    },
+    {
+      "move": {
+        "to_node": 37,
+        "type": "pawn"
+      },
+      "player_id": 2,
+      "turn": 34
+    },
+    {
+      "move": {
+        "to_node": 6,
+        "type": "pawn"
+      },
+      "player_id": 1,
+      "turn": 35
+    },
+    {
+      "move": {
+        "to_node": 36,
+        "type": "pawn"
+      },
+      "player_id": 2,
+      "turn": 36
+    },
+    {
+      "move": {
+        "to_node": 7,
+        "type": "pawn"
+      },
+      "player_id": 1,
+      "turn": 37
+    },
+    {
+      "move": {
+        "to_node": 27,
+        "type": "pawn"
+      },
+      "player_id": 2,
+      "turn": 38
+    },
+    {
+      "move": {
+        "to_node": 6,
+        "type": "pawn"
+      },
+      "player_id": 1,
+      "turn": 39
+    },
+    {
+      "move": {
+        "to_node": 18,
+        "type": "pawn"
+      },
+      "player_id": 2,
+      "turn": 40
+    },
+    {
+      "move": {
+        "to_node": 7,
+        "type": "pawn"
+      },
+      "player_id": 1,
+      "turn": 41
+    },
+    {
+      "move": {
+        "to_node": 9,
+        "type": "pawn"
+      },
+      "player_id": 2,
+      "turn": 42
+    },
+    {
+      "move": {
+        "to_node": 16,
+        "type": "pawn"
+      },
+      "player_id": 1,
+      "turn": 43
+    },
+    {
+      "move": {
+        "to_node": 0,
+        "type": "pawn"
+      },
+      "player_id": 2,
+      "turn": 44
+    }
+  ],
+  "walls_per_player": 10,
+  "winner_id": 2
+}
