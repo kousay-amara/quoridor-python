@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from quoridor.application.blitz import Blitz
 from quoridor.application.game_session import GameSession
 from quoridor.core.game_state import GameState
 from quoridor.interfaces import cli as cli_mod
@@ -574,7 +575,7 @@ def test_auto_play_ai_and_startup_messages(monkeypatch, capsys):
     state = GameState(
         board_size=9,
         current_player=1,
-        player_positions={1: 67, 2: 76},
+        player_positions={1: 67, 2: 4},
         remaining_walls={1: 20, 2: 20},
         vertical_walls=[],
         horizontal_walls=[],
@@ -582,8 +583,8 @@ def test_auto_play_ai_and_startup_messages(monkeypatch, capsys):
     session = GameSession(state=state, player_types={1: "ai", 2: "human"})
     monkeypatch.setattr(
         session,
-        "play_ai_turn",
-        lambda **_kwargs: session.state.player_positions.__setitem__(1, 76),
+        "compute_ai_move",
+        lambda **_kwargs: ("pawn", 76),
     )
     assert (
         cli_mod._auto_play_ai_until_human_or_end(
@@ -646,6 +647,45 @@ def test_auto_play_ai_and_startup_messages(monkeypatch, capsys):
     assert "blitz: 30 min/player" in out
     assert "3-player mode can be unbalanced" in out
     assert "AI players: [1]" in out
+
+
+def test_auto_play_ai_blitz_timeout_skips_move(monkeypatch, capsys):
+    moments = iter([0.0, 61.0])
+    monkeypatch.setattr(cli_shell.time, "time", lambda: next(moments))
+
+    state = GameState(
+        board_size=9,
+        current_player=1,
+        player_positions={1: 4, 2: 76},
+        remaining_walls={1: 20, 2: 20},
+        vertical_walls=[],
+        horizontal_walls=[],
+    )
+    session = GameSession(state=state, player_types={1: "ai", 2: "human"})
+    monkeypatch.setattr(
+        session,
+        "compute_ai_move",
+        lambda **_kwargs: ("pawn", 13),
+    )
+
+    assert (
+        cli_mod._auto_play_ai_until_human_or_end(
+            session,
+            ai_mode="minimax",
+            ai_time=1,
+            ai_minimax_depth=1,
+            blitz=Blitz(time_limit_minutes=1, player_ids=[1, 2]),
+        )
+        is True
+    )
+
+    out = capsys.readouterr().out
+    assert "Player 1 ran out of time and loses." in out
+    assert "Player 2 wins!" in out
+    assert "AI player 1 played." not in out
+    assert session.state.player_positions[1] == 4
+    assert session.state.current_player == 2
+    assert 1 in session.state.inactive_players
 
 
 class _FakeReadline:

@@ -198,7 +198,7 @@ def _auto_play_ai_until_human_or_end(
     while session.player_types.get(session.state.current_player) == "ai":
         current_ai = session.state.current_player
         started = time.time()
-        session.play_ai_turn(
+        move = session.compute_ai_move(
             mode=ai_mode,
             depth=ai_minimax_depth,
             time_limit_sec=ai_time,
@@ -208,6 +208,7 @@ def _auto_play_ai_until_human_or_end(
             if _handle_timeout(session, current_ai):
                 return True
             continue
+        session.apply_ai_move(move, player_id=current_ai)
         print(f"AI player {current_ai} played.")
 
         new_pos = session.state.player_positions[current_ai]
