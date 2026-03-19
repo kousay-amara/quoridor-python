@@ -98,6 +98,9 @@ def _build_parser(defaults: dict[str, bool | int]) -> argparse.ArgumentParser:
         "-d", "--debug", action="store_true", help=_("show debug messages")
     )
     parser.add_argument(
+        "-g", "--gui", action="store_true", help=_("launch the GTK GUI")
+    )
+    parser.add_argument(
         "-b", "--blitz", action="store_true", help=_("enable blitz mode")
     )
     parser.add_argument(

@@ -350,6 +350,62 @@ def test_main_interactive_version_and_validation(monkeypatch, capsys):
         cli_mod._main_interactive(["--ai-minimax-depth", "0"])
 
 
+def test_main_interactive_gui_path(monkeypatch):
+    captured: list[bool] = []
+
+    monkeypatch.setattr(cli_mod, "setup_i18n", lambda: None)
+    monkeypatch.setattr(
+        cli_mod,
+        "load_or_init_config",
+        lambda: {
+            "time": 30,
+            "players": 2,
+            "walls": 20,
+            "size": 9,
+            "verbose": False,
+            "blitz": False,
+        },
+    )
+    monkeypatch.setattr(cli_mod, "_main_gui", lambda: captured.append(True) or 4)
+    monkeypatch.setattr(
+        cli_mod,
+        "_run_interactive_shell",
+        lambda **_kwargs: pytest.fail("interactive shell should not start"),
+    )
+
+    assert cli_mod._main_interactive(["--gui"]) == 4
+    assert captured == [True]
+
+
+def test_main_gui_falls_back_to_system_python(monkeypatch):
+    import builtins
+
+    real_import = builtins.__import__
+    calls: list[list[str]] = []
+
+    def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name.endswith(".gui") or (
+            name == "quoridor.interfaces" and "gui" in fromlist
+        ):
+            raise ModuleNotFoundError("No module named 'gi'", name="gi")
+        return real_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+    monkeypatch.setattr(cli_mod.Path, "exists", lambda self: True)
+
+    def fake_run(cmd, check):
+        calls.append(cmd)
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(cli_mod.subprocess, "run", fake_run)
+
+    assert cli_mod._main_gui() == 0
+    assert calls == [[
+        "/usr/bin/python3",
+        str(cli_mod.Path(cli_mod.__file__).with_name("gui.py")),
+    ]]
+
+
 def test_main_interactive_time_behavior(monkeypatch, capsys):
     captured: list[dict] = []
 
