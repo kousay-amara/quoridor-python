@@ -39,6 +39,16 @@ pip install -e ".[gui]"
   quoridor -V
   ```
 
+- **Interface graphique (GTK)**  
+  Depuis la racine du dépôt :
+  ```bash
+  python -m quoridor.interfaces.gui
+  ```
+  Depuis `quoridor/interfaces` :
+  ```bash
+  python -m gui
+  ```
+
 ## Tests
 
 ```bash

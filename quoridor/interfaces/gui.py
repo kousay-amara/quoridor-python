@@ -4,17 +4,29 @@ from __future__ import annotations
 
 import math
 import sys
+from pathlib import Path
 
 import gi
 
 gi.require_version("Gtk", "4.0")
 from gi.repository import Gtk  # noqa: E402
 
-from ..core.game_state import GameState  # noqa: E402
-from ..application.game_session import (  # noqa: E402
-    GameSession,
-    initial_player_positions,
-)
+if __package__ in {None, ""}:
+    project_root = Path(__file__).resolve().parents[2]
+    if str(project_root) not in sys.path:
+        sys.path.insert(0, str(project_root))
+
+    from quoridor.core.game_state import GameState  # noqa: E402
+    from quoridor.application.game_session import (  # noqa: E402
+        GameSession,
+        initial_player_positions,
+    )
+else:
+    from ..core.game_state import GameState  # noqa: E402
+    from ..application.game_session import (  # noqa: E402
+        GameSession,
+        initial_player_positions,
+    )
 
 SIZE = 9
 MARGIN = 30

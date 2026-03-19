@@ -31,6 +31,7 @@ from .contest_parser import ContestError
 _ = gettext.gettext
 
 MAX_HISTORY_SIZE = 1000
+HINT_MINIMAX_DEPTH = 1
 
 
 class _BlitzInputTimeout(Exception):
@@ -366,25 +367,13 @@ def _handle_hint(
 ) -> None:
     from . import cli as cli_mod
 
+    del ai_mode, ai_time, ai_minimax_depth
     current = session.state.current_player
-    if ai_mode == "iterative":
-        move = cli_mod.find_best_move_iterative(
-            session.state,
-            ai_player_id=current,
-            time_limit_sec=ai_time,
-            max_depth=ai_minimax_depth,
-        )
-    elif ai_minimax_depth is None:
-        move = cli_mod.find_best_move_iterative(
-            session.state,
-            ai_player_id=current,
-            time_limit_sec=ai_time,
-            max_depth=None,
-        )
-    else:
-        move = cli_mod.find_best_move_minimax(
-            session.state, ai_player_id=current, depth=ai_minimax_depth
-        )
+    move = cli_mod.find_best_move_minimax(
+        session.state,
+        ai_player_id=current,
+        depth=HINT_MINIMAX_DEPTH,
+    )
     from_node = session.state.player_positions[current]
     best_hint = _format_hint_move(
         move, from_node=from_node, size=session.state.board_size
