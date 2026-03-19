@@ -52,33 +52,65 @@ def test_help_and_help_cmd(monkeypatch, capsys):
 
 
 def test_hint_uses_best_hint_action_format(monkeypatch, capsys):
+    called = {"depth": None}
+
+    def fake_minimax(state, ai_player_id, depth):
+        called["depth"] = depth
+        return (
+            "pawn",
+            state.player_positions[ai_player_id] + state.board_size,
+        )
+
     monkeypatch.setattr(
         cli_mod,
         "find_best_move_minimax",
-        lambda state, ai_player_id, depth: (
-            "pawn",
-            state.player_positions[ai_player_id] + state.board_size,
-        ),
+        fake_minimax,
     )
     _run_shell(monkeypatch, ["hint", "quit"])
 
     out = capsys.readouterr().out
     assert "Best hint action: e1-e2" in out
+    assert called["depth"] == 2
 
 
 def test_hint_uses_iterative_mode_when_requested(monkeypatch, capsys):
+    called = {"time_limit_sec": None, "max_depth": None}
+
+    def fake_iterative(state, ai_player_id, time_limit_sec, max_depth):
+        called["time_limit_sec"] = time_limit_sec
+        called["max_depth"] = max_depth
+        return (
+            "pawn",
+            state.player_positions[ai_player_id] + state.board_size,
+        )
+
     monkeypatch.setattr(
         cli_mod,
         "find_best_move_iterative",
-        lambda state, ai_player_id, time_limit_sec, max_depth: (
-            "pawn",
-            state.player_positions[ai_player_id] + state.board_size,
-        ),
+        fake_iterative,
     )
     _run_shell(monkeypatch, ["hint", "quit"], ai_mode="iterative", ai_time=3)
 
     out = capsys.readouterr().out
     assert "Best hint action: e1-e2" in out
+    assert called["time_limit_sec"] == 3
+    assert called["max_depth"] == 2
+
+
+def test_hint_uses_mcts_mode_when_requested(monkeypatch, capsys):
+    called = {"time_limit": None}
+
+    def fake_mcts(state, time_limit):
+        called["time_limit"] = time_limit
+        return ("pawn", state.player_positions[state.current_player] + 9)
+
+    monkeypatch.setattr(cli_mod, "mcts_search", fake_mcts)
+
+    _run_shell(monkeypatch, ["hint", "quit"], ai_mode="mcts", ai_time=7)
+
+    out = capsys.readouterr().out
+    assert "Best hint action: e1-e2" in out
+    assert called["time_limit"] == 7
 
 
 def test_shorthand_pawn_move_is_case_insensitive(monkeypatch, capsys):

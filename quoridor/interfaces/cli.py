@@ -8,6 +8,7 @@ from importlib import metadata
 
 from ..i18n import setup_i18n
 from ..application.contest import run_contest
+from ..application.mcts_engine import mcts_search
 from ..application.minimax_engine import (
     find_best_move_minimax,
     find_best_move_iterative,
@@ -77,6 +78,7 @@ __all__ = [
     "find_best_move_minimax",
     "main",
     "metadata",
+    "mcts_search",
     "parse_contest_file",
     "run_contest",
     "setup_i18n",
