@@ -1,5 +1,0 @@
-game_id,seed,winner_id,termination,turn_count,player_1_bot,player_2_bot
-game_0001,686579303,1,winner,75,minimax_default_d1,minimax_hybrid_d1
-game_0002,119540831,1,winner,79,minimax_hybrid_d1,minimax_default_d1
-game_0003,26855092,1,winner,27,iterative_hybrid_t1,mcts_t1
-game_0004,796233790,2,winner,44,mcts_t1,iterative_hybrid_t1

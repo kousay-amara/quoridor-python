@@ -79,3 +79,4 @@ temp/
 
 # Donnees generees localement
 data/raw_games/
+quoridor/ML/data/raw_games/
