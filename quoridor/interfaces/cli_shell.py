@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import argparse
 import gettext
+import shlex
 import signal
 import time
 from dataclasses import dataclass
@@ -19,7 +21,13 @@ from ..core.game_state import GameState
 from ..core.notation import get_edges_for_wall, get_node_from_notation
 from ..core.validators import validate_pawn_move, validate_wall
 from ..rules.win_rules import has_player_won
-from .cli_constants import UNBALANCED_PLAYERS_COUNT, WALL_TOKEN_MIN_LENGTH
+from .cli_constants import (
+    AI_MODE_DEFAULT,
+    AI_MODE_ITERATIVE,
+    AI_MODE_MCTS,
+    UNBALANCED_PLAYERS_COUNT,
+    WALL_TOKEN_MIN_LENGTH,
+)
 from .cli_render import (
     _format_hint_move,
     _print_moves,
@@ -68,6 +76,7 @@ def _stop_blitz_alarm(
 
 
 QUORIDOR_COMMANDS = [
+    "new",
     "help",
     "hint",
     "load ",
@@ -183,6 +192,239 @@ def _place_wall_from_token(session: GameSession, wall_token: str) -> None:
     _print_state(session)
 
 
+@dataclass()
+class _ShellConfig:
+    blitz_enabled: bool
+    time_limit: int
+    players: int
+    walls_per_player: int
+    board_size: int
+    ai_players: list[int]
+    ai_mode: str
+    ai_time: int
+    ai_minimax_depth: int | None
+
+
+def _config_from_state(state: "_ShellState") -> _ShellConfig:
+    return _ShellConfig(
+        blitz_enabled=state.blitz.is_enabled(),
+        time_limit=state.blitz.time_limit_minutes,
+        players=state.players,
+        walls_per_player=state.walls_per_player,
+        board_size=state.board_size,
+        ai_players=sorted(set(state.ai_players)),
+        ai_mode=state.ai_mode,
+        ai_time=state.ai_time,
+        ai_minimax_depth=state.ai_minimax_depth,
+    )
+
+
+def _fallback_player_types(config: _ShellConfig) -> dict[int, str]:
+    player_ids = range(1, config.players + 1)
+    ai_set = set(config.ai_players)
+    return {
+        pid: ("ai" if pid in ai_set else "human") for pid in player_ids
+    }
+
+
+def _fallback_remaining_walls(config: _ShellConfig) -> dict[int, int]:
+    wall_count = (
+        config.walls_per_player if config.walls_per_player >= 0 else -1
+    )
+    return {pid: wall_count for pid in range(1, config.players + 1)}
+
+
+def _create_new_session(config: _ShellConfig) -> GameSession:
+    state = GameState(
+        board_size=config.board_size,
+        current_player=1,
+        player_positions=initial_player_positions(
+            config.board_size, config.players
+        ),
+        remaining_walls=_fallback_remaining_walls(config),
+        vertical_walls=[],
+        horizontal_walls=[],
+    )
+    return GameSession(
+        state=state,
+        player_types=_fallback_player_types(config),
+    )
+
+
+def _create_blitz_state(config: _ShellConfig, session: GameSession) -> Blitz:
+    if not config.blitz_enabled:
+        return Blitz(time_limit_minutes=config.time_limit)
+    return Blitz(
+        time_limit_minutes=config.time_limit,
+        player_ids=session.state.player_positions,
+    )
+
+
+def _session_ai_players(session: GameSession) -> list[int]:
+    return sorted(
+        pid
+        for pid, player_type in session.player_types.items()
+        if player_type == "ai"
+    )
+
+
+def _print_shell_startup(
+    session: GameSession,
+    config: _ShellConfig,
+    *,
+    blitz_state: Blitz,
+) -> None:
+    if config.blitz_enabled:
+        print(
+            _("New game started (blitz: {minutes} min/player).").format(
+                minutes=config.time_limit
+            )
+        )
+    else:
+        print(_("New game started with default options."))
+
+    if len(session.state.player_positions) == UNBALANCED_PLAYERS_COUNT:
+        print(_("warning: 3-player mode can be unbalanced."))
+
+    print(_("Type 'help' for available commands."))
+    ai_players = _session_ai_players(session)
+    if ai_players:
+        depth_label = (
+            "auto"
+            if config.ai_minimax_depth is None
+            else config.ai_minimax_depth
+        )
+        print(
+            f"AI players: {ai_players} "
+            f"(mode={config.ai_mode}, depth={depth_label}, "
+            f"time={config.ai_time}s)"
+        )
+    if blitz_state.is_enabled():
+        _print_blitz_times(blitz_state)
+    _print_state(session)
+
+
+def _start_shell_session(
+    session: GameSession,
+    config: _ShellConfig,
+) -> tuple[Blitz, bool]:
+    blitz_state = _create_blitz_state(config, session)
+    _print_shell_startup(session, config, blitz_state=blitz_state)
+    should_break = _auto_play_ai_until_human_or_end(
+        session,
+        config.ai_mode,
+        config.ai_time,
+        config.ai_minimax_depth,
+        blitz=blitz_state,
+    )
+    return blitz_state, should_break
+
+
+def _build_new_argument_parser(
+    current_config: _ShellConfig,
+) -> argparse.ArgumentParser:
+    from . import cli_parser as parser_mod
+
+    parser = argparse.ArgumentParser(
+        prog="new",
+        add_help=False,
+        exit_on_error=False,
+    )
+    parser.add_argument(
+        "-b",
+        "--blitz",
+        action="store_true",
+        default=current_config.blitz_enabled,
+    )
+    parser.add_argument(
+        "-t",
+        "--time",
+        type=int,
+        default=current_config.time_limit,
+    )
+    parser.add_argument(
+        "-p",
+        "--players",
+        type=parser_mod._players_type,
+        default=current_config.players,
+    )
+    parser.add_argument(
+        "-w",
+        "--walls",
+        type=int,
+        default=current_config.walls_per_player,
+    )
+    parser.add_argument(
+        "-s",
+        "--size",
+        type=parser_mod._size_type,
+        default=current_config.board_size,
+    )
+    parser.add_argument(
+        "--ai-player",
+        action="append",
+        default=list(current_config.ai_players),
+        type=parser_mod._player_id_type,
+    )
+    parser.add_argument(
+        "--ai-mode",
+        choices=[AI_MODE_DEFAULT, AI_MODE_ITERATIVE, AI_MODE_MCTS],
+        default=current_config.ai_mode,
+    )
+    parser.add_argument(
+        "--ai-time",
+        type=int,
+        default=current_config.ai_time,
+    )
+    parser.add_argument(
+        "--ai-minimax-depth",
+        type=int,
+        default=current_config.ai_minimax_depth,
+    )
+    return parser
+
+
+def _parse_new_config(state: "_ShellState", line: str) -> _ShellConfig:
+    current_config = _config_from_state(state)
+    raw_args = line[3:].strip()
+    if not raw_args:
+        return current_config
+
+    try:
+        argv = shlex.split(raw_args)
+    except ValueError as exc:
+        raise ValueError(f"invalid new arguments: {exc}") from exc
+
+    parser = _build_new_argument_parser(current_config)
+    try:
+        args = parser.parse_args(argv)
+    except argparse.ArgumentError as exc:
+        raise ValueError(str(exc)) from exc
+    except SystemExit as exc:
+        raise ValueError("invalid new arguments") from exc
+
+    if args.time <= 0:
+        raise ValueError("--time must be > 0")
+    if args.ai_time <= 0:
+        raise ValueError("--ai-time must be > 0")
+    if args.ai_minimax_depth is not None and args.ai_minimax_depth <= 0:
+        raise ValueError("--ai-minimax-depth must be > 0")
+    if any(pid > args.players for pid in args.ai_player):
+        raise ValueError("--ai-player id must be <= --players")
+
+    return _ShellConfig(
+        blitz_enabled=bool(args.blitz),
+        time_limit=args.time,
+        players=args.players,
+        walls_per_player=args.walls,
+        board_size=args.size,
+        ai_players=sorted(set(args.ai_player)),
+        ai_mode=args.ai_mode,
+        ai_time=args.ai_time,
+        ai_minimax_depth=args.ai_minimax_depth,
+    )
+
+
 def _auto_play_ai_until_human_or_end(
     session: GameSession,
     ai_mode: str,
@@ -223,6 +465,11 @@ def _auto_play_ai_until_human_or_end(
 def _show_help(line: str) -> bool:
     line_lower = line.lower()
     help_by_command = {
+        "new": (
+            "new [ARGS]\n  Start a new game. Without ARGS, reuse the "
+            "current configuration. With ARGS, override it for the new "
+            "game."
+        ),
         "help": "help [CMD]\n  Show shell help, or help for CMD.",
         "show history": (
             "show history\n  Show the played moves grouped by turns. "
@@ -258,7 +505,7 @@ def _show_help(line: str) -> bool:
         parts = line.split(maxsplit=1)
         if len(parts) == 1:
             print(
-                "Commands: help [CMD], load, save, hint, "
+                "Commands: new [ARGS], help [CMD], load, save, hint, "
                 "show board, show history, show configuration, show time, "
                 "pause, "
                 "moves, move, wall, undo, redo, quit"
@@ -576,6 +823,23 @@ def _print_configuration(state: "_ShellState") -> None:
     print(f"timer_paused={state.blitz.paused}")
 
 
+def _command_new(state: _ShellState, line: str) -> bool:
+    config = _parse_new_config(state, line)
+    session = _create_new_session(config)
+    blitz_state, should_break = _start_shell_session(session, config)
+    state.session = session
+    state.has_unsaved_changes = False
+    state.ai_mode = config.ai_mode
+    state.ai_time = config.ai_time
+    state.ai_minimax_depth = config.ai_minimax_depth
+    state.players = config.players
+    state.walls_per_player = config.walls_per_player
+    state.board_size = config.board_size
+    state.ai_players = list(config.ai_players)
+    state.blitz = blitz_state
+    return should_break
+
+
 def _command_help(_state: _ShellState, line: str) -> bool:
     _show_help(line)
     return False
@@ -784,6 +1048,11 @@ def _match_help(line: str) -> bool:
     return line_lower == "help" or line_lower.startswith("help ")
 
 
+def _match_new(line: str) -> bool:
+    line_lower = line.lower()
+    return line_lower == "new" or line_lower.startswith("new ")
+
+
 def _match_load(line: str) -> bool:
     return line.lower().startswith("load ")
 
@@ -883,87 +1152,57 @@ def _run_interactive_shell(
     ai_time: int,
     ai_minimax_depth: int | None,
 ) -> None:
+    config = _ShellConfig(
+        blitz_enabled=blitz,
+        time_limit=time_limit,
+        players=players,
+        walls_per_player=walls_per_player,
+        board_size=board_size,
+        ai_players=sorted(set(ai_players)),
+        ai_mode=ai_mode,
+        ai_time=ai_time,
+        ai_minimax_depth=ai_minimax_depth,
+    )
     if save_file:
         print(_("Loading game from {path}").format(path=save_file))
-
-    player_positions = initial_player_positions(board_size, players)
-    wall_count = walls_per_player if walls_per_player >= 0 else -1
-    remaining_walls = {pid: wall_count for pid in player_positions}
-    ai_set = set(ai_players)
-    player_types = {
-        pid: ("ai" if pid in ai_set else "human") for pid in player_positions
-    }
 
     if save_file:
         from . import cli as cli_mod
 
+        fallback_player_types = _fallback_player_types(config)
+        fallback_remaining_walls = _fallback_remaining_walls(config)
         session = cli_mod._load_session_from_file(
             save_file,
-            fallback_player_types=player_types,
-            fallback_walls_per_player=remaining_walls,
+            fallback_player_types=fallback_player_types,
+            fallback_walls_per_player=fallback_remaining_walls,
         )
         has_unsaved_changes = False
     else:
-        state = GameState(
-            board_size=board_size,
-            current_player=1,
-            player_positions=player_positions,
-            remaining_walls=remaining_walls,
-            vertical_walls=[],
-            horizontal_walls=[],
-        )
-        session = GameSession(state=state, player_types=player_types)
+        session = _create_new_session(config)
         has_unsaved_changes = False
-    blitz_state = Blitz(time_limit_minutes=time_limit)
-    if blitz:
-        blitz_state = Blitz(
-            time_limit_minutes=time_limit,
-            player_ids=session.state.player_positions,
-        )
-        print(
-            _("New game started (blitz: {minutes} min/player).").format(
-                minutes=time_limit
-            )
-        )
-    else:
-        print(_("New game started with default options."))
-    if players == UNBALANCED_PLAYERS_COUNT:
-        print(_("warning: 3-player mode can be unbalanced."))
-
-    print(_("Type 'help' for available commands."))
-    if ai_set:
-        depth_label = "auto" if ai_minimax_depth is None else ai_minimax_depth
-        print(
-            f"AI players: {sorted(ai_set)} "
-            f"(mode={ai_mode}, depth={depth_label}, time={ai_time}s)"
-        )
-    if blitz_state.is_enabled():
-        _print_blitz_times(blitz_state)
-    _print_state(session)
-
-    if _auto_play_ai_until_human_or_end(
-        session,
-        ai_mode,
-        ai_time,
-        ai_minimax_depth,
-        blitz=blitz_state,
-    ):
+    blitz_state, should_break = _start_shell_session(session, config)
+    if should_break:
         return
 
     state = _ShellState(
         session=session,
         has_unsaved_changes=has_unsaved_changes,
-        ai_mode=ai_mode,
-        ai_time=ai_time,
-        ai_minimax_depth=ai_minimax_depth,
-        players=players,
-        walls_per_player=walls_per_player,
-        board_size=board_size,
-        ai_players=ai_players,
+        ai_mode=config.ai_mode,
+        ai_time=config.ai_time,
+        ai_minimax_depth=config.ai_minimax_depth,
+        players=config.players,
+        walls_per_player=config.walls_per_player,
+        board_size=config.board_size,
+        ai_players=list(config.ai_players),
         blitz=blitz_state,
     )
 
     commands = [
+        _Command(
+            matches=_match_new,
+            run=_command_new,
+            on_error=_error_as_invalid,
+        ),
         _Command(matches=_match_help, run=_command_help),
         _Command(matches=_match_history, run=_command_history),
         _Command(

@@ -42,10 +42,14 @@ def _run_shell(monkeypatch, commands: list[str], **kwargs) -> None:
 
 
 def test_help_and_help_cmd(monkeypatch, capsys):
-    _run_shell(monkeypatch, ["help", "help hint", "help show history", "quit"])
+    _run_shell(
+        monkeypatch,
+        ["help", "help new", "help hint", "help show history", "quit"],
+    )
 
     out = capsys.readouterr().out
-    assert "Commands: help [CMD], load, save, hint, show board" in out
+    assert "Commands: new [ARGS], help [CMD], load, save, hint" in out
+    assert "Start a new game." in out
     assert "show history" in out
     assert "hint" in out
     assert "Show a suggested move for the current player." in out
@@ -214,6 +218,46 @@ def test_show_history_command_prints_turns(monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "[history]" in out
     assert "1 e1-e2; 2 e9-e8;" in out
+
+
+def test_new_resets_session_and_clears_unsaved_changes(monkeypatch, capsys):
+    _run_shell(
+        monkeypatch,
+        ["e1-e2", "e9-e8", "new", "show history", "quit"],
+    )
+
+    out = capsys.readouterr().out
+    assert out.count("New game started with default options.") == 2
+    assert "[history]" in out
+    assert "1 e1-e2; 2 e9-e8;" not in out
+    assert "Save the game before quitting?" not in out
+
+
+def test_new_accepts_cli_style_args(monkeypatch, capsys):
+    _run_shell(
+        monkeypatch,
+        [
+            (
+                "new --players 4 --walls -1 --size 11 --blitz --time 7 "
+                "--ai-player 2 --ai-player 4 --ai-mode iterative "
+                "--ai-time 3 --ai-minimax-depth 5"
+            ),
+            "show configuration",
+            "quit",
+        ],
+    )
+
+    out = capsys.readouterr().out
+    assert "blitz: 7 min/player" in out
+    assert "players=4" in out
+    assert "walls_per_player=unlimited" in out
+    assert "board_size=11" in out
+    assert "ai_players=[2, 4]" in out
+    assert "ai_mode=iterative" in out
+    assert "ai_time=3" in out
+    assert "ai_minimax_depth=5" in out
+    assert "blitz=True" in out
+    assert "time_limit=7" in out
 
 
 def test_cli_type_helpers_and_flags():
@@ -773,7 +817,7 @@ def test_history_plus_without_term_prompts_and_executes(monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "Search history:" in out
     assert "History match: help" in out
-    assert "Commands: help [CMD], load, save, hint, show board" in out
+    assert "Commands: new [ARGS], help [CMD], load, save, hint" in out
     assert fake_readline.history == []
 
 
