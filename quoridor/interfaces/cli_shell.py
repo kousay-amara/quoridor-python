@@ -42,7 +42,9 @@ def _raise_blitz_input_timeout(_signum: int, _frame: object) -> None:
     raise _BlitzInputTimeout
 
 
-def _start_blitz_alarm(timeout_sec: float | None) -> tuple[bool, object | None]:
+def _start_blitz_alarm(
+    timeout_sec: float | None,
+) -> tuple[bool, object | None]:
     if timeout_sec is None or timeout_sec <= 0:
         return False, None
 
