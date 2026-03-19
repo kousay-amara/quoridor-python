@@ -34,7 +34,7 @@ class BotConfig:
         depth: int | None = None,
         scoring: str = "default",
     ) -> None:
-        
+
         self.mode = mode
         self.name = name
         self.time_limit_sec = time_limit_sec
@@ -266,7 +266,12 @@ class GameGenerator:
 
     def _save_game(self, game_id: str, game_data: dict) -> None:
         game_path = self.output_dir / f"{game_id}.json"
-        text = json.dumps(game_data, indent=2, ensure_ascii=False, sort_keys=True)
+        text = json.dumps(
+            game_data,
+            indent=2,
+            ensure_ascii=False,
+            sort_keys=True,
+        )
         game_path.write_text(text, encoding="utf-8")
 
     def _write_index(self, games: list[dict]) -> None:
