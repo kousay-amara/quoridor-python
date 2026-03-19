@@ -252,8 +252,6 @@ class GameSession:
                 self.state.current_player = next_player
                 return
 
-        self.state.current_player = active_players[0]
-
     def _player_type(self, player_id: int) -> PlayerType:
         if player_id not in self.player_types:
             raise ValueError(f"missing player type for player {player_id}")

@@ -5,7 +5,6 @@ from __future__ import annotations
 import gettext
 import signal
 import time
-from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Callable
 
@@ -42,25 +41,28 @@ def _raise_blitz_input_timeout(_signum: int, _frame: object) -> None:
     raise _BlitzInputTimeout
 
 
-@contextmanager
-def _blitz_input_alarm(timeout_sec: float | None):
+def _start_blitz_alarm(timeout_sec: float | None) -> tuple[bool, object | None]:
     if timeout_sec is None or timeout_sec <= 0:
-        yield
-        return
+        return False, None
 
     try:
         previous_handler = signal.getsignal(signal.SIGALRM)
         signal.signal(signal.SIGALRM, _raise_blitz_input_timeout)
         signal.setitimer(signal.ITIMER_REAL, timeout_sec)
     except (AttributeError, ValueError):
-        yield
+        return False, None
+
+    return True, previous_handler
+
+
+def _stop_blitz_alarm(
+    alarm_started: bool, previous_handler: object | None
+) -> None:
+    if not alarm_started:
         return
 
-    try:
-        yield
-    finally:
-        signal.setitimer(signal.ITIMER_REAL, 0.0)
-        signal.signal(signal.SIGALRM, previous_handler)
+    signal.setitimer(signal.ITIMER_REAL, 0.0)
+    signal.signal(signal.SIGALRM, previous_handler)
 
 
 QUORIDOR_COMMANDS = [
@@ -188,7 +190,7 @@ def _auto_play_ai_until_human_or_end(
     blitz: Blitz | None = None,
 ) -> bool:
     if blitz is None:
-        blitz = Blitz.disabled()
+        blitz = Blitz(time_limit_minutes=0)
 
     while session.player_types.get(session.state.current_player) == "ai":
         current_ai = session.state.current_player
@@ -524,9 +526,9 @@ def _read_shell_input(
         return "", False
 
     started = time.time()
+    alarm_started, previous_handler = _start_blitz_alarm(timeout_sec)
     try:
-        with _blitz_input_alarm(timeout_sec):
-            line = input(prompt).strip()
+        line = input(prompt).strip()
     except _BlitzInputTimeout:
         state.blitz.expire_player(timed_player)
         state.has_unsaved_changes = True
@@ -536,6 +538,8 @@ def _read_shell_input(
     except (EOFError, KeyboardInterrupt):
         print()
         return None, True
+    finally:
+        _stop_blitz_alarm(alarm_started, previous_handler)
 
     elapsed = time.time() - started
     if state.blitz.consume_time(timed_player, elapsed):
@@ -905,14 +909,12 @@ def _run_interactive_shell(
         )
         session = GameSession(state=state, player_types=player_types)
         has_unsaved_changes = False
-    blitz_state = Blitz.disabled(time_limit_minutes=time_limit)
+    blitz_state = Blitz(time_limit_minutes=time_limit)
     if blitz:
-        blitz_state = Blitz.for_players(
-            session.state.player_positions,
+        blitz_state = Blitz(
             time_limit_minutes=time_limit,
+            player_ids=session.state.player_positions,
         )
-
-    if blitz:
         print(
             _("New game started (blitz: {minutes} min/player).").format(
                 minutes=time_limit

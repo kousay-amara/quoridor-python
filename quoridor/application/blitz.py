@@ -3,34 +3,27 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from dataclasses import dataclass, field
 
 
-@dataclass
 class Blitz:
     """Manage per-player blitz timers independently from the CLI shell."""
 
-    time_limit_minutes: int
-    paused: bool = False
-    _remaining_times: dict[int, float] | None = field(default=None, repr=False)
+    def __init__(
+        self,
+        *,
+        time_limit_minutes: int,
+        player_ids: Iterable[int] | None = None,
+        paused: bool = False,
+    ) -> None:
+        self.time_limit_minutes = time_limit_minutes
+        self.paused = paused
+        self._remaining_times: dict[int, float] | None = None
 
-    @classmethod
-    def disabled(cls, *, time_limit_minutes: int = 0) -> "Blitz":
-        return cls(time_limit_minutes=time_limit_minutes)
-
-    @classmethod
-    def for_players(
-        cls, player_ids: Iterable[int], *, time_limit_minutes: int
-    ) -> "Blitz":
-        seconds = float(time_limit_minutes * 60)
-        remaining_times = {
-            player_id: seconds for player_id in sorted(set(player_ids))
-        }
-        return cls(
-            time_limit_minutes=time_limit_minutes,
-            paused=False,
-            _remaining_times=remaining_times,
-        )
+        if player_ids is not None:
+            seconds = float(time_limit_minutes * 60)
+            self._remaining_times = {
+                player_id: seconds for player_id in sorted(set(player_ids))
+            }
 
     def is_enabled(self) -> bool:
         return self._remaining_times is not None
