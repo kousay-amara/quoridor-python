@@ -69,11 +69,11 @@ def _stop_blitz_alarm(
 
 QUORIDOR_COMMANDS = [
     "help",
-    "history",
     "hint",
     "load ",
     "save ",
     "show board",
+    "show history",
     "show configuration",
     "show time",
     "pause",
@@ -224,8 +224,8 @@ def _show_help(line: str) -> bool:
     line_lower = line.lower()
     help_by_command = {
         "help": "help [CMD]\n  Show shell help, or help for CMD.",
-        "history": (
-            "history\n  Show the played moves grouped by turns. "
+        "show history": (
+            "show history\n  Show the played moves grouped by turns. "
             "Use Up/Down arrows to navigate command history. "
             "Use +TERM to search the last command matching TERM."
         ),
@@ -258,8 +258,9 @@ def _show_help(line: str) -> bool:
         parts = line.split(maxsplit=1)
         if len(parts) == 1:
             print(
-                "Commands: help [CMD], history, load, save, hint, "
-                "show board, show configuration, show time, pause, "
+                "Commands: help [CMD], load, save, hint, "
+                "show board, show history, show configuration, show time, "
+                "pause, "
                 "moves, move, wall, undo, redo, quit"
             )
             print("Use: help <command>")
@@ -788,7 +789,7 @@ def _match_load(line: str) -> bool:
 
 
 def _match_history(line: str) -> bool:
-    return line.lower() == "history"
+    return line.lower() == "show history"
 
 
 def _match_save(line: str) -> bool:

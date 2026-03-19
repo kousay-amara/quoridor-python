@@ -42,10 +42,11 @@ def _run_shell(monkeypatch, commands: list[str], **kwargs) -> None:
 
 
 def test_help_and_help_cmd(monkeypatch, capsys):
-    _run_shell(monkeypatch, ["help", "help hint", "help history", "quit"])
+    _run_shell(monkeypatch, ["help", "help hint", "help show history", "quit"])
 
     out = capsys.readouterr().out
-    assert "Commands: help [CMD], history, load, save, hint, show board" in out
+    assert "Commands: help [CMD], load, save, hint, show board" in out
+    assert "show history" in out
     assert "hint" in out
     assert "Show a suggested move for the current player." in out
     assert "Show the played moves grouped by turns." in out
@@ -137,7 +138,7 @@ def test_show_board_prints_board_only(monkeypatch, capsys):
 
 
 def test_commands_are_case_insensitive(monkeypatch, capsys):
-    _run_shell(monkeypatch, ["SHOW TIME", "HeLp HiStoRy", "QUIT"])
+    _run_shell(monkeypatch, ["SHOW TIME", "HeLp ShOw HiStoRy", "QUIT"])
 
     out = capsys.readouterr().out
     assert "Blitz mode is not enabled." in out
@@ -154,7 +155,7 @@ def test_save_then_load_roundtrip(monkeypatch, tmp_path: Path, capsys):
             "e9-e8",
             f"save {save_path}",
             f"load {save_path}",
-            "history",
+            "show history",
             "quit",
             "n",
         ],
@@ -207,8 +208,8 @@ def test_undo_redo_with_invalid_count(monkeypatch, capsys):
     assert "Invalid command: invalid literal for int() with base 10: 'abc'" in out
 
 
-def test_history_command_prints_turns(monkeypatch, capsys):
-    _run_shell(monkeypatch, ["e1-e2", "e9-e8", "history", "quit", "n"])
+def test_show_history_command_prints_turns(monkeypatch, capsys):
+    _run_shell(monkeypatch, ["e1-e2", "e9-e8", "show history", "quit", "n"])
 
     out = capsys.readouterr().out
     assert "[history]" in out
@@ -772,7 +773,7 @@ def test_history_plus_without_term_prompts_and_executes(monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "Search history:" in out
     assert "History match: help" in out
-    assert "Commands: help [CMD], history, load, save, hint, show board" in out
+    assert "Commands: help [CMD], load, save, hint, show board" in out
     assert fake_readline.history == []
 
 
@@ -798,9 +799,8 @@ def test_completer_unique_prefix():
 
 def test_completer_ambiguous_prefix():
     assert shell_mod.completer("h", 0) == "help"
-    assert shell_mod.completer("h", 1) == "history"
-    assert shell_mod.completer("h", 2) == "hint"
-    assert shell_mod.completer("h", 3) is None
+    assert shell_mod.completer("h", 1) == "hint"
+    assert shell_mod.completer("h", 2) is None
 
 
 def test_completer_empty_prefix():
@@ -817,8 +817,9 @@ def test_completer_exact_match():
 
 def test_completer_multiword_prefix():
     assert shell_mod.completer("show ", 0) == "show board"
-    assert shell_mod.completer("show ", 1) == "show configuration"
-    assert shell_mod.completer("show ", 2) == "show time"
-    assert shell_mod.completer("show ", 3) is None
+    assert shell_mod.completer("show ", 1) == "show history"
+    assert shell_mod.completer("show ", 2) == "show configuration"
+    assert shell_mod.completer("show ", 3) == "show time"
+    assert shell_mod.completer("show ", 4) is None
     assert shell_mod.completer("show b", 0) == "show board"
     assert shell_mod.completer("show b", 1) is None
