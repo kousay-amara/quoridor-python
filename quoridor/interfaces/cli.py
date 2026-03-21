@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import logging
+import subprocess
 import sys
 from importlib import metadata
+from pathlib import Path
 
 from ..i18n import setup_i18n
 from ..application.contest import run_contest
+from ..application.mcts_engine import mcts_search
 from ..application.minimax_engine import (
     find_best_move_minimax,
     find_best_move_iterative,
@@ -60,6 +63,7 @@ __all__ = [
     "_load_blitz_snapshot_from_file",
     "_load_session_from_file",
     "_main_contest",
+    "_main_gui",
     "_main_interactive",
     "_node",
     "_place_wall_from_token",
@@ -79,6 +83,7 @@ __all__ = [
     "find_best_move_minimax",
     "main",
     "metadata",
+    "mcts_search",
     "parse_contest_file",
     "run_contest",
     "setup_i18n",
@@ -120,21 +125,50 @@ def _main_contest(argv: list[str]) -> int:
     return 0
 
 
+def _main_gui() -> int:
+    try:
+        from . import gui as gui_mod
+    except ModuleNotFoundError as exc:
+        if exc.name != "gi":
+            raise
+
+        fallback_python = Path("/usr/bin/python3")
+        gui_script = Path(__file__).with_name("gui.py")
+        if not fallback_python.exists():
+            sys.stderr.write(
+                "error: GTK GUI requires PyGObject ('gi'), which is not "
+                "available in this Python environment\n"
+            )
+            return 1
+
+        result = subprocess.run(
+            [str(fallback_python), str(gui_script)],
+            check=False,
+        )
+        return result.returncode
+
+    return gui_mod.main()
+
+
 def _main_interactive(argv: list[str]) -> int:
     setup_i18n()
     defaults = load_or_init_config()
     parser = _build_parser(defaults)
     args = parser.parse_args(argv)
+
+    if args.version:
+        print(_get_version())
+        return 0
+
+    if args.gui:
+        return _main_gui()
+
     if any(pid > args.players for pid in args.ai_player):
         parser.error("--ai-player id must be <= --players")
     if args.ai_time <= 0:
         parser.error("--ai-time must be > 0")
     if args.ai_minimax_depth is not None and args.ai_minimax_depth <= 0:
         parser.error("--ai-minimax-depth must be > 0")
-
-    if args.version:
-        print(_get_version())
-        return 0
 
     _configure_logging(args.verbose, args.debug)
     LOGGER.debug("Loaded defaults from .qoridorrc: %s", defaults)

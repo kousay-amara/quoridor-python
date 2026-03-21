@@ -5,9 +5,9 @@ from types import SimpleNamespace
 
 import pytest
 
+from quoridor.application.blitz import Blitz
 from quoridor.application.game_session import GameSession
 from quoridor.core.game_state import GameState
-from quoridor.application.blitz import Blitz
 from quoridor.application.persistence_service import (
     parse_blitz,
     parse_history,
@@ -47,43 +47,80 @@ def _run_shell(monkeypatch, commands: list[str], **kwargs) -> None:
 
 
 def test_help_and_help_cmd(monkeypatch, capsys):
-    _run_shell(monkeypatch, ["help", "help hint", "help history", "quit"])
+    _run_shell(
+        monkeypatch,
+        ["help", "help new", "help hint", "help show history", "quit"],
+    )
 
     out = capsys.readouterr().out
-    assert "Commands: help [CMD], history, load, save, hint, show board" in out
+    assert "Commands: new [ARGS], help [CMD], load, save, hint" in out
+    assert "Start a new game." in out
+    assert "show history" in out
     assert "hint" in out
     assert "Show a suggested move for the current player." in out
     assert "Show the played moves grouped by turns." in out
 
 
 def test_hint_uses_best_hint_action_format(monkeypatch, capsys):
+    called = {"depth": None}
+
+    def fake_minimax(state, ai_player_id, depth):
+        called["depth"] = depth
+        return (
+            "pawn",
+            state.player_positions[ai_player_id] + state.board_size,
+        )
+
     monkeypatch.setattr(
         cli_mod,
         "find_best_move_minimax",
-        lambda state, ai_player_id, depth: (
-            "pawn",
-            state.player_positions[ai_player_id] + state.board_size,
-        ),
+        fake_minimax,
     )
     _run_shell(monkeypatch, ["hint", "quit"])
 
     out = capsys.readouterr().out
     assert "Best hint action: e1-e2" in out
+    assert called["depth"] == 2
 
 
 def test_hint_uses_iterative_mode_when_requested(monkeypatch, capsys):
+    called = {"time_limit_sec": None, "max_depth": None}
+
+    def fake_iterative(state, ai_player_id, time_limit_sec, max_depth):
+        called["time_limit_sec"] = time_limit_sec
+        called["max_depth"] = max_depth
+        return (
+            "pawn",
+            state.player_positions[ai_player_id] + state.board_size,
+        )
+
     monkeypatch.setattr(
         cli_mod,
         "find_best_move_iterative",
-        lambda state, ai_player_id, time_limit_sec, max_depth: (
-            "pawn",
-            state.player_positions[ai_player_id] + state.board_size,
-        ),
+        fake_iterative,
     )
     _run_shell(monkeypatch, ["hint", "quit"], ai_mode="iterative", ai_time=3)
 
     out = capsys.readouterr().out
     assert "Best hint action: e1-e2" in out
+    assert called["time_limit_sec"] == 3
+    assert called["max_depth"] == 2
+
+
+def test_hint_uses_mcts_mode_when_requested(monkeypatch, capsys):
+    called = {"time_limit": None}
+
+    def fake_mcts(state, time_limit):
+        called["time_limit"] = time_limit
+        return ("pawn", state.player_positions[state.current_player] + 9)
+
+    monkeypatch.setattr(cli_mod, "mcts_search", fake_mcts)
+
+    _run_shell(monkeypatch, ["hint", "quit"], ai_mode="mcts", ai_time=7)
+
+    out = capsys.readouterr().out
+    assert "Best hint action: e1-e2" in out
+    assert called["time_limit"] == 7
 
 
 def test_shorthand_pawn_move_is_case_insensitive(monkeypatch, capsys):
@@ -110,7 +147,7 @@ def test_show_board_prints_board_only(monkeypatch, capsys):
 
 
 def test_commands_are_case_insensitive(monkeypatch, capsys):
-    _run_shell(monkeypatch, ["SHOW TIME", "HeLp HiStoRy", "QUIT"])
+    _run_shell(monkeypatch, ["SHOW TIME", "HeLp ShOw HiStoRy", "QUIT"])
 
     out = capsys.readouterr().out
     assert "Blitz mode is not enabled." in out
@@ -127,7 +164,7 @@ def test_save_then_load_roundtrip(monkeypatch, tmp_path: Path, capsys):
             "e9-e8",
             f"save {save_path}",
             f"load {save_path}",
-            "history",
+            "show history",
             "quit",
             "n",
         ],
@@ -220,12 +257,52 @@ def test_undo_redo_with_invalid_count(monkeypatch, capsys):
     assert "Invalid command: invalid literal for int() with base 10: 'abc'" in out
 
 
-def test_history_command_prints_turns(monkeypatch, capsys):
-    _run_shell(monkeypatch, ["e1-e2", "e9-e8", "history", "quit", "n"])
+def test_show_history_command_prints_turns(monkeypatch, capsys):
+    _run_shell(monkeypatch, ["e1-e2", "e9-e8", "show history", "quit", "n"])
 
     out = capsys.readouterr().out
     assert "[history]" in out
     assert "1 e1-e2; 2 e9-e8;" in out
+
+
+def test_new_resets_session_and_clears_unsaved_changes(monkeypatch, capsys):
+    _run_shell(
+        monkeypatch,
+        ["e1-e2", "e9-e8", "new", "show history", "quit"],
+    )
+
+    out = capsys.readouterr().out
+    assert out.count("New game started with default options.") == 2
+    assert "[history]" in out
+    assert "1 e1-e2; 2 e9-e8;" not in out
+    assert "Save the game before quitting?" not in out
+
+
+def test_new_accepts_cli_style_args(monkeypatch, capsys):
+    _run_shell(
+        monkeypatch,
+        [
+            (
+                "new --players 4 --walls -1 --size 11 --blitz --time 7 "
+                "--ai-player 2 --ai-player 4 --ai-mode iterative "
+                "--ai-time 3 --ai-minimax-depth 5"
+            ),
+            "show configuration",
+            "quit",
+        ],
+    )
+
+    out = capsys.readouterr().out
+    assert "blitz: 7 min/player" in out
+    assert "players=4" in out
+    assert "walls_per_player=unlimited" in out
+    assert "board_size=11" in out
+    assert "ai_players=[2, 4]" in out
+    assert "ai_mode=iterative" in out
+    assert "ai_time=3" in out
+    assert "ai_minimax_depth=5" in out
+    assert "blitz=True" in out
+    assert "time_limit=7" in out
 
 
 def test_cli_type_helpers_and_flags():
@@ -316,6 +393,62 @@ def test_main_interactive_version_and_validation(monkeypatch, capsys):
         cli_mod._main_interactive(["--ai-time", "0"])
     with pytest.raises(SystemExit):
         cli_mod._main_interactive(["--ai-minimax-depth", "0"])
+
+
+def test_main_interactive_gui_path(monkeypatch):
+    captured: list[bool] = []
+
+    monkeypatch.setattr(cli_mod, "setup_i18n", lambda: None)
+    monkeypatch.setattr(
+        cli_mod,
+        "load_or_init_config",
+        lambda: {
+            "time": 30,
+            "players": 2,
+            "walls": 20,
+            "size": 9,
+            "verbose": False,
+            "blitz": False,
+        },
+    )
+    monkeypatch.setattr(cli_mod, "_main_gui", lambda: captured.append(True) or 4)
+    monkeypatch.setattr(
+        cli_mod,
+        "_run_interactive_shell",
+        lambda **_kwargs: pytest.fail("interactive shell should not start"),
+    )
+
+    assert cli_mod._main_interactive(["--gui"]) == 4
+    assert captured == [True]
+
+
+def test_main_gui_falls_back_to_system_python(monkeypatch):
+    import builtins
+
+    real_import = builtins.__import__
+    calls: list[list[str]] = []
+
+    def fake_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name.endswith(".gui") or (
+            name == "quoridor.interfaces" and "gui" in fromlist
+        ):
+            raise ModuleNotFoundError("No module named 'gi'", name="gi")
+        return real_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+    monkeypatch.setattr(cli_mod.Path, "exists", lambda self: True)
+
+    def fake_run(cmd, check):
+        calls.append(cmd)
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(cli_mod.subprocess, "run", fake_run)
+
+    assert cli_mod._main_gui() == 0
+    assert calls == [[
+        "/usr/bin/python3",
+        str(cli_mod.Path(cli_mod.__file__).with_name("gui.py")),
+    ]]
 
 
 def test_main_interactive_time_behavior(monkeypatch, capsys):
@@ -620,7 +753,7 @@ def test_auto_play_ai_and_startup_messages(monkeypatch, capsys):
     state = GameState(
         board_size=9,
         current_player=1,
-        player_positions={1: 67, 2: 76},
+        player_positions={1: 67, 2: 4},
         remaining_walls={1: 20, 2: 20},
         vertical_walls=[],
         horizontal_walls=[],
@@ -628,8 +761,8 @@ def test_auto_play_ai_and_startup_messages(monkeypatch, capsys):
     session = GameSession(state=state, player_types={1: "ai", 2: "human"})
     monkeypatch.setattr(
         session,
-        "play_ai_turn",
-        lambda **_kwargs: session.state.player_positions.__setitem__(1, 76),
+        "compute_ai_move",
+        lambda **_kwargs: ("pawn", 76),
     )
     assert (
         cli_mod._auto_play_ai_until_human_or_end(
@@ -703,6 +836,65 @@ def test_plus_prefix_is_not_a_history_search_command(monkeypatch, capsys):
     assert "Invalid command." in out
 
 
+def test_auto_play_ai_blitz_timeout_skips_move(monkeypatch, capsys):
+    moments = iter([0.0, 61.0])
+    monkeypatch.setattr(cli_shell.time, "time", lambda: next(moments))
+
+    state = GameState(
+        board_size=9,
+        current_player=1,
+        player_positions={1: 4, 2: 76},
+        remaining_walls={1: 20, 2: 20},
+        vertical_walls=[],
+        horizontal_walls=[],
+    )
+    session = GameSession(state=state, player_types={1: "ai", 2: "human"})
+    monkeypatch.setattr(
+        session,
+        "compute_ai_move",
+        lambda **_kwargs: ("pawn", 13),
+    )
+
+    assert (
+        cli_mod._auto_play_ai_until_human_or_end(
+            session,
+            ai_mode="minimax",
+            ai_time=1,
+            ai_minimax_depth=1,
+            blitz=Blitz(time_limit_minutes=1, player_ids=[1, 2]),
+        )
+        is True
+    )
+
+    out = capsys.readouterr().out
+    assert "Player 1 ran out of time and loses." in out
+    assert "Player 2 wins!" in out
+    assert "AI player 1 played." not in out
+    assert session.state.player_positions[1] == 4
+    assert session.state.current_player == 2
+    assert 1 in session.state.inactive_players
+
+
+def test_keyboard_interrupt_during_ai_turn_exits_cleanly(
+    monkeypatch, capsys
+):
+    def _raise_keyboard_interrupt(self, **_kwargs):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(
+        GameSession,
+        "compute_ai_move",
+        _raise_keyboard_interrupt,
+    )
+
+    _run_shell(monkeypatch, ["e1-e2"], ai_players=[2])
+
+    out = capsys.readouterr().out
+    assert "Player 1: e2, Player 2: e9" in out
+    assert "AI player 2 played." not in out
+    assert "Bye." not in out
+
+
 def test_completer_no_match():
     assert shell_mod.completer("xyz", 0) is None
 
@@ -714,9 +906,8 @@ def test_completer_unique_prefix():
 
 def test_completer_ambiguous_prefix():
     assert shell_mod.completer("h", 0) == "help"
-    assert shell_mod.completer("h", 1) == "history"
-    assert shell_mod.completer("h", 2) == "hint"
-    assert shell_mod.completer("h", 3) is None
+    assert shell_mod.completer("h", 1) == "hint"
+    assert shell_mod.completer("h", 2) is None
 
 
 def test_completer_empty_prefix():
@@ -733,9 +924,10 @@ def test_completer_exact_match():
 
 def test_completer_multiword_prefix():
     assert shell_mod.completer("show ", 0) == "show board"
-    assert shell_mod.completer("show ", 1) == "show configuration"
-    assert shell_mod.completer("show ", 2) == "show time"
-    assert shell_mod.completer("show ", 3) is None
+    assert shell_mod.completer("show ", 1) == "show history"
+    assert shell_mod.completer("show ", 2) == "show configuration"
+    assert shell_mod.completer("show ", 3) == "show time"
+    assert shell_mod.completer("show ", 4) is None
     assert shell_mod.completer("show b", 0) == "show board"
     assert shell_mod.completer("show b", 1) is None
 

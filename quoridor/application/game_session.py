@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
 from ..core.game_state import GameState
 from ..core.move_record import MoveRecord, PlayerType
@@ -18,6 +18,7 @@ from .minimax_engine import (
 )
 
 WallOrientation = Literal["vertical", "horizontal"]
+AIMove = tuple[Any, ...]
 
 
 def initial_player_positions(board_size: int, players: int) -> dict[int, int]:
@@ -210,14 +211,14 @@ class GameSession:
             apply_blitz_snapshot=self._restore_blitz_snapshot,
         )
 
-    def play_ai_turn(
+    def compute_ai_move(
         self,
         *,
         mode: str = "minimax",
         depth: int | None = None,
         time_limit_sec: float = 5.0,
-    ) -> MoveRecord:
-        """Compute and play the current AI player's move."""
+    ) -> AIMove:
+        """Compute the current AI player's move without applying it."""
         player_id = self.state.current_player
         if self._player_type(player_id) != "ai":
             raise ValueError(f"player {player_id} is not an AI player")
@@ -243,6 +244,21 @@ class GameSession:
         else:
             raise ValueError(f"unsupported AI mode: {mode}")
 
+        return move
+
+    def apply_ai_move(
+        self,
+        move: AIMove,
+        *,
+        player_id: int | None = None,
+    ) -> MoveRecord:
+        """Apply a previously computed move for the current AI player."""
+        if player_id is None:
+            player_id = self.state.current_player
+        self._ensure_current_player(player_id)
+        if self._player_type(player_id) != "ai":
+            raise ValueError(f"player {player_id} is not an AI player")
+
         move_type = move[0]
 
         if move_type == "pawn":
@@ -259,6 +275,21 @@ class GameSession:
             return self.place_wall(player_id, edges, orientation)
 
         raise ValueError(f"unsupported AI move type: {move_type}")
+
+    def play_ai_turn(
+        self,
+        *,
+        mode: str = "minimax",
+        depth: int | None = None,
+        time_limit_sec: float = 5.0,
+    ) -> MoveRecord:
+        """Compute and play the current AI player's move."""
+        move = self.compute_ai_move(
+            mode=mode,
+            depth=depth,
+            time_limit_sec=time_limit_sec,
+        )
+        return self.apply_ai_move(move)
 
     def _ensure_current_player(self, player_id: int) -> None:
         if not self.state.is_player_active(player_id):

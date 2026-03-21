@@ -12,17 +12,25 @@ class CommandHelp:
     description: str
 
 
+_HISTORY_DESCRIPTION = (
+    "Show the played moves grouped by turns. "
+    "Use Up/Down arrows to navigate command history. "
+    "Use Ctrl+R for reverse history search (readline)."
+)
+
+
 COMMAND_CATALOG: tuple[CommandHelp, ...] = (
-    CommandHelp("help", "help [CMD]", "Show shell help, or help for CMD."),
     CommandHelp(
-        "history",
-        "history",
+        "new",
+        "new [ARGS]",
         (
-            "Show the played moves grouped by turns. "
-            "Use Up/Down arrows to navigate command history. "
-            "Use Ctrl+R for reverse history search (readline)."
+            "Start a new game. Without ARGS, reuse the current "
+            "configuration. With ARGS, override it for the new game."
         ),
     ),
+    CommandHelp("help", "help [CMD]", "Show shell help, or help for CMD."),
+    CommandHelp("history", "history", _HISTORY_DESCRIPTION),
+    CommandHelp("show history", "show history", _HISTORY_DESCRIPTION),
     CommandHelp("load", "load FILE", "Load a game position from FILE."),
     CommandHelp("save", "save FILE", "Save the current game position to FILE."),
     CommandHelp("hint", "hint", "Show a suggested move for the current player."),
@@ -52,19 +60,21 @@ COMMAND_CATALOG: tuple[CommandHelp, ...] = (
 
 
 OVERVIEW_TEXT = (
-    "Commands: help [CMD], history, load, save, hint, show board, "
-    "show configuration, show time, pause, moves, move, wall, undo, redo, quit\n"
+    "Commands: new [ARGS], help [CMD], load, save, hint, show board, "
+    "show history, show configuration, show time, pause, moves, move, wall, "
+    "undo, redo, quit\n"
     "Use: help <command>"
 )
 
 
 COMPLETION_COMMANDS = [
+    "new",
     "help",
-    "history",
     "hint",
     "load ",
     "save ",
     "show board",
+    "show history",
     "show configuration",
     "show time",
     "pause",
