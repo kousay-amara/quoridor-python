@@ -172,6 +172,46 @@ def test_undo_redo_with_count(monkeypatch, capsys):
     assert "Player 1: e2, Player 2: e8" in out
 
 
+def test_undo_redo_restores_blitz_time_for_non_timeout_move(monkeypatch, capsys):
+    moments = iter(
+        [
+            0.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+            10.0,
+        ]
+    )
+    monkeypatch.setattr(cli_shell.time, "time", lambda: next(moments))
+
+    _run_shell(
+        monkeypatch,
+        [
+            "e1-e2",
+            "show time",
+            "undo",
+            "show time",
+            "redo",
+            "show time",
+            "quit",
+            "n",
+        ],
+        blitz=True,
+        time_limit=1,
+    )
+
+    out = capsys.readouterr().out
+    assert out.count("Blitz time -> Player 1: 00:50, Player 2: 01:00") == 3
+
 def test_undo_redo_with_invalid_count(monkeypatch, capsys):
     _run_shell(monkeypatch, ["undo 0", "redo abc", "quit"])
 
