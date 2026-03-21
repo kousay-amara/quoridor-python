@@ -9,6 +9,7 @@ from ..core.move_record import MoveRecord, PlayerType
 from ..rules.pawn_rules import get_all_legal_pawn_moves
 from ..rules.wall_rules import get_player_target_funcs, is_wall_legal
 from ..rules.win_rules import has_player_won
+from .blitz import Blitz
 from .history_manager import HistoryManager
 from .mcts_engine import mcts_search
 from .minimax_engine import (
@@ -43,6 +44,10 @@ class GameSession:
         self.player_types = dict(player_types)
         self.history = HistoryManager()
         self._turn_order = sorted(self.state.player_positions.keys())
+        self._blitz: Blitz | None = None
+
+    def attach_blitz(self, blitz: Blitz | None) -> None:
+        self._blitz = blitz
 
     def active_player_ids(self) -> list[int]:
         return self.state.active_player_ids()
@@ -70,9 +75,11 @@ class GameSession:
             raise ValueError(f"illegal pawn move: {from_node} -> {to_node}")
 
         before = self.state.to_snapshot()
+        before_blitz = self._capture_blitz_snapshot()
         self.state.player_positions[player_id] = to_node
         self._advance_turn()
         after = self.state.to_snapshot()
+        after_blitz = self._capture_blitz_snapshot()
 
         record = MoveRecord(
             player_id=player_id,
@@ -80,6 +87,8 @@ class GameSession:
             action="move_pawn",
             before_state=before,
             after_state=after,
+            before_blitz=before_blitz,
+            after_blitz=after_blitz,
         )
         self.history.record_move(record)
         return record
@@ -127,6 +136,7 @@ class GameSession:
             raise ValueError(f"illegal wall placement: {wall_edges}")
 
         before = self.state.to_snapshot()
+        before_blitz = self._capture_blitz_snapshot()
         for edge in wall_edges:
             self.state.graph.remove_edge(*edge)
         if orientation == "vertical":
@@ -137,6 +147,7 @@ class GameSession:
             self.state.remaining_walls[player_id] = walls_left - 1
         self._advance_turn()
         after = self.state.to_snapshot()
+        after_blitz = self._capture_blitz_snapshot()
 
         record = MoveRecord(
             player_id=player_id,
@@ -144,19 +155,32 @@ class GameSession:
             action="place_wall",
             before_state=before,
             after_state=after,
+            before_blitz=before_blitz,
+            after_blitz=after_blitz,
         )
         self.history.record_move(record)
         return record
 
-    def timeout_player(self, player_id: int) -> tuple[MoveRecord, int | None]:
+    def timeout_player(
+        self,
+        player_id: int,
+        *,
+        before_blitz_snapshot=None,
+    ) -> tuple[MoveRecord, int | None]:
         self._ensure_current_player(player_id)
         if not self.state.is_player_active(player_id):
             raise ValueError(f"player {player_id} is already inactive")
 
         before = self.state.to_snapshot()
+        before_blitz = (
+            self._capture_blitz_snapshot()
+            if before_blitz_snapshot is None
+            else before_blitz_snapshot
+        )
         self.state.inactive_players.add(player_id)
         self._advance_turn()
         after = self.state.to_snapshot()
+        after_blitz = self._capture_blitz_snapshot()
 
         record = MoveRecord(
             player_id=player_id,
@@ -164,6 +188,8 @@ class GameSession:
             action="timeout_loss",
             before_state=before,
             after_state=after,
+            before_blitz=before_blitz,
+            after_blitz=after_blitz,
         )
         self.history.record_move(record)
         return record, self.winner_id()
@@ -173,6 +199,7 @@ class GameSession:
         return self.history.undo_until_human_boundary(
             self.state.restore,
             requester_type=requester_type,
+            apply_blitz_snapshot=self._restore_blitz_snapshot,
         )
 
     def redo(self, requester_id: int) -> list[MoveRecord]:
@@ -180,6 +207,7 @@ class GameSession:
         return self.history.redo_until_human_boundary(
             self.state.restore,
             requester_type=requester_type,
+            apply_blitz_snapshot=self._restore_blitz_snapshot,
         )
 
     def play_ai_turn(
@@ -257,6 +285,16 @@ class GameSession:
             if next_player in active_players:
                 self.state.current_player = next_player
                 return
+
+    def _capture_blitz_snapshot(self):
+        if self._blitz is None:
+            return None
+        return self._blitz.snapshot()
+
+    def _restore_blitz_snapshot(self, snapshot) -> None:
+        if self._blitz is None:
+            return
+        self._blitz.restore_snapshot(snapshot)
 
     def _player_type(self, player_id: int) -> PlayerType:
         if player_id not in self.player_types:

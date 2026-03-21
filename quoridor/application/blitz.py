@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 
+from ..core.move_record import BlitzSnapshot
+
 
 class Blitz:
     """Manage per-player blitz timers independently from the CLI shell."""
@@ -40,6 +42,41 @@ class Blitz:
             player_id: remaining_times[player_id]
             for player_id in sorted(remaining_times)
         }
+
+    def snapshot(self) -> BlitzSnapshot:
+        remaining_times = (
+            self.remaining_times() if self.is_enabled() else {}
+        )
+        return {
+            "enabled": self.is_enabled(),
+            "time_limit_minutes": int(self.time_limit_minutes),
+            "paused": bool(self.paused),
+            "remaining_times": remaining_times,
+        }
+
+    def restore_snapshot(self, snapshot: BlitzSnapshot | None) -> None:
+        if snapshot is None or not bool(snapshot.get("enabled", False)):
+            self._remaining_times = None
+            self.paused = False
+            return
+
+        self.time_limit_minutes = int(snapshot.get("time_limit_minutes", 0))
+        self.paused = bool(snapshot.get("paused", False))
+        raw_remaining = snapshot.get("remaining_times", {})
+        self._remaining_times = {
+            int(player_id): float(remaining)
+            for player_id, remaining in raw_remaining.items()
+        }
+
+    @classmethod
+    def from_snapshot(cls, snapshot: BlitzSnapshot | None) -> Blitz:
+        if snapshot is None:
+            return cls(time_limit_minutes=0)
+        blitz = cls(
+            time_limit_minutes=int(snapshot.get("time_limit_minutes", 0))
+        )
+        blitz.restore_snapshot(snapshot)
+        return blitz
 
     def input_timeout_for(self, player_id: int) -> float | None:
         if not self.is_enabled() or self.paused:

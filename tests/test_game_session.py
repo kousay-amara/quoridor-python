@@ -1,3 +1,4 @@
+from quoridor.application.blitz import Blitz
 from quoridor.application.game_session import GameSession
 from quoridor.application.game_session_builder import GameSessionBuilder
 from quoridor.core.game_state import GameState
@@ -146,3 +147,35 @@ def test_play_ai_turn_uses_mcts_when_mode_is_mcts(monkeypatch):
 
     assert captured["time_limit"] == 1.5
     assert record.action == "move_pawn"
+
+
+def test_timeout_undo_restores_blitz_snapshot_and_keeps_redo_branch():
+    state = GameState(
+        board_size=9,
+        current_player=1,
+        player_positions={1: 4, 2: 76},
+        remaining_walls={1: 20, 2: 20},
+        vertical_walls=[],
+        horizontal_walls=[],
+    )
+    session = GameSession(state=state, player_types={1: "human", 2: "human"})
+    blitz = Blitz(time_limit_minutes=1, player_ids=[1, 2])
+    session.attach_blitz(blitz)
+
+    before_timeout = blitz.snapshot()
+    assert blitz.consume_time(1, 61.0) is True
+    assert blitz.remaining_time(1) == 0.0
+
+    record, winner = session.timeout_player(
+        1,
+        before_blitz_snapshot=before_timeout,
+    )
+    assert record.action == "timeout_loss"
+    assert winner == 2
+    assert session.history.can_redo() is False
+
+    session.undo(requester_id=2)
+
+    assert session.state.is_player_active(1)
+    assert blitz.remaining_time(1) == before_timeout["remaining_times"][1]
+    assert session.history.can_redo() is True

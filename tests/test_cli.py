@@ -7,6 +7,12 @@ import pytest
 
 from quoridor.application.game_session import GameSession
 from quoridor.core.game_state import GameState
+from quoridor.application.blitz import Blitz
+from quoridor.application.persistence_service import (
+    parse_blitz,
+    parse_history,
+    parse_player_types,
+)
 from quoridor.interfaces import cli as cli_mod
 from quoridor.interfaces import cli_shell
 from quoridor.interfaces import cli_shell as shell_mod
@@ -648,71 +654,13 @@ def test_auto_play_ai_and_startup_messages(monkeypatch, capsys):
     assert "AI players: [1]" in out
 
 
-class _FakeReadline:
-    def __init__(self, history: list[str] | None = None):
-        self.history = [] if history is None else list(history)
-        self.history_length = None
-
-    def set_history_length(self, value: int) -> None:
-        self.history_length = value
-
-    def set_completer_delims(self, delims: str) -> None:
-        pass
-
-    def set_completer(self, func) -> None:
-        pass
-
-    def parse_and_bind(self, binding: str) -> None:
-        pass
-
-    def get_current_history_length(self) -> int:
-        return len(self.history)
-
-    def get_history_item(self, index: int) -> str | None:
-        if 1 <= index <= len(self.history):
-            return self.history[index - 1]
-        return None
-
-    def remove_history_item(self, index: int) -> None:
-        del self.history[index]
-
-
-def test_history_plus_term_executes_matching_command(monkeypatch, capsys):
-    fake_readline = _FakeReadline(["older", "+mov"])
-    monkeypatch.setattr(shell_mod, "readline", fake_readline)
-    monkeypatch.setattr(shell_mod, "_get_last_history_match", lambda term: "moves")
-
+def test_plus_prefix_is_not_a_history_search_command(monkeypatch, capsys):
     _run_shell(monkeypatch, ["+mov", "quit"])
 
     out = capsys.readouterr().out
-    assert "History match: moves" in out
-    assert "Legal pawn moves for player 1" in out
-    assert fake_readline.history == ["older"]
-
-
-def test_history_plus_without_term_prompts_and_executes(monkeypatch, capsys):
-    fake_readline = _FakeReadline(["older", "+"])
-    monkeypatch.setattr(shell_mod, "readline", fake_readline)
-    monkeypatch.setattr(shell_mod, "_get_last_history_match", lambda term: "help")
-
-    _run_shell(monkeypatch, ["+", "help", "quit"])
-
-    out = capsys.readouterr().out
-    assert "Search history:" in out
-    assert "History match: help" in out
-    assert "Commands: help [CMD], history, load, save, hint, show board" in out
-    assert fake_readline.history == []
-
-
-def test_history_plus_no_match_prints_message(monkeypatch, capsys):
-    fake_readline = _FakeReadline(["older", "+abc"])
-    monkeypatch.setattr(shell_mod, "readline", fake_readline)
-    monkeypatch.setattr(shell_mod, "_get_last_history_match", lambda term: None)
-
-    _run_shell(monkeypatch, ["+abc", "quit"])
-
-    out = capsys.readouterr().out
-    assert "No command found in history." in out
+    assert "No command found in history." not in out
+    assert "History match:" not in out
+    assert "Invalid command." in out
 
 
 def test_completer_no_match():
@@ -750,3 +698,153 @@ def test_completer_multiword_prefix():
     assert shell_mod.completer("show ", 3) is None
     assert shell_mod.completer("show b", 0) == "show board"
     assert shell_mod.completer("show b", 1) is None
+
+
+def test_save_persists_and_loads_blitz_snapshot(tmp_path: Path):
+    state = GameState(
+        board_size=9,
+        current_player=1,
+        player_positions={1: 4, 2: 76},
+        remaining_walls={1: 20, 2: 20},
+        vertical_walls=[],
+        horizontal_walls=[],
+    )
+    session = GameSession(state=state, player_types={1: "human", 2: "human"})
+    blitz = Blitz(time_limit_minutes=1, player_ids=[1, 2])
+    blitz.consume_time(1, 15.5)
+    blitz.toggle_pause()
+
+    save_path = tmp_path / "with_blitz.txt"
+    cli_mod._save_session_to_file(str(save_path), session, blitz)
+
+    raw = save_path.read_text(encoding="utf-8")
+    assert "[blitz]" in raw
+    assert "enabled: true" in raw
+    assert "paused: true" in raw
+
+    snapshot = cli_mod._load_blitz_snapshot_from_file(str(save_path))
+    assert snapshot is not None
+    assert snapshot["enabled"] is True
+    assert snapshot["paused"] is True
+    assert snapshot["time_limit_minutes"] == 1
+    assert snapshot["remaining_times"][1] == pytest.approx(44.5)
+    assert snapshot["remaining_times"][2] == pytest.approx(60.0)
+
+
+def test_save_writes_settings_and_load_uses_saved_player_types(tmp_path: Path):
+    state = GameState(
+        board_size=9,
+        current_player=1,
+        player_positions={1: 4, 2: 76},
+        remaining_walls={1: 20, 2: 20},
+        vertical_walls=[],
+        horizontal_walls=[],
+    )
+    session = GameSession(state=state, player_types={1: "ai", 2: "human"})
+
+    save_path = tmp_path / "with_settings.txt"
+    cli_mod._save_session_to_file(str(save_path), session)
+    raw = save_path.read_text(encoding="utf-8")
+
+    assert "[settings]" in raw
+    assert "player_types: 1=ai 2=human" in raw
+
+    loaded = cli_mod._load_session_from_file(
+        str(save_path),
+        fallback_player_types={1: "human", 2: "ai"},
+        fallback_walls_per_player={1: 20, 2: 20},
+    )
+    assert loaded.player_types == {1: "ai", 2: "human"}
+
+
+def test_comment_support_across_settings_history_and_blitz_sections():
+    raw = """{ block comment before sections }
+[settings]
+# only comment line
+player_types: 1=human 2=ai # inline comment
+
+[history]
+1 e1-e2; # end of line comment
+{ block comment inside history }
+2 e9-e8;
+
+[blitz]
+enabled: true
+paused: false # inline
+remaining: 1=42.5 2=60.0
+"""
+
+    assert parse_player_types(raw) == {1: "human", 2: "ai"}
+    assert parse_history(raw) == [(1, "e1-e2"), (2, "e9-e8")]
+
+    snapshot = parse_blitz(raw)
+    assert snapshot is not None
+    assert snapshot["enabled"] is True
+    assert snapshot["paused"] is False
+    assert snapshot["remaining_times"][1] == pytest.approx(42.5)
+
+
+def test_load_then_quit_without_new_move_does_not_prompt_save(
+    monkeypatch, tmp_path: Path, capsys
+):
+    state = GameState(
+        board_size=9,
+        current_player=1,
+        player_positions={1: 4, 2: 76},
+        remaining_walls={1: 20, 2: 20},
+        vertical_walls=[],
+        horizontal_walls=[],
+    )
+    session = GameSession(state=state, player_types={1: "human", 2: "human"})
+    save_path = tmp_path / "clean_load.txt"
+    cli_mod._save_session_to_file(str(save_path), session)
+
+    _run_shell(monkeypatch, [f"load {save_path}", "quit"])
+    out = capsys.readouterr().out
+
+    assert f"Game loaded from {save_path}" in out
+    assert "Save the game before quitting? [Y/N]" not in out
+
+
+def test_load_without_blitz_snapshot_replaces_previous_blitz_state(
+    monkeypatch, tmp_path: Path, capsys
+):
+    save_path = tmp_path / "legacy_no_blitz.txt"
+    save_path.write_text(
+        """[game]
+1
+_ _ _ _ _ _ _ _ _
+. . . . . . . . .
+_ _ _ _ _ _ _ _ _
+. . . . . . . . .
+_ _ _ _ _ _ _ _ _
+. . . . . . . . .
+_ _ _ _ _ _ _ _ _
+. . . . . . . . .
+_ _ _ _ 1 _ _ _ _
+. . . . . . . . .
+_ _ _ _ _ _ _ _ _
+. . . . . . . . .
+_ _ _ _ _ _ _ _ _
+. . . . . . . . .
+_ _ _ _ _ _ _ _ _
+. . . . . . . . .
+_ _ _ _ 2 _ _ _ _
+walls: 20 20
+
+[settings]
+player_types: 1=human 2=human
+""",
+        encoding="utf-8",
+    )
+
+    _run_shell(
+        monkeypatch,
+        ["show time", f"load {save_path}", "show time", "quit"],
+        blitz=True,
+        time_limit=1,
+    )
+    out = capsys.readouterr().out
+
+    assert "Blitz time ->" in out
+    assert out.count("Blitz mode is not enabled.") == 1

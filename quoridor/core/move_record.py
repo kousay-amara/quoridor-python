@@ -31,6 +31,15 @@ class GameSnapshot(TypedDict):
     inactive_players: list[int]
 
 
+class BlitzSnapshot(TypedDict):
+    """Serializable blitz timer snapshot."""
+
+    enabled: bool
+    time_limit_minutes: int
+    paused: bool
+    remaining_times: dict[int, float]
+
+
 @dataclass
 class MoveRecord:
     """One recorded move with state before/after execution."""
@@ -40,3 +49,5 @@ class MoveRecord:
     action: ActionType
     before_state: GameSnapshot
     after_state: GameSnapshot
+    before_blitz: BlitzSnapshot | None = None
+    after_blitz: BlitzSnapshot | None = None

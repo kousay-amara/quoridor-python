@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from ..core.move_record import GameSnapshot, MoveRecord, PlayerType
+from ..core.move_record import BlitzSnapshot, GameSnapshot, MoveRecord, PlayerType
 
 
 class HistoryManager:
@@ -31,6 +31,7 @@ class HistoryManager:
         self,
         apply_snapshot: Callable[[GameSnapshot], None],
         requester_type: PlayerType = "human",
+        apply_blitz_snapshot: Callable[[BlitzSnapshot | None], None] | None = None,
     ) -> list[MoveRecord]:
         """Undo moves until the previous human boundary is reached."""
         self._ensure_human_requester(requester_type)
@@ -43,6 +44,8 @@ class HistoryManager:
         while self.can_undo():
             record = self.records[self.cursor]
             apply_snapshot(record.before_state)
+            if apply_blitz_snapshot is not None:
+                apply_blitz_snapshot(record.before_blitz)
             undone.append(record)
             self.cursor -= 1
 
@@ -62,6 +65,7 @@ class HistoryManager:
         self,
         apply_snapshot: Callable[[GameSnapshot], None],
         requester_type: PlayerType = "human",
+        apply_blitz_snapshot: Callable[[BlitzSnapshot | None], None] | None = None,
     ) -> list[MoveRecord]:
         """Redo moves until the next human boundary is reached."""
         self._ensure_human_requester(requester_type)
@@ -77,6 +81,8 @@ class HistoryManager:
                 break
 
             apply_snapshot(next_record.after_state)
+            if apply_blitz_snapshot is not None:
+                apply_blitz_snapshot(next_record.after_blitz)
             self.cursor += 1
             redone.append(next_record)
 
