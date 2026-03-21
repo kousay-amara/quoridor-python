@@ -21,7 +21,7 @@ class MCTSNode:
 
         all_moves = get_all_legal_moves(state)
         self.untried_moves = sorted(
-            all_moves, 
+            all_moves,
             key=lambda m: 0 if getattr(m, 'action', '') == 'move_pawn' else 1
         )
 
@@ -54,10 +54,9 @@ def check_any_winner(state):
     return None
 
 
-def mcts_search(root_state, time_limit=5.0, exploration_weight = 1.41):
+def mcts_search(root_state, time_limit=5.0, exploration_weight=1.41):
     """Perform MCTS search"""
     root_node = MCTSNode(root_state)
-    ai_player_id = root_state.current_player
     start_time = time.time()
 
     while time.time() - start_time < time_limit:
@@ -79,14 +78,10 @@ def mcts_search(root_state, time_limit=5.0, exploration_weight = 1.41):
 
         # Simulation
         rollout_state = clone_state(node.state)
-        max_moves = 300  # Security against infinites games
+        max_moves = 300  # Security against infinite games
         winner = None
 
         while max_moves > 0:
-            winner = check_any_winner(rollout_state)
-            if winner is not None:
-                break
-
             moves = get_all_legal_moves(rollout_state)
             if not moves:
                 break
@@ -97,22 +92,25 @@ def mcts_search(root_state, time_limit=5.0, exploration_weight = 1.41):
             pawn_moves = [m for m in moves if getattr(m, 'action', '') == 'move_pawn']
 
             if pawn_moves and random.random() < 0.7:
-                move_to_apply = min(
-                    pawn_moves, 
-                    key=lambda m: get_dist_to_goal(p_id, m.to_pos, b_size)
-            )
-            else :
-                move_to_apply = random.choices(moves)
-            
+                best_dist = min(get_dist_to_goal(p_id, m.to_pos, b_size) for m in pawn_moves)
+                best_moves = [m for m in pawn_moves if get_dist_to_goal(p_id, m.to_pos, b_size) == best_dist]
+                move_to_apply = random.choice(best_moves)
+            else:
+                move_to_apply = random.choice(moves)
+
             apply_move(rollout_state, move_to_apply)
             max_moves -= 1
 
+            winner = check_any_winner(rollout_state)
+            if winner is not None:
+                break
+
         # Backpropagation
-        result = 1 if winner == ai_player_id else 0
         temp_node = node
         while temp_node is not None:
             temp_node.visits += 1
-            temp_node.wins += result
+            node_player = temp_node.state.current_player
+            temp_node.wins += 1 if winner == node_player else 0
             temp_node = temp_node.parent
 
     if not root_node.childrens:
