@@ -183,7 +183,7 @@ def _place_wall_from_token(session: GameSession, wall_token: str) -> None:
 @dataclass()
 class _ShellConfig:
     blitz_enabled: bool
-    time_limit: int
+    time_limit: float
     players: int
     walls_per_player: int
     board_size: int
@@ -213,6 +213,10 @@ def _fallback_player_types(config: _ShellConfig) -> dict[int, str]:
     return {
         pid: ("ai" if pid in ai_set else "human") for pid in player_ids
     }
+
+
+def _format_minutes(minutes: float) -> str:
+    return f"{minutes:g}"
 
 
 def _fallback_remaining_walls(config: _ShellConfig) -> dict[int, int]:
@@ -265,7 +269,7 @@ def _print_shell_startup(
     if config.blitz_enabled:
         print(
             _("New game started (blitz: {minutes} min/player).").format(
-                minutes=config.time_limit
+                minutes=_format_minutes(config.time_limit)
             )
         )
     else:
@@ -327,7 +331,7 @@ def _build_new_argument_parser(
     parser.add_argument(
         "-t",
         "--time",
-        type=int,
+        type=parser_mod._positive_time_type,
         default=current_config.time_limit,
     )
     parser.add_argument(
@@ -843,7 +847,7 @@ def _print_configuration(state: "_ShellState") -> None:
     print(f"ai_time={state.ai_time}")
     print(f"ai_minimax_depth={state.ai_minimax_depth}")
     print(f"blitz={state.blitz.is_enabled()}")
-    print(f"time_limit={state.blitz.time_limit_minutes}")
+    print(f"time_limit={_format_minutes(state.blitz.time_limit_minutes)}")
     print(f"timer_paused={state.blitz.paused}")
 
 
@@ -1337,7 +1341,7 @@ def _run_interactive_shell(
         )
         print(
             _("New game started (blitz: {minutes} min/player).").format(
-                minutes=time_limit
+                minutes=_format_minutes(time_limit)
             )
         )
     else:
