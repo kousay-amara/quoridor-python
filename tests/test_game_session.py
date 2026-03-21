@@ -119,3 +119,30 @@ def test_play_ai_turn_uses_iterative_search_when_depth_is_omitted(monkeypatch):
 
     assert called["iterative"] is True
     assert record.action == "move_pawn"
+
+
+def test_play_ai_turn_uses_mcts_when_mode_is_mcts(monkeypatch):
+    state = GameState(
+        board_size=9,
+        current_player=2,
+        player_positions={1: 4, 2: 76},
+        remaining_walls={1: 10, 2: 10},
+    )
+    session = GameSession(state=state, player_types={1: "human", 2: "ai"})
+
+    captured = {}
+
+    def fake_mcts_search(root_state, time_limit=5.0, exploration_weight=1.41):
+        del root_state, exploration_weight
+        captured["time_limit"] = time_limit
+        return ("pawn", 67)
+
+    monkeypatch.setattr(
+        "quoridor.application.game_session.mcts_search",
+        fake_mcts_search,
+    )
+
+    record = session.play_ai_turn(mode="mcts", time_limit_sec=1.5)
+
+    assert captured["time_limit"] == 1.5
+    assert record.action == "move_pawn"

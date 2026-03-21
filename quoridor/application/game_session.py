@@ -10,6 +10,7 @@ from ..rules.pawn_rules import get_all_legal_pawn_moves
 from ..rules.wall_rules import get_player_target_funcs, is_wall_legal
 from ..rules.win_rules import has_player_won
 from .history_manager import HistoryManager
+from .mcts_engine import mcts_search
 from .minimax_engine import (
     find_best_move_iterative,
     find_best_move_minimax,
@@ -193,7 +194,12 @@ class GameSession:
         if self._player_type(player_id) != "ai":
             raise ValueError(f"player {player_id} is not an AI player")
 
-        if mode == "iterative" or depth is None:
+        if mode == "mcts":
+            move = mcts_search(
+                self.state,
+                time_limit=time_limit_sec,
+            )
+        elif mode == "iterative" or depth is None:
             move = find_best_move_iterative(
                 self.state,
                 ai_player_id=player_id,
