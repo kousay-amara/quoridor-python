@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import argparse
 import gettext
+import shlex
 import signal
 import time
 from dataclasses import dataclass
-from typing import Callable
 
 try:  # readline enables in-session history navigation with arrow keys.
     import readline  # type: ignore
@@ -14,12 +15,23 @@ except ImportError:  # pragma: no cover - platform-dependent
     readline = None
 
 from ..application.blitz import Blitz
+from ..application.command_catalog import (
+    command_names_for_completion,
+    help_for,
+    help_overview,
+)
 from ..application.game_session import GameSession, initial_player_positions
 from ..core.game_state import GameState
 from ..core.notation import get_edges_for_wall, get_node_from_notation
 from ..core.validators import validate_pawn_move, validate_wall
 from ..rules.win_rules import has_player_won
-from .cli_constants import UNBALANCED_PLAYERS_COUNT, WALL_TOKEN_MIN_LENGTH
+from .cli_constants import (
+    AI_MODE_DEFAULT,
+    AI_MODE_ITERATIVE,
+    AI_MODE_MCTS,
+    UNBALANCED_PLAYERS_COUNT,
+    WALL_TOKEN_MIN_LENGTH,
+)
 from .cli_render import (
     _format_hint_move,
     _print_moves,
@@ -27,11 +39,11 @@ from .cli_render import (
     _render_ascii_board,
 )
 from .contest_parser import ContestError
+from .cli_io import _prompt_save_before_quit
 
 _ = gettext.gettext
 
 MAX_HISTORY_SIZE = 1000
-HINT_MINIMAX_DEPTH = 1
 
 
 class _BlitzInputTimeout(Exception):
@@ -68,23 +80,7 @@ def _stop_blitz_alarm(
     signal.signal(signal.SIGALRM, previous_handler)
 
 
-QUORIDOR_COMMANDS = [
-    "help",
-    "history",
-    "hint",
-    "load ",
-    "save ",
-    "show board",
-    "show configuration",
-    "show time",
-    "pause",
-    "moves",
-    "move ",
-    "wall ",
-    "undo",
-    "redo",
-    "quit",
-]
+QUORIDOR_COMMANDS = command_names_for_completion()
 
 
 def completer(text: str, state: int) -> str | None:
@@ -184,6 +180,378 @@ def _place_wall_from_token(session: GameSession, wall_token: str) -> None:
     _print_state(session)
 
 
+@dataclass()
+class _ShellConfig:
+    blitz_enabled: bool
+    time_limit: float
+    players: int
+    walls_per_player: int
+    board_size: int
+    ai_players: list[int]
+    ai_mode: str
+    ai_time: int
+    ai_minimax_depth: int | None
+
+
+def _config_from_state(state: "_ShellState") -> _ShellConfig:
+    return _ShellConfig(
+        blitz_enabled=state.blitz_enabled,
+        time_limit=state.time_limit,
+        players=state.players,
+        walls_per_player=state.walls_per_player,
+        board_size=state.board_size,
+        ai_players=sorted(set(state.ai_players)),
+        ai_mode=state.ai_mode,
+        ai_time=state.ai_time,
+        ai_minimax_depth=state.ai_minimax_depth,
+    )
+
+
+def _fallback_player_types(config: _ShellConfig) -> dict[int, str]:
+    player_ids = range(1, config.players + 1)
+    ai_set = set(config.ai_players)
+    return {
+        pid: ("ai" if pid in ai_set else "human") for pid in player_ids
+    }
+
+
+def _format_minutes(minutes: float) -> str:
+    return f"{minutes:g}"
+
+
+def _fallback_remaining_walls(config: _ShellConfig) -> dict[int, int]:
+    wall_count = (
+        config.walls_per_player if config.walls_per_player >= 0 else -1
+    )
+    return {pid: wall_count for pid in range(1, config.players + 1)}
+
+
+def _create_new_session(config: _ShellConfig) -> GameSession:
+    state = GameState(
+        board_size=config.board_size,
+        current_player=1,
+        player_positions=initial_player_positions(
+            config.board_size, config.players
+        ),
+        remaining_walls=_fallback_remaining_walls(config),
+        vertical_walls=[],
+        horizontal_walls=[],
+    )
+    return GameSession(
+        state=state,
+        player_types=_fallback_player_types(config),
+    )
+
+
+def _create_blitz_state(config: _ShellConfig, session: GameSession) -> Blitz:
+    if not config.blitz_enabled:
+        return Blitz(time_limit_minutes=config.time_limit)
+    return Blitz(
+        time_limit_minutes=config.time_limit,
+        player_ids=session.state.player_positions,
+    )
+
+
+def _session_ai_players(session: GameSession) -> list[int]:
+    return sorted(
+        pid
+        for pid, player_type in session.player_types.items()
+        if player_type == "ai"
+    )
+
+
+def _print_shell_startup(
+    session: GameSession,
+    config: _ShellConfig,
+    *,
+    blitz_state: Blitz,
+) -> None:
+    if config.blitz_enabled:
+        print(
+            _("New game started (blitz: {minutes} min/player).").format(
+                minutes=_format_minutes(config.time_limit)
+            )
+        )
+    else:
+        print(_("New game started with default options."))
+
+    if len(session.state.player_positions) == UNBALANCED_PLAYERS_COUNT:
+        print(_("warning: 3-player mode can be unbalanced."))
+
+    print(_("Type 'help' for available commands."))
+    ai_players = _session_ai_players(session)
+    if ai_players:
+        depth_label = (
+            "auto"
+            if config.ai_minimax_depth is None
+            else config.ai_minimax_depth
+        )
+        print(
+            f"AI players: {ai_players} "
+            f"(mode={config.ai_mode}, depth={depth_label}, "
+            f"time={config.ai_time}s)"
+        )
+    if blitz_state.is_enabled():
+        _print_blitz_times(blitz_state)
+    _print_state(session)
+
+
+def _start_shell_session(
+    session: GameSession,
+    config: _ShellConfig,
+) -> tuple[Blitz, bool]:
+    blitz_state = _create_blitz_state(config, session)
+    _print_shell_startup(session, config, blitz_state=blitz_state)
+    should_break, interrupted = _run_auto_play_with_interrupt_handling(
+        session,
+        config.ai_mode,
+        config.ai_time,
+        config.ai_minimax_depth,
+        blitz=blitz_state,
+    )
+    return blitz_state, should_break or interrupted
+
+
+def _build_new_argument_parser(
+    current_config: _ShellConfig,
+) -> argparse.ArgumentParser:
+    from . import cli_parser as parser_mod
+
+    parser = argparse.ArgumentParser(
+        prog="new",
+        add_help=False,
+        exit_on_error=False,
+    )
+    parser.add_argument(
+        "-b",
+        "--blitz",
+        action="store_true",
+        default=current_config.blitz_enabled,
+    )
+    parser.add_argument(
+        "-t",
+        "--time",
+        type=parser_mod._positive_time_type,
+        default=current_config.time_limit,
+    )
+    parser.add_argument(
+        "-p",
+        "--players",
+        type=parser_mod._players_type,
+        default=current_config.players,
+    )
+    parser.add_argument(
+        "-w",
+        "--walls",
+        type=int,
+        default=current_config.walls_per_player,
+    )
+    parser.add_argument(
+        "-s",
+        "--size",
+        type=parser_mod._size_type,
+        default=current_config.board_size,
+    )
+    parser.add_argument(
+        "--ai-player",
+        action="append",
+        default=list(current_config.ai_players),
+        type=parser_mod._player_id_type,
+    )
+    parser.add_argument(
+        "--ai-mode",
+        choices=[AI_MODE_DEFAULT, AI_MODE_ITERATIVE, AI_MODE_MCTS],
+        default=current_config.ai_mode,
+    )
+    parser.add_argument(
+        "--ai-time",
+        type=int,
+        default=current_config.ai_time,
+    )
+    parser.add_argument(
+        "--ai-minimax-depth",
+        type=int,
+        default=current_config.ai_minimax_depth,
+    )
+    return parser
+
+
+def _parse_new_config(state: "_ShellState", line: str) -> _ShellConfig:
+    current_config = _config_from_state(state)
+    raw_args = line[3:].strip()
+    if not raw_args:
+        return current_config
+
+    try:
+        argv = shlex.split(raw_args)
+    except ValueError as exc:
+        raise ValueError(f"invalid new arguments: {exc}") from exc
+
+    parser = _build_new_argument_parser(current_config)
+    try:
+        args = parser.parse_args(argv)
+    except argparse.ArgumentError as exc:
+        raise ValueError(str(exc)) from exc
+    except SystemExit as exc:
+        raise ValueError("invalid new arguments") from exc
+
+    if args.time <= 0:
+        raise ValueError("--time must be > 0")
+    if args.ai_time <= 0:
+        raise ValueError("--ai-time must be > 0")
+    if args.ai_minimax_depth is not None and args.ai_minimax_depth <= 0:
+        raise ValueError("--ai-minimax-depth must be > 0")
+    if any(pid > args.players for pid in args.ai_player):
+        raise ValueError("--ai-player id must be <= --players")
+
+    return _ShellConfig(
+        blitz_enabled=bool(args.blitz),
+        time_limit=args.time,
+        players=args.players,
+        walls_per_player=args.walls,
+        board_size=args.size,
+        ai_players=sorted(set(args.ai_player)),
+        ai_mode=args.ai_mode,
+        ai_time=args.ai_time,
+        ai_minimax_depth=args.ai_minimax_depth,
+    )
+
+
+_SET_ALIASES = {
+    "players": "players",
+    "walls": "walls_per_player",
+    "walls_per_player": "walls_per_player",
+    "size": "board_size",
+    "board_size": "board_size",
+    "blitz": "blitz_enabled",
+    "blitz_enabled": "blitz_enabled",
+    "time": "time_limit",
+    "time_limit": "time_limit",
+    "ai_players": "ai_players",
+    "ai_player": "ai_players",
+    "ai_mode": "ai_mode",
+    "ai_time": "ai_time",
+    "ai_minimax_depth": "ai_minimax_depth",
+}
+
+
+def _parse_set_bool(raw: str) -> bool:
+    value = raw.strip().lower()
+    if value in {"1", "true", "yes", "on"}:
+        return True
+    if value in {"0", "false", "no", "off"}:
+        return False
+    raise ValueError("boolean value expected (true/false)")
+
+
+def _parse_set_ai_players(raw: str, *, players: int) -> list[int]:
+    from . import cli_parser as parser_mod
+
+    normalized = raw.strip()
+    if not normalized or normalized.lower() == "none":
+        return []
+
+    tokens = normalized.replace(",", " ").split()
+    parsed = sorted({parser_mod._player_id_type(token) for token in tokens})
+    if any(pid > players for pid in parsed):
+        raise ValueError("ai_players ids must be <= players")
+    return parsed
+
+
+def _sync_session_ai_players(state: "_ShellState") -> None:
+    player_ids = sorted(state.session.state.player_positions)
+    ai_set = set(state.ai_players)
+    state.session.player_types = {
+        pid: ("ai" if pid in ai_set else "human") for pid in player_ids
+    }
+
+
+def _sync_runtime_config_from_session(state: "_ShellState") -> None:
+    state.players = len(state.session.state.player_positions)
+    state.board_size = state.session.state.board_size
+    state.ai_players = _session_ai_players(state.session)
+    state.blitz_enabled = state.blitz.is_enabled()
+    state.time_limit = state.blitz.time_limit_minutes
+
+
+def _format_set_value(param: str, value: object) -> str:
+    if param == "ai_players":
+        return str(sorted(set(value)))
+    if param == "time_limit":
+        return _format_minutes(float(value))
+    return str(value)
+
+
+def _handle_set(state: "_ShellState", line: str) -> None:
+    from . import cli_parser as parser_mod
+
+    raw = line[3:].strip()
+    if not raw or "=" not in raw:
+        raise ValueError("Invalid format. Use: set PARAM=VALUE")
+
+    param_raw, value_raw = raw.split("=", 1)
+    param_key = param_raw.strip().lower().replace("-", "_")
+    if not param_key:
+        raise ValueError("Invalid format. Use: set PARAM=VALUE")
+
+    param = _SET_ALIASES.get(param_key)
+    if param is None:
+        raise ValueError(f"unknown setting: {param_raw.strip()}")
+
+    value = value_raw.strip()
+    if param == "players":
+        parsed_value = parser_mod._players_type(value)
+        if any(pid > parsed_value for pid in state.ai_players):
+            raise ValueError("ai_players ids must be <= players")
+        state.players = parsed_value
+    elif param == "walls_per_player":
+        state.walls_per_player = int(value)
+        parsed_value = state.walls_per_player
+    elif param == "board_size":
+        state.board_size = parser_mod._size_type(value)
+        parsed_value = state.board_size
+    elif param == "blitz_enabled":
+        state.blitz_enabled = _parse_set_bool(value)
+        parsed_value = state.blitz_enabled
+    elif param == "time_limit":
+        state.time_limit = parser_mod._positive_time_type(value)
+        parsed_value = state.time_limit
+    elif param == "ai_players":
+        state.ai_players = _parse_set_ai_players(value, players=state.players)
+        _sync_session_ai_players(state)
+        parsed_value = state.ai_players
+    elif param == "ai_mode":
+        normalized = value.lower()
+        if normalized not in {AI_MODE_DEFAULT, AI_MODE_ITERATIVE, AI_MODE_MCTS}:
+            raise ValueError("ai_mode must be one of: minimax, iterative, mcts")
+        state.ai_mode = normalized
+        parsed_value = state.ai_mode
+    elif param == "ai_time":
+        state.ai_time = int(value)
+        if state.ai_time <= 0:
+            raise ValueError("ai_time must be > 0")
+        parsed_value = state.ai_time
+    elif param == "ai_minimax_depth":
+        normalized = value.lower()
+        if normalized in {"auto", "none"}:
+            state.ai_minimax_depth = None
+        else:
+            state.ai_minimax_depth = int(value)
+            if state.ai_minimax_depth <= 0:
+                raise ValueError("ai_minimax_depth must be > 0")
+        parsed_value = state.ai_minimax_depth
+    else:
+        raise ValueError(f"unsupported setting: {param}")
+
+    display_name = "blitz" if param == "blitz_enabled" else param
+    print(
+        f"Configuration updated: {display_name}="
+        f"{_format_set_value(param, parsed_value)}"
+    )
+    if param in {"players", "walls_per_player", "board_size", "blitz_enabled", "time_limit"}:
+        print("Use 'new' to apply this setting to a fresh game.")
+
+
 def _auto_play_ai_until_human_or_end(
     session: GameSession,
     ai_mode: str,
@@ -197,17 +565,23 @@ def _auto_play_ai_until_human_or_end(
 
     while session.player_types.get(session.state.current_player) == "ai":
         current_ai = session.state.current_player
+        before_blitz_snapshot = blitz.snapshot() if blitz.is_enabled() else None
         started = time.time()
-        session.play_ai_turn(
+        move = session.compute_ai_move(
             mode=ai_mode,
             depth=ai_minimax_depth,
             time_limit_sec=ai_time,
         )
         elapsed = time.time() - started
         if blitz.consume_time(current_ai, elapsed):
-            if _handle_timeout(session, current_ai):
+            if _handle_timeout(
+                session,
+                current_ai,
+                before_blitz_snapshot=before_blitz_snapshot,
+            ):
                 return True
             continue
+        session.apply_ai_move(move, player_id=current_ai)
         print(f"AI player {current_ai} played.")
 
         new_pos = session.state.player_positions[current_ai]
@@ -220,56 +594,44 @@ def _auto_play_ai_until_human_or_end(
     return False
 
 
+def _run_auto_play_with_interrupt_handling(
+    session: GameSession,
+    ai_mode: str,
+    ai_time: int,
+    ai_minimax_depth: int | None,
+    *,
+    blitz: Blitz,
+) -> tuple[bool, bool]:
+    try:
+        return (
+            _auto_play_ai_until_human_or_end(
+                session,
+                ai_mode,
+                ai_time,
+                ai_minimax_depth,
+                blitz=blitz,
+            ),
+            False,
+        )
+    except KeyboardInterrupt:
+        print()
+        return False, True
+
+
 def _show_help(line: str) -> bool:
     line_lower = line.lower()
-    help_by_command = {
-        "help": "help [CMD]\n  Show shell help, or help for CMD.",
-        "history": (
-            "history\n  Show the played moves grouped by turns. "
-            "Use Up/Down arrows to navigate command history. "
-            "Use +TERM to search the last command matching TERM."
-        ),
-        "load": "load FILE\n  Load a game position from FILE.",
-        "save": "save FILE\n  Save the current game position to FILE.",
-        "hint": "hint\n  Show a suggested move for the current player.",
-        "show board": "show board\n  Display only the current board.",
-        "show configuration": (
-            "show configuration\n  Display current runtime configuration."
-        ),
-        "show time": (
-            "show time\n  Display remaining blitz time for each player."
-        ),
-        "pause": "pause\n  Toggle blitz timer pause/resume.",
-        "moves": "moves\n  Display legal pawn moves for the current player.",
-        "move": (
-            "move <FROM-TO>\n  Move the current pawn "
-            "(example: move e2-e3). Shorthand: e2-e3."
-        ),
-        "wall": (
-            "wall <POSh|POSv>\n  Place a wall "
-            "(example: wall e2h or wall e2v). Shorthand: e2h/e2v."
-        ),
-        "undo": "undo [N]\n  Undo the last move-group (or N groups).",
-        "redo": "redo [N]\n  Redo the last undone move-group (or N groups).",
-        "quit": "quit\n  Exit the program.",
-    }
-
     if line_lower == "help" or line_lower.startswith("help "):
         parts = line.split(maxsplit=1)
         if len(parts) == 1:
-            print(
-                "Commands: help [CMD], history, load, save, hint, "
-                "show board, show configuration, show time, pause, "
-                "moves, move, wall, undo, redo, quit"
-            )
-            print("Use: help <command>")
+            print(help_overview())
             return True
 
         target = parts[1].strip().lower()
-        if target in help_by_command:
-            print(help_by_command[target])
-        else:
+        entry = help_for(target)
+        if entry is None:
             print(_("Invalid command."))
+        else:
+            print(entry)
         return True
 
     return False
@@ -282,16 +644,22 @@ def _apply_and_maybe_auto_play(
     ai_minimax_depth: int | None,
     *,
     blitz: Blitz,
+    base_unsaved: bool = True,
 ) -> tuple[bool, bool]:
-    has_unsaved_changes = True
+    has_unsaved_changes = base_unsaved
     before_ai_cursor = session.history.cursor
-    if _auto_play_ai_until_human_or_end(
+    game_over, interrupted = _run_auto_play_with_interrupt_handling(
         session,
         ai_mode,
         ai_time,
         ai_minimax_depth,
         blitz=blitz,
-    ):
+    )
+    if interrupted:
+        if session.history.cursor != before_ai_cursor:
+            has_unsaved_changes = True
+        return has_unsaved_changes, True
+    if game_over:
         if session.history.cursor != before_ai_cursor:
             has_unsaved_changes = True
         return has_unsaved_changes, True
@@ -302,19 +670,19 @@ def _apply_and_maybe_auto_play(
 
 def _auto_play_pending_ai(state: "_ShellState") -> bool:
     before_ai_cursor = state.session.history.cursor
-    if _auto_play_ai_until_human_or_end(
+    game_over, interrupted = _run_auto_play_with_interrupt_handling(
         state.session,
         state.ai_mode,
         state.ai_time,
         state.ai_minimax_depth,
         blitz=state.blitz,
-    ):
+    )
+    if state.session.history.cursor != before_ai_cursor:
+        state.has_unsaved_changes = True
+    if game_over or interrupted:
         if state.session.history.cursor != before_ai_cursor:
             state.has_unsaved_changes = True
         return True
-
-    if state.session.history.cursor != before_ai_cursor:
-        state.has_unsaved_changes = True
     return False
 
 
@@ -326,7 +694,7 @@ def _handle_load(
     ai_minimax_depth: int | None,
     *,
     blitz: Blitz,
-) -> tuple[GameSession, bool, bool]:
+) -> tuple[GameSession, Blitz, bool, bool]:
     from . import cli as cli_mod
 
     session = cli_mod._load_session_from_file(
@@ -334,7 +702,18 @@ def _handle_load(
         fallback_player_types=session.player_types,
         fallback_walls_per_player=session.state.remaining_walls,
     )
-    has_unsaved_changes = True
+    try:
+        loaded_blitz_snapshot = cli_mod._load_blitz_snapshot_from_file(file_path)
+    except (OSError, ValueError):
+        loaded_blitz_snapshot = None
+
+    loaded_blitz = (
+        Blitz.from_snapshot(loaded_blitz_snapshot)
+        if loaded_blitz_snapshot is not None
+        else Blitz(time_limit_minutes=0)
+    )
+    session.attach_blitz(loaded_blitz)
+
     print(_("Game loaded from {path}").format(path=file_path))
     _print_state(session)
     has_unsaved_changes, should_break = _apply_and_maybe_auto_play(
@@ -342,15 +721,21 @@ def _handle_load(
         ai_mode,
         ai_time,
         ai_minimax_depth,
-        blitz=blitz,
+        blitz=loaded_blitz,
+        base_unsaved=False,
     )
-    return session, has_unsaved_changes, should_break
+    return session, loaded_blitz, has_unsaved_changes, should_break
 
 
-def _handle_save(session: GameSession, file_path: str) -> bool:
+def _handle_save(
+    session: GameSession,
+    file_path: str,
+    *,
+    blitz: Blitz,
+) -> bool:
     from . import cli as cli_mod
 
-    cli_mod._save_session_to_file(file_path, session)
+    cli_mod._save_session_to_file(file_path, session, blitz)
     print(_("Game saved to {path}").format(path=file_path))
     return False
 
@@ -369,13 +754,26 @@ def _handle_hint(
 ) -> None:
     from . import cli as cli_mod
 
-    del ai_mode, ai_time, ai_minimax_depth
     current = session.state.current_player
-    move = cli_mod.find_best_move_minimax(
-        session.state,
-        ai_player_id=current,
-        depth=HINT_MINIMAX_DEPTH,
-    )
+    if ai_mode == "mcts":
+        move = cli_mod.mcts_search(session.state, time_limit=ai_time)
+        if move is None:
+            raise ValueError("no legal moves available for hint")
+    elif ai_mode == "iterative" or ai_minimax_depth is None:
+        move = cli_mod.find_best_move_iterative(
+            session.state,
+            ai_player_id=current,
+            time_limit_sec=ai_time,
+            max_depth=ai_minimax_depth,
+        )
+    elif ai_mode == "minimax":
+        move = cli_mod.find_best_move_minimax(
+            session.state,
+            ai_player_id=current,
+            depth=ai_minimax_depth,
+        )
+    else:
+        raise ValueError(f"unsupported AI mode: {ai_mode}")
     from_node = session.state.player_positions[current]
     best_hint = _format_hint_move(
         move, from_node=from_node, size=session.state.board_size
@@ -472,11 +870,14 @@ def _handle_redo(session: GameSession, line: str) -> bool:
     return total_redone > 0
 
 
-def _handle_quit(session: GameSession, has_unsaved_changes: bool) -> None:
+def _handle_quit(
+    session: GameSession,
+    has_unsaved_changes: bool,
+    *,
+    blitz: Blitz,
+) -> None:
     if has_unsaved_changes:
-        from . import cli as cli_mod
-
-        cli_mod._prompt_save_before_quit(session)
+        _prompt_save_before_quit(session, blitz)
     print(_("Bye."))
 
 
@@ -496,8 +897,16 @@ def _print_blitz_times(blitz: Blitz) -> None:
     print(f"Blitz time -> {text}")
 
 
-def _handle_timeout(session: GameSession, loser_id: int) -> bool:
-    _record, winner = session.timeout_player(loser_id)
+def _handle_timeout(
+    session: GameSession,
+    loser_id: int,
+    *,
+    before_blitz_snapshot=None,
+) -> bool:
+    _record, winner = session.timeout_player(
+        loser_id,
+        before_blitz_snapshot=before_blitz_snapshot,
+    )
     print(f"Player {loser_id} ran out of time and loses.")
     if winner is not None:
         print(f"Player {winner} wins!")
@@ -509,10 +918,17 @@ def _read_shell_input(
     state: "_ShellState", prompt: str
 ) -> tuple[str | None, bool]:
     timed_player = state.session.state.current_player
+    before_blitz_snapshot = (
+        state.blitz.snapshot() if state.blitz.is_enabled() else None
+    )
     timeout_sec = state.blitz.input_timeout_for(timed_player)
     if timeout_sec is not None and timeout_sec <= 0:
         state.has_unsaved_changes = True
-        if _handle_timeout(state.session, timed_player):
+        if _handle_timeout(
+            state.session,
+            timed_player,
+            before_blitz_snapshot=before_blitz_snapshot,
+        ):
             return None, True
         return "", False
 
@@ -523,7 +939,11 @@ def _read_shell_input(
     except _BlitzInputTimeout:
         state.blitz.expire_player(timed_player)
         state.has_unsaved_changes = True
-        if _handle_timeout(state.session, timed_player):
+        if _handle_timeout(
+            state.session,
+            timed_player,
+            before_blitz_snapshot=before_blitz_snapshot,
+        ):
             return None, True
         return "", False
     except (EOFError, KeyboardInterrupt):
@@ -535,7 +955,11 @@ def _read_shell_input(
     elapsed = time.time() - started
     if state.blitz.consume_time(timed_player, elapsed):
         state.has_unsaved_changes = True
-        if _handle_timeout(state.session, timed_player):
+        if _handle_timeout(
+            state.session,
+            timed_player,
+            before_blitz_snapshot=before_blitz_snapshot,
+        ):
             return None, True
         return "", False
 
@@ -557,9 +981,28 @@ def _print_configuration(state: "_ShellState") -> None:
     print(f"ai_mode={state.ai_mode}")
     print(f"ai_time={state.ai_time}")
     print(f"ai_minimax_depth={state.ai_minimax_depth}")
-    print(f"blitz={state.blitz.is_enabled()}")
-    print(f"time_limit={state.blitz.time_limit_minutes}")
+    print(f"blitz={state.blitz_enabled}")
+    print(f"time_limit={_format_minutes(state.time_limit)}")
     print(f"timer_paused={state.blitz.paused}")
+
+
+def _command_new(state: _ShellState, line: str) -> bool:
+    config = _parse_new_config(state, line)
+    session = _create_new_session(config)
+    blitz_state, should_break = _start_shell_session(session, config)
+    state.session = session
+    state.has_unsaved_changes = False
+    state.ai_mode = config.ai_mode
+    state.ai_time = config.ai_time
+    state.ai_minimax_depth = config.ai_minimax_depth
+    state.players = config.players
+    state.walls_per_player = config.walls_per_player
+    state.board_size = config.board_size
+    state.ai_players = list(config.ai_players)
+    state.blitz_enabled = config.blitz_enabled
+    state.time_limit = config.time_limit
+    state.blitz = blitz_state
+    return should_break
 
 
 def _command_help(_state: _ShellState, line: str) -> bool:
@@ -573,7 +1016,7 @@ def _command_load(state: _ShellState, line: str) -> bool:
         print("Invalid format. Use: load FILE")
         return False
     try:
-        session, has_unsaved_changes, should_break = _handle_load(
+        session, blitz, has_unsaved_changes, should_break = _handle_load(
             state.session,
             file_path,
             state.ai_mode,
@@ -582,6 +1025,8 @@ def _command_load(state: _ShellState, line: str) -> bool:
             blitz=state.blitz,
         )
         state.session = session
+        state.blitz = blitz
+        _sync_runtime_config_from_session(state)
         state.has_unsaved_changes = has_unsaved_changes
         return should_break
     except ContestError as exc:
@@ -603,11 +1048,20 @@ def _command_save(state: _ShellState, line: str) -> bool:
         print("Invalid format. Use: save FILE")
         return False
     try:
-        state.has_unsaved_changes = _handle_save(state.session, file_path)
+        state.has_unsaved_changes = _handle_save(
+            state.session,
+            file_path,
+            blitz=state.blitz,
+        )
         return False
     except OSError as exc:
         print(f"Cannot save file: {exc}")
         return False
+
+
+def _command_set(state: _ShellState, line: str) -> bool:
+    _handle_set(state, line)
+    return False
 
 
 def _command_hint(state: _ShellState, _line: str) -> bool:
@@ -721,7 +1175,11 @@ def _command_shorthand_wall(state: _ShellState, line: str) -> bool:
 
 
 def _command_quit(state: _ShellState, _line: str) -> bool:
-    _handle_quit(state.session, state.has_unsaved_changes)
+    _handle_quit(
+        state.session,
+        state.has_unsaved_changes,
+        blitz=state.blitz,
+    )
     return True
 
 
@@ -736,124 +1194,249 @@ class _ShellState:
     walls_per_player: int
     board_size: int
     ai_players: list[int]
+    blitz_enabled: bool
+    time_limit: float
     blitz: Blitz
 
 
-@dataclass
-class _Command:
-    matches: Callable[[str], bool]
-    run: Callable[["_ShellState", str], bool]
-    on_error: (
-        Callable[["_ShellState", str, Exception], tuple[bool, bool]] | None
-    ) = None
+class _BaseCommand:
+    """Command interface for CLI actions."""
+
+    def matches(self, line: str) -> bool:
+        raise NotImplementedError
+
+    def run(self, state: _ShellState, line: str) -> bool:
+        raise NotImplementedError
+
+    def on_error(
+        self, _state: _ShellState, _line: str, exc: Exception
+    ) -> tuple[bool, bool]:
+        raise exc
+
+
+class _InvalidAsCommandError(_BaseCommand):
+    def on_error(
+        self, _state: _ShellState, _line: str, exc: Exception
+    ) -> tuple[bool, bool]:
+        _handle_invalid_command(exc)
+        return True, False
+
+
+class _PassthroughOnError(_BaseCommand):
+    def on_error(
+        self, _state: _ShellState, _line: str, _exc: Exception
+    ) -> tuple[bool, bool]:
+        return False, False
+
+
+class _NewCommand(_InvalidAsCommandError):
+    def matches(self, line: str) -> bool:
+        line_lower = line.lower()
+        return line_lower == "new" or line_lower.startswith("new ")
+
+    def run(self, state: _ShellState, line: str) -> bool:
+        return _command_new(state, line)
+
+
+class _HelpCommand(_BaseCommand):
+    def matches(self, line: str) -> bool:
+        line_lower = line.lower()
+        return line_lower == "help" or line_lower.startswith("help ")
+
+    def run(self, state: _ShellState, line: str) -> bool:
+        return _command_help(state, line)
+
+
+class _HistoryCommand(_BaseCommand):
+    def matches(self, line: str) -> bool:
+        line_lower = line.lower()
+        return line_lower in {"history", "show history"}
+
+    def run(self, state: _ShellState, line: str) -> bool:
+        return _command_history(state, line)
+
+
+class _LoadCommand(_InvalidAsCommandError):
+    def matches(self, line: str) -> bool:
+        return line.lower().startswith("load ")
+
+    def run(self, state: _ShellState, line: str) -> bool:
+        return _command_load(state, line)
+
+
+class _SaveCommand(_InvalidAsCommandError):
+    def matches(self, line: str) -> bool:
+        return line.lower().startswith("save ")
+
+    def run(self, state: _ShellState, line: str) -> bool:
+        return _command_save(state, line)
+
+
+class _SetCommand(_InvalidAsCommandError):
+    def matches(self, line: str) -> bool:
+        line_lower = line.lower()
+        return line_lower == "set" or line_lower.startswith("set ")
+
+    def run(self, state: _ShellState, line: str) -> bool:
+        return _command_set(state, line)
+
+
+class _HintCommand(_InvalidAsCommandError):
+    def matches(self, line: str) -> bool:
+        return line.lower() == "hint"
+
+    def run(self, state: _ShellState, line: str) -> bool:
+        return _command_hint(state, line)
+
+
+class _ShowBoardCommand(_BaseCommand):
+    def matches(self, line: str) -> bool:
+        return line.lower() == "show board"
+
+    def run(self, state: _ShellState, line: str) -> bool:
+        return _command_show_board(state, line)
+
+
+class _ShowConfigurationCommand(_BaseCommand):
+    def matches(self, line: str) -> bool:
+        return line.lower() == "show configuration"
+
+    def run(self, state: _ShellState, line: str) -> bool:
+        return _command_show_configuration(state, line)
+
+
+class _ShowTimeCommand(_BaseCommand):
+    def matches(self, line: str) -> bool:
+        return line.lower() == "show time"
+
+    def run(self, state: _ShellState, line: str) -> bool:
+        return _command_show_time(state, line)
+
+
+class _PauseCommand(_BaseCommand):
+    def matches(self, line: str) -> bool:
+        return line.lower() == "pause"
+
+    def run(self, state: _ShellState, line: str) -> bool:
+        return _command_pause(state, line)
+
+
+class _MovesCommand(_BaseCommand):
+    def matches(self, line: str) -> bool:
+        return line.lower() == "moves"
+
+    def run(self, state: _ShellState, line: str) -> bool:
+        return _command_moves(state, line)
+
+
+class _MoveCommand(_InvalidAsCommandError):
+    def matches(self, line: str) -> bool:
+        return line.lower().startswith("move ")
+
+    def run(self, state: _ShellState, line: str) -> bool:
+        return _command_move(state, line)
+
+
+class _WallCommand(_InvalidAsCommandError):
+    def matches(self, line: str) -> bool:
+        return line.lower().startswith("wall ")
+
+    def run(self, state: _ShellState, line: str) -> bool:
+        return _command_wall(state, line)
+
+
+class _UndoCommand(_InvalidAsCommandError):
+    def matches(self, line: str) -> bool:
+        line_lower = line.lower()
+        return line_lower == "undo" or line_lower.startswith("undo ")
+
+    def run(self, state: _ShellState, line: str) -> bool:
+        return _command_undo(state, line)
+
+
+class _RedoCommand(_InvalidAsCommandError):
+    def matches(self, line: str) -> bool:
+        line_lower = line.lower()
+        return line_lower == "redo" or line_lower.startswith("redo ")
+
+    def run(self, state: _ShellState, line: str) -> bool:
+        return _command_redo(state, line)
+
+
+class _ShorthandMoveCommand(_PassthroughOnError):
+    def matches(self, line: str) -> bool:
+        return "-" in line and " " not in line
+
+    def run(self, state: _ShellState, line: str) -> bool:
+        return _command_shorthand_move(state, line)
+
+
+class _ShorthandWallCommand(_PassthroughOnError):
+    def matches(self, line: str) -> bool:
+        return (
+            " " not in line
+            and len(line) >= 3
+            and line[-1].lower() in {"h", "v"}
+        )
+
+    def run(self, state: _ShellState, line: str) -> bool:
+        return _command_shorthand_wall(state, line)
+
+
+class _QuitCommand(_BaseCommand):
+    def matches(self, line: str) -> bool:
+        return line.lower() == "quit"
+
+    def run(self, state: _ShellState, line: str) -> bool:
+        return _command_quit(state, line)
+
+
+class _CommandRegistry:
+    """Dispatch user input to the first matching command object."""
+
+    def __init__(self, commands: list[_BaseCommand]) -> None:
+        self._commands = commands
+
+    def dispatch(self, state: _ShellState, line: str) -> tuple[bool, bool]:
+        for command in self._commands:
+            if not command.matches(line):
+                continue
+            try:
+                should_break = command.run(state, line)
+                return True, should_break
+            except Exception as exc:
+                return command.on_error(state, line, exc)
+        return False, False
+
+
+def _build_command_registry() -> _CommandRegistry:
+    return _CommandRegistry(
+        [
+            _NewCommand(),
+            _HelpCommand(),
+            _HistoryCommand(),
+            _LoadCommand(),
+            _SaveCommand(),
+            _SetCommand(),
+            _HintCommand(),
+            _ShowBoardCommand(),
+            _ShowConfigurationCommand(),
+            _ShowTimeCommand(),
+            _PauseCommand(),
+            _MovesCommand(),
+            _MoveCommand(),
+            _WallCommand(),
+            _UndoCommand(),
+            _RedoCommand(),
+            _ShorthandMoveCommand(),
+            _ShorthandWallCommand(),
+            _QuitCommand(),
+        ]
+    )
 
 
 def _handle_invalid_command(exc: Exception) -> None:
     print(f"Invalid command: {exc}")
-
-
-def _error_as_invalid(
-    _state: _ShellState, _line: str, exc: Exception
-) -> tuple[bool, bool]:
-    _handle_invalid_command(exc)
-    return True, False
-
-
-def _error_passthrough(
-    _state: _ShellState, _line: str, _exc: Exception
-) -> tuple[bool, bool]:
-    return False, False
-
-
-def _match_help(line: str) -> bool:
-    line_lower = line.lower()
-    return line_lower == "help" or line_lower.startswith("help ")
-
-
-def _match_load(line: str) -> bool:
-    return line.lower().startswith("load ")
-
-
-def _match_history(line: str) -> bool:
-    return line.lower() == "history"
-
-
-def _match_save(line: str) -> bool:
-    return line.lower().startswith("save ")
-
-
-def _match_hint(line: str) -> bool:
-    return line.lower() == "hint"
-
-
-def _match_show_board(line: str) -> bool:
-    return line.lower() == "show board"
-
-
-def _match_show_configuration(line: str) -> bool:
-    return line.lower() == "show configuration"
-
-
-def _match_show_time(line: str) -> bool:
-    return line.lower() == "show time"
-
-
-def _match_pause(line: str) -> bool:
-    return line.lower() == "pause"
-
-
-def _match_moves(line: str) -> bool:
-    return line.lower() == "moves"
-
-
-def _match_move(line: str) -> bool:
-    return line.lower().startswith("move ")
-
-
-def _match_wall(line: str) -> bool:
-    return line.lower().startswith("wall ")
-
-
-def _match_undo(line: str) -> bool:
-    line_lower = line.lower()
-    return line_lower == "undo" or line_lower.startswith("undo ")
-
-
-def _match_redo(line: str) -> bool:
-    line_lower = line.lower()
-    return line_lower == "redo" or line_lower.startswith("redo ")
-
-
-def _match_shorthand_move(line: str) -> bool:
-    return "-" in line and " " not in line
-
-
-def _match_shorthand_wall(line: str) -> bool:
-    return (
-        " " not in line and len(line) >= 3 and line[-1].lower() in {"h", "v"}
-    )
-
-
-def _match_quit(line: str) -> bool:
-    return line.lower() == "quit"
-
-
-def _run_command_loop(
-    state: _ShellState,
-    line: str,
-    commands: list[_Command],
-) -> tuple[bool, bool]:
-    for command in commands:
-        if not command.matches(line):
-            continue
-        try:
-            should_break = command.run(state, line)
-            return True, should_break
-        except Exception as exc:
-            if command.on_error is None:
-                raise
-            return command.on_error(state, line, exc)
-    return False, False
 
 
 def _run_interactive_shell(
@@ -869,58 +1452,65 @@ def _run_interactive_shell(
     ai_time: int,
     ai_minimax_depth: int | None,
 ) -> None:
+    config = _ShellConfig(
+        blitz_enabled=blitz,
+        time_limit=time_limit,
+        players=players,
+        walls_per_player=walls_per_player,
+        board_size=board_size,
+        ai_players=sorted(set(ai_players)),
+        ai_mode=ai_mode,
+        ai_time=ai_time,
+        ai_minimax_depth=ai_minimax_depth,
+    )
     if save_file:
         print(_("Loading game from {path}").format(path=save_file))
 
-    player_positions = initial_player_positions(board_size, players)
-    wall_count = walls_per_player if walls_per_player >= 0 else -1
-    remaining_walls = {pid: wall_count for pid in player_positions}
-    ai_set = set(ai_players)
-    player_types = {
-        pid: ("ai" if pid in ai_set else "human") for pid in player_positions
-    }
-
+    loaded_blitz_snapshot = None
     if save_file:
         from . import cli as cli_mod
 
+        fallback_player_types = _fallback_player_types(config)
+        fallback_remaining_walls = _fallback_remaining_walls(config)
         session = cli_mod._load_session_from_file(
             save_file,
-            fallback_player_types=player_types,
-            fallback_walls_per_player=remaining_walls,
+            fallback_player_types=fallback_player_types,
+            fallback_walls_per_player=fallback_remaining_walls,
         )
+        try:
+            loaded_blitz_snapshot = cli_mod._load_blitz_snapshot_from_file(save_file)
+        except (OSError, ValueError):
+            loaded_blitz_snapshot = None
         has_unsaved_changes = False
     else:
-        state = GameState(
-            board_size=board_size,
-            current_player=1,
-            player_positions=player_positions,
-            remaining_walls=remaining_walls,
-            vertical_walls=[],
-            horizontal_walls=[],
-        )
-        session = GameSession(state=state, player_types=player_types)
+        session = _create_new_session(config)
         has_unsaved_changes = False
     blitz_state = Blitz(time_limit_minutes=time_limit)
-    if blitz:
+    if loaded_blitz_snapshot is not None:
+        blitz_state.restore_snapshot(loaded_blitz_snapshot)
+        print(_("Game loaded with blitz timer state."))
+    elif blitz:
         blitz_state = Blitz(
             time_limit_minutes=time_limit,
             player_ids=session.state.player_positions,
         )
         print(
             _("New game started (blitz: {minutes} min/player).").format(
-                minutes=time_limit
+                minutes=_format_minutes(time_limit)
             )
         )
     else:
         print(_("New game started with default options."))
-    if players == UNBALANCED_PLAYERS_COUNT:
+    session.attach_blitz(blitz_state)
+    if len(session.state.player_positions) == UNBALANCED_PLAYERS_COUNT:
         print(_("warning: 3-player mode can be unbalanced."))
 
     print(_("Type 'help' for available commands."))
-    if ai_set:
+    session_ai_players = _session_ai_players(session)
+    if session_ai_players:
         depth_label = "auto" if ai_minimax_depth is None else ai_minimax_depth
         print(
-            f"AI players: {sorted(ai_set)} "
+            f"AI players: {session_ai_players} "
             f"(mode={ai_mode}, depth={depth_label}, time={ai_time}s)"
         )
     if blitz_state.is_enabled():
@@ -935,77 +1525,24 @@ def _run_interactive_shell(
         blitz=blitz_state,
     ):
         return
+        return
 
     state = _ShellState(
         session=session,
         has_unsaved_changes=has_unsaved_changes,
-        ai_mode=ai_mode,
-        ai_time=ai_time,
-        ai_minimax_depth=ai_minimax_depth,
-        players=players,
-        walls_per_player=walls_per_player,
-        board_size=board_size,
-        ai_players=ai_players,
+        ai_mode=config.ai_mode,
+        ai_time=config.ai_time,
+        ai_minimax_depth=config.ai_minimax_depth,
+        players=len(session.state.player_positions),
+        walls_per_player=config.walls_per_player,
+        board_size=session.state.board_size,
+        ai_players=_session_ai_players(session),
+        blitz_enabled=blitz_state.is_enabled(),
+        time_limit=blitz_state.time_limit_minutes,
         blitz=blitz_state,
     )
 
-    commands = [
-        _Command(matches=_match_help, run=_command_help),
-        _Command(matches=_match_history, run=_command_history),
-        _Command(
-            matches=_match_load,
-            run=_command_load,
-            on_error=_error_as_invalid,
-        ),
-        _Command(
-            matches=_match_save,
-            run=_command_save,
-            on_error=_error_as_invalid,
-        ),
-        _Command(
-            matches=_match_hint,
-            run=_command_hint,
-            on_error=_error_as_invalid,
-        ),
-        _Command(matches=_match_show_board, run=_command_show_board),
-        _Command(
-            matches=_match_show_configuration, run=_command_show_configuration
-        ),
-        _Command(matches=_match_show_time, run=_command_show_time),
-        _Command(matches=_match_pause, run=_command_pause),
-        _Command(matches=_match_moves, run=_command_moves),
-        _Command(
-            matches=_match_move,
-            run=_command_move,
-            on_error=_error_as_invalid,
-        ),
-        _Command(
-            matches=_match_wall,
-            run=_command_wall,
-            on_error=_error_as_invalid,
-        ),
-        _Command(
-            matches=_match_undo,
-            run=_command_undo,
-            on_error=_error_as_invalid,
-        ),
-        _Command(
-            matches=_match_redo,
-            run=_command_redo,
-            on_error=_error_as_invalid,
-        ),
-        _Command(
-            matches=_match_shorthand_move,
-            run=_command_shorthand_move,
-            on_error=_error_passthrough,
-        ),
-        _Command(
-            matches=_match_shorthand_wall,
-            run=_command_shorthand_wall,
-            on_error=_error_passthrough,
-        ),
-        _Command(matches=_match_quit, run=_command_quit),
-    ]
+    registry = _build_command_registry()
 
     if readline is not None:
         readline.set_history_length(MAX_HISTORY_SIZE)
@@ -1021,31 +1558,10 @@ def _run_interactive_shell(
         if should_break:
             break
 
-        if line.startswith("+"):
-            if readline is not None:
-                _maybe_remove_last_history_item()
-            term = line[1:].strip()
-            if not term:
-                term, should_break = _read_shell_input(
-                    state, "Search history: "
-                )
-                if should_break:
-                    break
-                if readline is not None:
-                    _maybe_remove_last_history_item()
-            if not term:
-                continue
-            match = _get_last_history_match(term)
-            if match is None:
-                print(_("No command found in history."))
-                continue
-            line = match
-            print(_("History match: {command}").format(command=line))
-
         if not line:
             continue
 
-        handled, should_break = _run_command_loop(state, line, commands)
+        handled, should_break = registry.dispatch(state, line)
         if should_break:
             break
         if not handled:

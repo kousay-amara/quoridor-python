@@ -46,3 +46,35 @@ def test_paused_blitz_does_not_consume_time():
     assert blitz.remaining_time(1) == 60.0
     assert blitz.toggle_pause() is False
     assert blitz.input_timeout_for(1) == 60.0
+
+
+def test_blitz_snapshot_roundtrip_with_pause_and_remaining_times():
+    blitz = Blitz(time_limit_minutes=2, player_ids=[1, 2])
+    blitz.consume_time(1, 10.0)
+    blitz.toggle_pause()
+
+    snapshot = blitz.snapshot()
+
+    restored = Blitz.from_snapshot(snapshot)
+
+    assert restored.is_enabled() is True
+    assert restored.paused is True
+    assert restored.time_limit_minutes == 2
+    assert restored.remaining_time(1) == 110.0
+    assert restored.remaining_time(2) == 120.0
+
+
+def test_fractional_blitz_minutes_initialize_expected_seconds():
+    blitz = Blitz(time_limit_minutes=0.5, player_ids=[1, 2])
+
+    assert blitz.is_enabled() is True
+    assert blitz.remaining_times() == {1: 30.0, 2: 30.0}
+
+
+def test_blitz_snapshot_preserves_fractional_minutes():
+    blitz = Blitz(time_limit_minutes=0.5, player_ids=[1, 2])
+
+    restored = Blitz.from_snapshot(blitz.snapshot())
+
+    assert restored.time_limit_minutes == 0.5
+    assert restored.remaining_time(1) == 30.0

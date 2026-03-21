@@ -1,3 +1,12 @@
+[settings]
+players=2
+board-size=9
+player-types=1=ai 2=human
+blitz-enabled=true
+blitz-time-limit-minutes=1
+blitz-paused=false
+blitz-remaining-times=1=44.500000 2=60.000000
+
 [game]
 1
 _ _ _ _ _ _ _ _ _

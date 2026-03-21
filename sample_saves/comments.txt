@@ -1,8 +1,18 @@
+{ Example save with comments for load testing }
+[settings]
+players=2
+board-size=9
+player-types=1=human 2=ai # player 2 is an AI
+blitz-enabled=true
+blitz-time-limit-minutes=2
+blitz-paused=true
+blitz-remaining-times=1=85.000000 2=120.000000
+
 [game]
-1
+2 # current player
 _ _ _ _ _ _ _ _ _
 . . . . . . . . .
-_ _ _ _ 1 _ _ _ _
+_ _ _ 1 _ _ _ _ _
 . . . . . . . . .
 _ _ _ _ _ _ _ _ _
 . . . . . . . . .
@@ -21,3 +31,5 @@ walls: 20 20
 
 [history]
 1 e1-e2; 2 e9-e8;
+{ block comment inside history }
+1 e2-d2;

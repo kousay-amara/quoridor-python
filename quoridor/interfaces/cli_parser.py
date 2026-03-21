@@ -73,7 +73,17 @@ def _player_id_type(raw: str) -> int:
     return value
 
 
-def _build_parser(defaults: dict[str, bool | int]) -> argparse.ArgumentParser:
+def _positive_time_type(raw: str) -> float:
+    try:
+        value = float(raw)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("time must be a number") from exc
+    if value <= 0:
+        raise argparse.ArgumentTypeError("time must be > 0")
+    return value
+
+
+def _build_parser(defaults: dict[str, bool | int | float]) -> argparse.ArgumentParser:
     parser = QuoridorArgumentParser(
         prog="quoridor",
         description=_("Quoridor game command-line interface."),
@@ -98,6 +108,9 @@ def _build_parser(defaults: dict[str, bool | int]) -> argparse.ArgumentParser:
         "-d", "--debug", action="store_true", help=_("show debug messages")
     )
     parser.add_argument(
+        "-g", "--gui", action="store_true", help=_("launch the GTK GUI")
+    )
+    parser.add_argument(
         "-b", "--blitz", action="store_true", help=_("enable blitz mode")
     )
     parser.add_argument(
@@ -109,8 +122,8 @@ def _build_parser(defaults: dict[str, bool | int]) -> argparse.ArgumentParser:
     parser.add_argument(
         "-t",
         "--time",
-        type=int,
-        default=int(defaults["time"]),
+        type=_positive_time_type,
+        default=float(defaults["time"]),
         help=_("time limit in minutes for blitz mode"),
     )
     parser.add_argument(
