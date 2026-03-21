@@ -49,14 +49,16 @@ def _run_shell(monkeypatch, commands: list[str], **kwargs) -> None:
 def test_help_and_help_cmd(monkeypatch, capsys):
     _run_shell(
         monkeypatch,
-        ["help", "help new", "help hint", "help show history", "quit"],
+        ["help", "help new", "help hint", "help set", "help show history", "quit"],
     )
 
     out = capsys.readouterr().out
-    assert "Commands: new [ARGS], help [CMD], load, save, hint" in out
+    assert "Commands: new [ARGS], help [CMD], load, save, set, hint" in out
     assert "Start a new game." in out
     assert "show history" in out
     assert "hint" in out
+    assert "set PARAM=VALUE" in out
+    assert "Update the runtime configuration" in out
     assert "Show a suggested move for the current player." in out
     assert "Show the played moves grouped by turns." in out
 
@@ -303,6 +305,69 @@ def test_new_accepts_cli_style_args(monkeypatch, capsys):
     assert "ai_minimax_depth=5" in out
     assert "blitz=True" in out
     assert "time_limit=0.5" in out
+
+
+def test_set_updates_configuration_and_new_uses_it(monkeypatch, capsys):
+    _run_shell(
+        monkeypatch,
+        [
+            "set blitz=true",
+            "set time=0.5",
+            "set players=4",
+            "set walls=-1",
+            "set size=11",
+            "set ai_players=2,4",
+            "set ai_mode=iterative",
+            "set ai_time=3",
+            "set ai_minimax_depth=5",
+            "show configuration",
+            "new",
+            "show configuration",
+            "quit",
+        ],
+    )
+
+    out = capsys.readouterr().out
+    assert "Configuration updated: blitz=True" in out
+    assert "Configuration updated: time_limit=0.5" in out
+    assert "Configuration updated: players=4" in out
+    assert "Configuration updated: walls_per_player=-1" in out
+    assert "Configuration updated: board_size=11" in out
+    assert "Configuration updated: ai_players=[2, 4]" in out
+    assert "Configuration updated: ai_mode=iterative" in out
+    assert "Configuration updated: ai_time=3" in out
+    assert "Configuration updated: ai_minimax_depth=5" in out
+    assert "New game started (blitz: 0.5 min/player)." in out
+    assert out.count("players=4") >= 2
+    assert "walls_per_player=unlimited" in out
+    assert "board_size=11" in out
+    assert "ai_players=[2, 4]" in out
+    assert "ai_mode=iterative" in out
+    assert "ai_time=3" in out
+    assert "ai_minimax_depth=5" in out
+    assert "blitz=True" in out
+    assert "time_limit=0.5" in out
+
+
+def test_set_ai_players_updates_current_session(monkeypatch, capsys):
+    _run_shell(monkeypatch, ["set ai_players=2", "e1-e2", "quit", "n"])
+
+    out = capsys.readouterr().out
+    assert "Configuration updated: ai_players=[2]" in out
+    assert "AI player 2 played." in out
+
+
+def test_set_rejects_invalid_format_and_values(monkeypatch, capsys):
+    _run_shell(
+        monkeypatch,
+        ["set", "set unknown=1", "set ai_players=3", "set blitz=maybe", "quit"],
+    )
+
+    out = capsys.readouterr().out
+    assert "Invalid command: Invalid format. Use: set PARAM=VALUE" in out
+    assert "Invalid command: unknown setting: unknown" in out
+    assert "Invalid command: ai_players ids must be <= players" in out
+    assert "Invalid command: boolean value expected (true/false)" in out
 
 
 def test_cli_type_helpers_and_flags():

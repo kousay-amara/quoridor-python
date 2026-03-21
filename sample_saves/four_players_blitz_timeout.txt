@@ -1,8 +1,3 @@
-{ Four-player blitz sample save.
-  - Player 3 has lost on time.
-  - Player 1 is on e8 and needs one more move to win.
-  - The position includes several walls around the center-left lane.
-}
 [settings]
 players=4
 board-size=9
