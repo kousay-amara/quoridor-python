@@ -46,3 +46,19 @@ def test_load_or_init_config_invalid_file_warns_and_does_not_overwrite(
     assert values == DEFAULTS
     assert "warning: invalid config file" in captured.err
     assert config_path.read_text(encoding="utf-8") == original_content
+
+
+def test_load_or_init_config_reads_fractional_time(tmp_path: Path):
+    config_path = tmp_path / ".qoridorrc"
+    config_path.write_text(
+        "[defaults]\nverbose = false\nblitz = true\ntime = 0.5\n",
+        encoding="utf-8",
+    )
+
+    values = load_or_init_config(config_path)
+
+    assert values == {
+        "verbose": False,
+        "blitz": True,
+        "time": 0.5,
+    }

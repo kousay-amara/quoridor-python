@@ -33,6 +33,14 @@ COMMAND_CATALOG: tuple[CommandHelp, ...] = (
     CommandHelp("show history", "show history", _HISTORY_DESCRIPTION),
     CommandHelp("load", "load FILE", "Load a game position from FILE."),
     CommandHelp("save", "save FILE", "Save the current game position to FILE."),
+    CommandHelp(
+        "set",
+        "set PARAM=VALUE",
+        (
+            "Update the runtime configuration (example: set ai_mode=mcts or "
+            "set time=0.5). Use new to apply board or blitz changes to a fresh game."
+        ),
+    ),
     CommandHelp("hint", "hint", "Show a suggested move for the current player."),
     CommandHelp("show board", "show board", "Display only the current board."),
     CommandHelp(
@@ -60,7 +68,7 @@ COMMAND_CATALOG: tuple[CommandHelp, ...] = (
 
 
 OVERVIEW_TEXT = (
-    "Commands: new [ARGS], help [CMD], load, save, hint, show board, "
+    "Commands: new [ARGS], help [CMD], load, save, set, hint, show board, "
     "show history, show configuration, show time, pause, moves, move, wall, "
     "undo, redo, quit\n"
     "Use: help <command>"
@@ -73,6 +81,7 @@ COMPLETION_COMMANDS = [
     "hint",
     "load ",
     "save ",
+    "set ",
     "show board",
     "show history",
     "show configuration",

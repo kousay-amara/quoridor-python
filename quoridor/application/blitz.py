@@ -13,7 +13,7 @@ class Blitz:
     def __init__(
         self,
         *,
-        time_limit_minutes: int,
+        time_limit_minutes: float,
         player_ids: Iterable[int] | None = None,
         paused: bool = False,
     ) -> None:
@@ -49,7 +49,7 @@ class Blitz:
         )
         return {
             "enabled": self.is_enabled(),
-            "time_limit_minutes": int(self.time_limit_minutes),
+            "time_limit_minutes": float(self.time_limit_minutes),
             "paused": bool(self.paused),
             "remaining_times": remaining_times,
         }
@@ -60,7 +60,7 @@ class Blitz:
             self.paused = False
             return
 
-        self.time_limit_minutes = int(snapshot.get("time_limit_minutes", 0))
+        self.time_limit_minutes = float(snapshot.get("time_limit_minutes", 0))
         self.paused = bool(snapshot.get("paused", False))
         raw_remaining = snapshot.get("remaining_times", {})
         self._remaining_times = {
@@ -73,7 +73,7 @@ class Blitz:
         if snapshot is None:
             return cls(time_limit_minutes=0)
         blitz = cls(
-            time_limit_minutes=int(snapshot.get("time_limit_minutes", 0))
+            time_limit_minutes=float(snapshot.get("time_limit_minutes", 0))
         )
         blitz.restore_snapshot(snapshot)
         return blitz

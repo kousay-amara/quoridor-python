@@ -183,7 +183,7 @@ def _place_wall_from_token(session: GameSession, wall_token: str) -> None:
 @dataclass()
 class _ShellConfig:
     blitz_enabled: bool
-    time_limit: int
+    time_limit: float
     players: int
     walls_per_player: int
     board_size: int
@@ -195,8 +195,8 @@ class _ShellConfig:
 
 def _config_from_state(state: "_ShellState") -> _ShellConfig:
     return _ShellConfig(
-        blitz_enabled=state.blitz.is_enabled(),
-        time_limit=state.blitz.time_limit_minutes,
+        blitz_enabled=state.blitz_enabled,
+        time_limit=state.time_limit,
         players=state.players,
         walls_per_player=state.walls_per_player,
         board_size=state.board_size,
@@ -213,6 +213,10 @@ def _fallback_player_types(config: _ShellConfig) -> dict[int, str]:
     return {
         pid: ("ai" if pid in ai_set else "human") for pid in player_ids
     }
+
+
+def _format_minutes(minutes: float) -> str:
+    return f"{minutes:g}"
 
 
 def _fallback_remaining_walls(config: _ShellConfig) -> dict[int, int]:
@@ -265,7 +269,7 @@ def _print_shell_startup(
     if config.blitz_enabled:
         print(
             _("New game started (blitz: {minutes} min/player).").format(
-                minutes=config.time_limit
+                minutes=_format_minutes(config.time_limit)
             )
         )
     else:
@@ -327,7 +331,7 @@ def _build_new_argument_parser(
     parser.add_argument(
         "-t",
         "--time",
-        type=int,
+        type=parser_mod._positive_time_type,
         default=current_config.time_limit,
     )
     parser.add_argument(
@@ -411,6 +415,141 @@ def _parse_new_config(state: "_ShellState", line: str) -> _ShellConfig:
         ai_time=args.ai_time,
         ai_minimax_depth=args.ai_minimax_depth,
     )
+
+
+_SET_ALIASES = {
+    "players": "players",
+    "walls": "walls_per_player",
+    "walls_per_player": "walls_per_player",
+    "size": "board_size",
+    "board_size": "board_size",
+    "blitz": "blitz_enabled",
+    "blitz_enabled": "blitz_enabled",
+    "time": "time_limit",
+    "time_limit": "time_limit",
+    "ai_players": "ai_players",
+    "ai_player": "ai_players",
+    "ai_mode": "ai_mode",
+    "ai_time": "ai_time",
+    "ai_minimax_depth": "ai_minimax_depth",
+}
+
+
+def _parse_set_bool(raw: str) -> bool:
+    value = raw.strip().lower()
+    if value in {"1", "true", "yes", "on"}:
+        return True
+    if value in {"0", "false", "no", "off"}:
+        return False
+    raise ValueError("boolean value expected (true/false)")
+
+
+def _parse_set_ai_players(raw: str, *, players: int) -> list[int]:
+    from . import cli_parser as parser_mod
+
+    normalized = raw.strip()
+    if not normalized or normalized.lower() == "none":
+        return []
+
+    tokens = normalized.replace(",", " ").split()
+    parsed = sorted({parser_mod._player_id_type(token) for token in tokens})
+    if any(pid > players for pid in parsed):
+        raise ValueError("ai_players ids must be <= players")
+    return parsed
+
+
+def _sync_session_ai_players(state: "_ShellState") -> None:
+    player_ids = sorted(state.session.state.player_positions)
+    ai_set = set(state.ai_players)
+    state.session.player_types = {
+        pid: ("ai" if pid in ai_set else "human") for pid in player_ids
+    }
+
+
+def _sync_runtime_config_from_session(state: "_ShellState") -> None:
+    state.players = len(state.session.state.player_positions)
+    state.board_size = state.session.state.board_size
+    state.ai_players = _session_ai_players(state.session)
+    state.blitz_enabled = state.blitz.is_enabled()
+    state.time_limit = state.blitz.time_limit_minutes
+
+
+def _format_set_value(param: str, value: object) -> str:
+    if param == "ai_players":
+        return str(sorted(set(value)))
+    if param == "time_limit":
+        return _format_minutes(float(value))
+    return str(value)
+
+
+def _handle_set(state: "_ShellState", line: str) -> None:
+    from . import cli_parser as parser_mod
+
+    raw = line[3:].strip()
+    if not raw or "=" not in raw:
+        raise ValueError("Invalid format. Use: set PARAM=VALUE")
+
+    param_raw, value_raw = raw.split("=", 1)
+    param_key = param_raw.strip().lower().replace("-", "_")
+    if not param_key:
+        raise ValueError("Invalid format. Use: set PARAM=VALUE")
+
+    param = _SET_ALIASES.get(param_key)
+    if param is None:
+        raise ValueError(f"unknown setting: {param_raw.strip()}")
+
+    value = value_raw.strip()
+    if param == "players":
+        parsed_value = parser_mod._players_type(value)
+        if any(pid > parsed_value for pid in state.ai_players):
+            raise ValueError("ai_players ids must be <= players")
+        state.players = parsed_value
+    elif param == "walls_per_player":
+        state.walls_per_player = int(value)
+        parsed_value = state.walls_per_player
+    elif param == "board_size":
+        state.board_size = parser_mod._size_type(value)
+        parsed_value = state.board_size
+    elif param == "blitz_enabled":
+        state.blitz_enabled = _parse_set_bool(value)
+        parsed_value = state.blitz_enabled
+    elif param == "time_limit":
+        state.time_limit = parser_mod._positive_time_type(value)
+        parsed_value = state.time_limit
+    elif param == "ai_players":
+        state.ai_players = _parse_set_ai_players(value, players=state.players)
+        _sync_session_ai_players(state)
+        parsed_value = state.ai_players
+    elif param == "ai_mode":
+        normalized = value.lower()
+        if normalized not in {AI_MODE_DEFAULT, AI_MODE_ITERATIVE, AI_MODE_MCTS}:
+            raise ValueError("ai_mode must be one of: minimax, iterative, mcts")
+        state.ai_mode = normalized
+        parsed_value = state.ai_mode
+    elif param == "ai_time":
+        state.ai_time = int(value)
+        if state.ai_time <= 0:
+            raise ValueError("ai_time must be > 0")
+        parsed_value = state.ai_time
+    elif param == "ai_minimax_depth":
+        normalized = value.lower()
+        if normalized in {"auto", "none"}:
+            state.ai_minimax_depth = None
+        else:
+            state.ai_minimax_depth = int(value)
+            if state.ai_minimax_depth <= 0:
+                raise ValueError("ai_minimax_depth must be > 0")
+        parsed_value = state.ai_minimax_depth
+    else:
+        raise ValueError(f"unsupported setting: {param}")
+
+    display_name = "blitz" if param == "blitz_enabled" else param
+    print(
+        f"Configuration updated: {display_name}="
+        f"{_format_set_value(param, parsed_value)}"
+    )
+    if param in {"players", "walls_per_player", "board_size", "blitz_enabled", "time_limit"}:
+        print("Use 'new' to apply this setting to a fresh game.")
 
 
 def _auto_play_ai_until_human_or_end(
@@ -842,8 +981,8 @@ def _print_configuration(state: "_ShellState") -> None:
     print(f"ai_mode={state.ai_mode}")
     print(f"ai_time={state.ai_time}")
     print(f"ai_minimax_depth={state.ai_minimax_depth}")
-    print(f"blitz={state.blitz.is_enabled()}")
-    print(f"time_limit={state.blitz.time_limit_minutes}")
+    print(f"blitz={state.blitz_enabled}")
+    print(f"time_limit={_format_minutes(state.time_limit)}")
     print(f"timer_paused={state.blitz.paused}")
 
 
@@ -860,6 +999,8 @@ def _command_new(state: _ShellState, line: str) -> bool:
     state.walls_per_player = config.walls_per_player
     state.board_size = config.board_size
     state.ai_players = list(config.ai_players)
+    state.blitz_enabled = config.blitz_enabled
+    state.time_limit = config.time_limit
     state.blitz = blitz_state
     return should_break
 
@@ -885,6 +1026,7 @@ def _command_load(state: _ShellState, line: str) -> bool:
         )
         state.session = session
         state.blitz = blitz
+        _sync_runtime_config_from_session(state)
         state.has_unsaved_changes = has_unsaved_changes
         return should_break
     except ContestError as exc:
@@ -915,6 +1057,11 @@ def _command_save(state: _ShellState, line: str) -> bool:
     except OSError as exc:
         print(f"Cannot save file: {exc}")
         return False
+
+
+def _command_set(state: _ShellState, line: str) -> bool:
+    _handle_set(state, line)
+    return False
 
 
 def _command_hint(state: _ShellState, _line: str) -> bool:
@@ -1047,6 +1194,8 @@ class _ShellState:
     walls_per_player: int
     board_size: int
     ai_players: list[int]
+    blitz_enabled: bool
+    time_limit: float
     blitz: Blitz
 
 
@@ -1121,6 +1270,15 @@ class _SaveCommand(_InvalidAsCommandError):
 
     def run(self, state: _ShellState, line: str) -> bool:
         return _command_save(state, line)
+
+
+class _SetCommand(_InvalidAsCommandError):
+    def matches(self, line: str) -> bool:
+        line_lower = line.lower()
+        return line_lower == "set" or line_lower.startswith("set ")
+
+    def run(self, state: _ShellState, line: str) -> bool:
+        return _command_set(state, line)
 
 
 class _HintCommand(_InvalidAsCommandError):
@@ -1259,6 +1417,7 @@ def _build_command_registry() -> _CommandRegistry:
             _HistoryCommand(),
             _LoadCommand(),
             _SaveCommand(),
+            _SetCommand(),
             _HintCommand(),
             _ShowBoardCommand(),
             _ShowConfigurationCommand(),
@@ -1337,7 +1496,7 @@ def _run_interactive_shell(
         )
         print(
             _("New game started (blitz: {minutes} min/player).").format(
-                minutes=time_limit
+                minutes=_format_minutes(time_limit)
             )
         )
     else:
@@ -1374,10 +1533,12 @@ def _run_interactive_shell(
         ai_mode=config.ai_mode,
         ai_time=config.ai_time,
         ai_minimax_depth=config.ai_minimax_depth,
-        players=config.players,
+        players=len(session.state.player_positions),
         walls_per_player=config.walls_per_player,
-        board_size=config.board_size,
-        ai_players=list(config.ai_players),
+        board_size=session.state.board_size,
+        ai_players=_session_ai_players(session),
+        blitz_enabled=blitz_state.is_enabled(),
+        time_limit=blitz_state.time_limit_minutes,
         blitz=blitz_state,
     )
 

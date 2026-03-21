@@ -24,6 +24,7 @@ from .cli_parser import (
     _is_contest_on_cli,
     _is_time_passed_on_cli,
     _player_id_type,
+    _positive_time_type,
     _players_type,
     _size_type,
 )
@@ -67,6 +68,7 @@ __all__ = [
     "_main_interactive",
     "_node",
     "_place_wall_from_token",
+    "_positive_time_type",
     "_player_id_type",
     "_players_type",
     "_play_pawn_move_from_token",
@@ -179,7 +181,7 @@ def _main_interactive(argv: list[str]) -> int:
         sys.stderr.write(
             "warning: --time is ignored unless --blitz is enabled\n"
         )
-        time_limit = int(defaults.get("time", DEFAULTS["time"]))
+        time_limit = float(defaults.get("time", DEFAULTS["time"]))
     _run_interactive_shell(
         blitz=args.blitz,
         time_limit=time_limit,

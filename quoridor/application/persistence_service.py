@@ -111,31 +111,107 @@ def parse_history(raw_text: str) -> list[tuple[int, str]]:
     return entries
 
 
-def serialize_settings(session: GameSession) -> str:
+def _parse_key_value_lines(
+    lines: list[str], *, section_name: str
+) -> dict[str, str]:
+    values: dict[str, str] = {}
+
+    for line in lines:
+        if "=" not in line:
+            raise ValueError(
+                f"invalid {section_name} line (expected key=value): {line}"
+            )
+        key, raw_value = line.split("=", 1)
+        values[key.strip().lower()] = raw_value.strip()
+
+    return values
+
+
+_REQUIRED_SETTINGS_KEYS = {
+    "players",
+    "board-size",
+    "player-types",
+    "blitz-enabled",
+    "blitz-time-limit-minutes",
+    "blitz-paused",
+    "blitz-remaining-times",
+}
+
+
+def _settings_values(raw_text: str) -> dict[str, str]:
+    sections = split_sections(raw_text)
+    return _parse_key_value_lines(
+        sections.get("settings", []), section_name="settings"
+    )
+
+
+def _validated_current_settings(raw_text: str) -> dict[str, str]:
+    sections = split_sections(raw_text)
+    if "settings" not in sections:
+        raise ValueError("missing [settings] section")
+    if "blitz" in sections:
+        raise ValueError(
+            "legacy [blitz] section is not supported; use blitz fields in [settings]"
+        )
+
+    values = _parse_key_value_lines(
+        sections["settings"], section_name="settings"
+    )
+    missing = sorted(_REQUIRED_SETTINGS_KEYS - set(values))
+    if missing:
+        raise ValueError(
+            "missing settings keys: " + ", ".join(missing)
+        )
+    return values
+
+
+def serialize_settings(
+    session: GameSession,
+    blitz_snapshot: BlitzSnapshot | None = None,
+) -> str:
     players = sorted(session.state.player_positions)
     lines = ["[settings]"]
-    lines.append(f"players: {len(players)}")
-    lines.append(f"board_size: {session.state.board_size}")
+    lines.append(f"players={len(players)}")
+    lines.append(f"board-size={session.state.board_size}")
     parts = [
         f"{player_id}={session.player_types.get(player_id, 'human')}"
         for player_id in players
     ]
-    lines.append("player_types: " + " ".join(parts))
+    lines.append("player-types=" + " ".join(parts))
+
+    enabled = False
+    time_limit = 0
+    paused = False
+    remaining: dict[int, float] = {}
+    if blitz_snapshot is not None:
+        enabled = bool(blitz_snapshot.get("enabled", False))
+        time_limit = float(blitz_snapshot.get("time_limit_minutes", 0))
+        paused = bool(blitz_snapshot.get("paused", False))
+        remaining_raw = blitz_snapshot.get("remaining_times", {})
+        remaining = {
+            int(player_id): float(seconds)
+            for player_id, seconds in remaining_raw.items()
+        }
+
+    lines.append(f"blitz-enabled={'true' if enabled else 'false'}")
+    lines.append(f"blitz-time-limit-minutes={time_limit:g}")
+    lines.append(f"blitz-paused={'true' if paused else 'false'}")
+    if remaining:
+        parts = [
+            f"{player_id}={remaining[player_id]:.6f}"
+            for player_id in sorted(remaining)
+        ]
+        lines.append("blitz-remaining-times=" + " ".join(parts))
+    else:
+        lines.append("blitz-remaining-times=")
+
     return "\n".join(lines) + "\n"
 
 
 def parse_player_types(raw_text: str) -> dict[int, str]:
-    sections = split_sections(raw_text)
-    lines = sections.get("settings", [])
-    values: dict[str, str] = {}
+    values = _settings_values(raw_text)
 
-    for line in lines:
-        if ":" not in line:
-            raise ValueError(f"invalid settings line: {line}")
-        key, raw_value = line.split(":", 1)
-        values[key.strip().lower()] = raw_value.strip()
-
-    player_types_raw = values.get("player_types", "")
+    player_types_raw = values.get("player-types", "")
     if not player_types_raw:
         return {}
 
@@ -159,79 +235,57 @@ def parse_player_types(raw_text: str) -> dict[int, str]:
     return parsed
 
 
-def serialize_blitz(snapshot: BlitzSnapshot | None) -> str:
-    if snapshot is None:
-        return ""
+def _parse_bool_value(raw_value: str, *, label: str) -> bool:
+    normalized = raw_value.strip().lower()
+    if normalized not in {"true", "false"}:
+        raise ValueError(f"invalid {label} value")
+    return normalized == "true"
 
-    enabled = bool(snapshot.get("enabled", False))
-    time_limit = int(snapshot.get("time_limit_minutes", 0))
-    paused = bool(snapshot.get("paused", False))
-    remaining_raw = snapshot.get("remaining_times", {})
-    remaining = {
-        int(player_id): float(seconds)
-        for player_id, seconds in remaining_raw.items()
-    }
 
-    lines = ["[blitz]"]
-    lines.append(f"enabled: {'true' if enabled else 'false'}")
-    lines.append(f"time_limit_minutes: {time_limit}")
-    lines.append(f"paused: {'true' if paused else 'false'}")
+def _parse_remaining_times(
+    raw_value: str, *, label: str
+) -> dict[int, float]:
+    remaining_times: dict[int, float] = {}
+    if not raw_value:
+        return remaining_times
 
-    if remaining:
-        parts = [
-            f"{player_id}={remaining[player_id]:.6f}"
-            for player_id in sorted(remaining)
-        ]
-        lines.append("remaining: " + " ".join(parts))
-    else:
-        lines.append("remaining:")
+    for token in raw_value.split():
+        if "=" not in token:
+            raise ValueError(f"invalid {label} token: {token}")
+        pid_text, seconds_text = token.split("=", 1)
+        try:
+            player_id = int(pid_text)
+            seconds = float(seconds_text)
+        except ValueError as exc:
+            raise ValueError(f"invalid {label} token: {token}") from exc
+        remaining_times[player_id] = seconds
 
-    return "\n".join(lines) + "\n"
+    return remaining_times
 
 
 def parse_blitz(raw_text: str) -> BlitzSnapshot | None:
-    sections = split_sections(raw_text)
-    lines = sections.get("blitz", [])
-    if not lines:
+    values = _settings_values(raw_text)
+    if not values:
         return None
 
-    values: dict[str, str] = {}
-    for line in lines:
-        if ":" not in line:
-            raise ValueError(f"invalid blitz line: {line}")
-        key, raw_value = line.split(":", 1)
-        values[key.strip().lower()] = raw_value.strip()
-
-    enabled_raw = values.get("enabled", "false").lower()
-    if enabled_raw not in {"true", "false"}:
-        raise ValueError("invalid blitz enabled value")
-    enabled = enabled_raw == "true"
-
+    enabled = _parse_bool_value(
+        values.get("blitz-enabled", "false"),
+        label="blitz enabled",
+    )
+    time_limit_raw = values.get("blitz-time-limit-minutes", "0")
     try:
-        time_limit = int(values.get("time_limit_minutes", "0"))
+        time_limit = float(time_limit_raw)
     except ValueError as exc:
-        raise ValueError("invalid blitz time_limit_minutes") from exc
+        raise ValueError("invalid blitz time limit") from exc
 
-    paused_raw = values.get("paused", "false").lower()
-    if paused_raw not in {"true", "false"}:
-        raise ValueError("invalid blitz paused value")
-    paused = paused_raw == "true"
-
-    remaining_times: dict[int, float] = {}
-    remaining_raw = values.get("remaining", "")
-    if remaining_raw:
-        for token in remaining_raw.split():
-            if "=" not in token:
-                raise ValueError(f"invalid blitz remaining token: {token}")
-            pid_text, seconds_text = token.split("=", 1)
-            try:
-                player_id = int(pid_text)
-                seconds = float(seconds_text)
-            except ValueError as exc:
-                raise ValueError(
-                    f"invalid blitz remaining token: {token}"
-                ) from exc
-            remaining_times[player_id] = seconds
+    paused = _parse_bool_value(
+        values.get("blitz-paused", "false"),
+        label="blitz paused",
+    )
+    remaining_times = _parse_remaining_times(
+        values.get("blitz-remaining-times", ""),
+        label="blitz remaining",
+    )
 
     return {
         "enabled": enabled,
@@ -310,11 +364,16 @@ def load_session(
     fallback_walls_per_player: dict[int, int],
 ) -> GameSession:
     raw_text = Path(path).read_text(encoding="utf-8")
+    try:
+        _validated_current_settings(raw_text)
+        saved_player_types = parse_player_types(raw_text)
+    except ValueError as exc:
+        raise ContestError(f"invalid save settings in {path}: {exc}") from exc
+
     position = parse_contest_file(path)
     history_entries = parse_history(raw_text)
 
     players = sorted(position.positions.keys())
-    saved_player_types = parse_player_types(raw_text)
     player_types = {
         pid: saved_player_types.get(
             pid, fallback_player_types.get(pid, "human")
@@ -399,14 +458,11 @@ def save_session(
     blitz_snapshot: BlitzSnapshot | None = None,
 ) -> None:
     content = (
-        serialize_game(session.state)
+        serialize_settings(session, blitz_snapshot)
         + "\n"
-        + serialize_settings(session)
+        + serialize_game(session.state)
         + "\n"
         + serialize_history(session)
     )
-    blitz_text = serialize_blitz(blitz_snapshot)
-    if blitz_text:
-        content += "\n" + blitz_text
     with open(path, "w", encoding="utf-8") as stream:
         stream.write(content)

@@ -35,7 +35,7 @@ class BlitzSnapshot(TypedDict):
     """Serializable blitz timer snapshot."""
 
     enabled: bool
-    time_limit_minutes: int
+    time_limit_minutes: float
     paused: bool
     remaining_times: dict[int, float]
 

@@ -6,7 +6,7 @@ import configparser
 import sys
 from pathlib import Path
 
-DEFAULTS: dict[str, bool | int] = {
+DEFAULTS: dict[str, bool | int | float] = {
     "verbose": False,
     "blitz": False,
     "time": 30,
@@ -25,7 +25,7 @@ def _write_minimal_config(path: Path) -> None:
         parser.write(stream)
 
 
-def load_or_init_config(path: Path | None = None) -> dict[str, bool | int]:
+def load_or_init_config(path: Path | None = None) -> dict[str, bool | int | float]:
     """Load defaults from .qoridorrc, creating it if missing.
 
     If the config file exists but is invalid, print a warning and return
@@ -59,7 +59,7 @@ def load_or_init_config(path: Path | None = None) -> dict[str, bool | int]:
             "blitz": section.getboolean(
                 "blitz", fallback=bool(DEFAULTS["blitz"])
             ),
-            "time": section.getint("time", fallback=int(DEFAULTS["time"])),
+            "time": section.getfloat("time", fallback=float(DEFAULTS["time"])),
         }
     except (OSError, configparser.Error, ValueError) as exc:
         sys.stderr.write(
