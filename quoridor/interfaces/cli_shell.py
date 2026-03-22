@@ -1570,7 +1570,6 @@ def _run_interactive_shell(
         blitz=blitz_state,
     ):
         return
-        return
 
     state = _ShellState(
         session=session,
