@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -41,6 +42,8 @@ def _run_shell(monkeypatch, commands: list[str], **kwargs) -> None:
         "ai_mode": "minimax",
         "ai_time": 5,
         "ai_minimax_depth": 2,
+        "verbose": False,
+        "debug": False,
     }
     shell_kwargs.update(kwargs)
     cli_mod._run_interactive_shell(**shell_kwargs)
@@ -311,6 +314,8 @@ def test_set_updates_configuration_and_new_uses_it(monkeypatch, capsys):
     _run_shell(
         monkeypatch,
         [
+            "set verbose=true",
+            "set debug=true",
             "set blitz=true",
             "set time=0.5",
             "set players=4",
@@ -328,6 +333,8 @@ def test_set_updates_configuration_and_new_uses_it(monkeypatch, capsys):
     )
 
     out = capsys.readouterr().out
+    assert "Configuration updated: verbose=True" in out
+    assert "Configuration updated: debug=True" in out
     assert "Configuration updated: blitz=True" in out
     assert "Configuration updated: time_limit=0.5" in out
     assert "Configuration updated: players=4" in out
@@ -338,6 +345,8 @@ def test_set_updates_configuration_and_new_uses_it(monkeypatch, capsys):
     assert "Configuration updated: ai_time=3" in out
     assert "Configuration updated: ai_minimax_depth=5" in out
     assert "New game started (blitz: 0.5 min/player)." in out
+    assert "verbose=True" in out
+    assert "debug=True" in out
     assert out.count("players=4") >= 2
     assert "walls_per_player=unlimited" in out
     assert "board_size=11" in out
@@ -349,12 +358,64 @@ def test_set_updates_configuration_and_new_uses_it(monkeypatch, capsys):
     assert "time_limit=0.5" in out
 
 
-def test_set_ai_players_updates_current_session(monkeypatch, capsys):
+def test_new_applies_logging_configuration_from_set(monkeypatch):
+    calls: list[tuple[bool, bool]] = []
+
+    monkeypatch.setattr(cli_mod, "_configure_logging", lambda verbose, debug: calls.append((verbose, debug)))
+
+    _run_shell(
+        monkeypatch,
+        ["set verbose=true", "set debug=true", "new", "quit"],
+    )
+
+    assert calls == [(True, True)]
+
+
+def test_set_ai_players_does_not_change_current_session(monkeypatch, capsys):
     _run_shell(monkeypatch, ["set ai_players=2", "e1-e2", "quit", "n"])
 
     out = capsys.readouterr().out
     assert "Configuration updated: ai_players=[2]" in out
-    assert "AI player 2 played." in out
+    assert "Use 'new' to apply this setting to a fresh game." in out
+    assert "AI player 2 played." not in out
+    assert "Current player: 2" in out
+
+
+
+def test_set_ai_search_settings_do_not_apply_before_new(monkeypatch, capsys):
+    calls: list[dict[str, object]] = []
+
+    def fake_compute_ai_move(self, **kwargs):
+        calls.append(kwargs)
+        current = self.state.current_player
+        return ("pawn", self.state.player_positions[current] - self.state.board_size)
+
+    monkeypatch.setattr(GameSession, "compute_ai_move", fake_compute_ai_move)
+
+    _run_shell(
+        monkeypatch,
+        [
+            "set ai_mode=iterative",
+            "set ai_time=1",
+            "set ai_minimax_depth=5",
+            "e1-e2",
+            "quit",
+            "n",
+        ],
+        ai_players=[2],
+        ai_mode="minimax",
+        ai_time=7,
+        ai_minimax_depth=2,
+    )
+
+    out = capsys.readouterr().out
+    assert "Configuration updated: ai_mode=iterative" in out
+    assert "Configuration updated: ai_time=1" in out
+    assert "Configuration updated: ai_minimax_depth=5" in out
+    assert len(calls) == 1
+    assert calls[0]["mode"] == "minimax"
+    assert calls[0]["time_limit_sec"] == 7
+    assert calls[0]["depth"] == 2
 
 
 def test_set_rejects_invalid_format_and_values(monkeypatch, capsys):
@@ -764,7 +825,10 @@ def test_main_uses_sys_argv_when_none(monkeypatch):
 
 def test_configure_logging_and_helpers_output(monkeypatch, capsys):
     cli_mod._configure_logging(verbose=True, debug=False)
+    assert logging.getLogger().getEffectiveLevel() == logging.INFO
+
     cli_mod._configure_logging(verbose=False, debug=True)
+    assert logging.getLogger().getEffectiveLevel() == logging.DEBUG
 
     _run_shell(
         monkeypatch, ["help unknown", "moves", "move z9-z8", "wall a1x", "blah", "quit"]

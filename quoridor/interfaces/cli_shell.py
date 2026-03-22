@@ -182,6 +182,8 @@ def _place_wall_from_token(session: GameSession, wall_token: str) -> None:
 
 @dataclass()
 class _ShellConfig:
+    verbose: bool
+    debug: bool
     blitz_enabled: bool
     time_limit: float
     players: int
@@ -195,6 +197,8 @@ class _ShellConfig:
 
 def _config_from_state(state: "_ShellState") -> _ShellConfig:
     return _ShellConfig(
+        verbose=state.verbose,
+        debug=state.debug,
         blitz_enabled=state.blitz_enabled,
         time_limit=state.time_limit,
         players=state.players,
@@ -416,6 +420,8 @@ def _parse_new_config(state: "_ShellState", line: str) -> _ShellConfig:
         raise ValueError("--ai-player id must be <= --players")
 
     return _ShellConfig(
+        verbose=current_config.verbose,
+        debug=current_config.debug,
         blitz_enabled=bool(args.blitz),
         time_limit=args.time,
         players=args.players,
@@ -429,6 +435,8 @@ def _parse_new_config(state: "_ShellState", line: str) -> _ShellConfig:
 
 
 _SET_ALIASES = {
+    "verbose": "verbose",
+    "debug": "debug",
     "players": "players",
     "walls": "walls_per_player",
     "walls_per_player": "walls_per_player",
@@ -469,13 +477,6 @@ def _parse_set_ai_players(raw: str, *, players: int) -> list[int]:
     return parsed
 
 
-def _sync_session_ai_players(state: "_ShellState") -> None:
-    player_ids = sorted(state.session.state.player_positions)
-    ai_set = set(state.ai_players)
-    state.session.player_types = {
-        pid: ("ai" if pid in ai_set else "human") for pid in player_ids
-    }
-
 
 def _sync_runtime_config_from_session(state: "_ShellState") -> None:
     state.players = len(state.session.state.player_positions)
@@ -483,6 +484,12 @@ def _sync_runtime_config_from_session(state: "_ShellState") -> None:
     state.ai_players = _session_ai_players(state.session)
     state.blitz_enabled = state.blitz.is_enabled()
     state.time_limit = state.blitz.time_limit_minutes
+
+
+def _sync_active_ai_settings_from_config(state: "_ShellState") -> None:
+    state.current_ai_mode = state.ai_mode
+    state.current_ai_time = state.ai_time
+    state.current_ai_minimax_depth = state.ai_minimax_depth
 
 
 def _format_set_value(param: str, value: object) -> str:
@@ -510,7 +517,13 @@ def _handle_set(state: "_ShellState", line: str) -> None:
         raise ValueError(f"unknown setting: {param_raw.strip()}")
 
     value = value_raw.strip()
-    if param == "players":
+    if param == "verbose":
+        state.verbose = _parse_set_bool(value)
+        parsed_value = state.verbose
+    elif param == "debug":
+        state.debug = _parse_set_bool(value)
+        parsed_value = state.debug
+    elif param == "players":
         parsed_value = parser_mod._players_type(value)
         if any(pid > parsed_value for pid in state.ai_players):
             raise ValueError("ai_players ids must be <= players")
@@ -529,7 +542,6 @@ def _handle_set(state: "_ShellState", line: str) -> None:
         parsed_value = state.time_limit
     elif param == "ai_players":
         state.ai_players = _parse_set_ai_players(value, players=state.players)
-        _sync_session_ai_players(state)
         parsed_value = state.ai_players
     elif param == "ai_mode":
         normalized = value.lower()
@@ -559,8 +571,7 @@ def _handle_set(state: "_ShellState", line: str) -> None:
         f"Configuration updated: {display_name}="
         f"{_format_set_value(param, parsed_value)}"
     )
-    if param in {"players", "walls_per_player", "board_size", "blitz_enabled", "time_limit"}:
-        print("Use 'new' to apply this setting to a fresh game.")
+    print("Use 'new' to apply this setting to a fresh game.")
 
 
 def _auto_play_ai_until_human_or_end(
@@ -688,9 +699,9 @@ def _auto_play_pending_ai(state: "_ShellState") -> bool:
     before_ai_cursor = state.session.history.cursor
     game_over, interrupted = _run_auto_play_with_interrupt_handling(
         state.session,
-        state.ai_mode,
-        state.ai_time,
-        state.ai_minimax_depth,
+        state.current_ai_mode,
+        state.current_ai_time,
+        state.current_ai_minimax_depth,
         blitz=state.blitz,
     )
     if state.session.history.cursor != before_ai_cursor:
@@ -990,6 +1001,8 @@ def _print_configuration(state: "_ShellState") -> None:
         else str(state.walls_per_player)
     )
     print("Current configuration:")
+    print(f"verbose={state.verbose}")
+    print(f"debug={state.debug}")
     print(f"players={state.players}")
     print(f"walls_per_player={walls_text}")
     print(f"board_size={state.board_size}")
@@ -1003,11 +1016,16 @@ def _print_configuration(state: "_ShellState") -> None:
 
 
 def _command_new(state: _ShellState, line: str) -> bool:
+    from . import cli as cli_mod
+
     config = _parse_new_config(state, line)
+    cli_mod._configure_logging(config.verbose, config.debug)
     session = _create_new_session(config)
     blitz_state, should_break = _start_shell_session(session, config)
     state.session = session
     state.has_unsaved_changes = False
+    state.verbose = config.verbose
+    state.debug = config.debug
     state.ai_mode = config.ai_mode
     state.ai_time = config.ai_time
     state.ai_minimax_depth = config.ai_minimax_depth
@@ -1018,6 +1036,7 @@ def _command_new(state: _ShellState, line: str) -> bool:
     state.blitz_enabled = config.blitz_enabled
     state.time_limit = config.time_limit
     state.blitz = blitz_state
+    _sync_active_ai_settings_from_config(state)
     return should_break
 
 
@@ -1035,14 +1054,15 @@ def _command_load(state: _ShellState, line: str) -> bool:
         session, blitz, has_unsaved_changes, should_break = _handle_load(
             state.session,
             file_path,
-            state.ai_mode,
-            state.ai_time,
-            state.ai_minimax_depth,
+            state.current_ai_mode,
+            state.current_ai_time,
+            state.current_ai_minimax_depth,
             blitz=state.blitz,
         )
         state.session = session
         state.blitz = blitz
         _sync_runtime_config_from_session(state)
+        _sync_active_ai_settings_from_config(state)
         state.has_unsaved_changes = has_unsaved_changes
         return should_break
     except ContestError as exc:
@@ -1084,9 +1104,9 @@ def _command_hint(state: _ShellState, _line: str) -> bool:
     try:
         _handle_hint(
             state.session,
-            state.ai_mode,
-            state.ai_time,
-            state.ai_minimax_depth,
+            state.current_ai_mode,
+            state.current_ai_time,
+            state.current_ai_minimax_depth,
         )
     except Exception as exc:
         print(f"No hint available: {exc}")
@@ -1130,9 +1150,9 @@ def _command_move(state: _ShellState, line: str) -> bool:
     has_unsaved_changes, should_break = _handle_move(
         state.session,
         line[5:],
-        state.ai_mode,
-        state.ai_time,
-        state.ai_minimax_depth,
+        state.current_ai_mode,
+        state.current_ai_time,
+        state.current_ai_minimax_depth,
         blitz=state.blitz,
     )
     state.has_unsaved_changes = has_unsaved_changes
@@ -1143,9 +1163,9 @@ def _command_wall(state: _ShellState, line: str) -> bool:
     has_unsaved_changes, should_break = _handle_wall(
         state.session,
         line[5:],
-        state.ai_mode,
-        state.ai_time,
-        state.ai_minimax_depth,
+        state.current_ai_mode,
+        state.current_ai_time,
+        state.current_ai_minimax_depth,
         blitz=state.blitz,
     )
     state.has_unsaved_changes = has_unsaved_changes
@@ -1168,9 +1188,9 @@ def _command_shorthand_move(state: _ShellState, line: str) -> bool:
     has_unsaved_changes, should_break = _handle_move(
         state.session,
         line,
-        state.ai_mode,
-        state.ai_time,
-        state.ai_minimax_depth,
+        state.current_ai_mode,
+        state.current_ai_time,
+        state.current_ai_minimax_depth,
         blitz=state.blitz,
     )
     state.has_unsaved_changes = has_unsaved_changes
@@ -1181,9 +1201,9 @@ def _command_shorthand_wall(state: _ShellState, line: str) -> bool:
     has_unsaved_changes, should_break = _handle_wall(
         state.session,
         line,
-        state.ai_mode,
-        state.ai_time,
-        state.ai_minimax_depth,
+        state.current_ai_mode,
+        state.current_ai_time,
+        state.current_ai_minimax_depth,
         blitz=state.blitz,
     )
     state.has_unsaved_changes = has_unsaved_changes
@@ -1203,9 +1223,14 @@ def _command_quit(state: _ShellState, _line: str) -> bool:
 class _ShellState:
     session: GameSession
     has_unsaved_changes: bool
+    verbose: bool
+    debug: bool
     ai_mode: str
     ai_time: int
     ai_minimax_depth: int | None
+    current_ai_mode: str
+    current_ai_time: int
+    current_ai_minimax_depth: int | None
     players: int
     walls_per_player: int
     board_size: int
@@ -1467,8 +1492,12 @@ def _run_interactive_shell(
     ai_mode: str,
     ai_time: int,
     ai_minimax_depth: int | None,
+    verbose: bool = False,
+    debug: bool = False,
 ) -> None:
     config = _ShellConfig(
+        verbose=verbose,
+        debug=debug,
         blitz_enabled=blitz,
         time_limit=time_limit,
         players=players,
@@ -1546,9 +1575,14 @@ def _run_interactive_shell(
     state = _ShellState(
         session=session,
         has_unsaved_changes=has_unsaved_changes,
+        verbose=config.verbose,
+        debug=config.debug,
         ai_mode=config.ai_mode,
         ai_time=config.ai_time,
         ai_minimax_depth=config.ai_minimax_depth,
+        current_ai_mode=config.ai_mode,
+        current_ai_time=config.ai_time,
+        current_ai_minimax_depth=config.ai_minimax_depth,
         players=len(session.state.player_positions),
         walls_per_player=config.walls_per_player,
         board_size=session.state.board_size,
