@@ -252,6 +252,17 @@ def _create_blitz_state(config: _ShellConfig, session: GameSession) -> Blitz:
     )
 
 
+def _effective_ai_time_limit(
+    ai_time: int,
+    *,
+    blitz: Blitz,
+    player_id: int,
+) -> float:
+    if not blitz.is_enabled():
+        return float(ai_time)
+    return min(float(ai_time), blitz.remaining_time(player_id))
+
+
 def _session_ai_players(session: GameSession) -> list[int]:
     return sorted(
         pid
@@ -566,11 +577,16 @@ def _auto_play_ai_until_human_or_end(
     while session.player_types.get(session.state.current_player) == "ai":
         current_ai = session.state.current_player
         before_blitz_snapshot = blitz.snapshot() if blitz.is_enabled() else None
+        effective_ai_time = _effective_ai_time_limit(
+            ai_time,
+            blitz=blitz,
+            player_id=current_ai,
+        )
         started = time.time()
         move = session.compute_ai_move(
             mode=ai_mode,
             depth=ai_minimax_depth,
-            time_limit_sec=ai_time,
+            time_limit_sec=effective_ai_time,
         )
         elapsed = time.time() - started
         if blitz.consume_time(current_ai, elapsed):

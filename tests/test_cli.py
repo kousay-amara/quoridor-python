@@ -966,6 +966,41 @@ def test_auto_play_ai_blitz_timeout_skips_move(monkeypatch, capsys):
     assert 1 in session.state.inactive_players
 
 
+def test_auto_play_ai_caps_time_budget_to_remaining_blitz(monkeypatch):
+    state = GameState(
+        board_size=9,
+        current_player=1,
+        player_positions={1: 4, 2: 76},
+        remaining_walls={1: 20, 2: 20},
+        vertical_walls=[],
+        horizontal_walls=[],
+    )
+    session = GameSession(state=state, player_types={1: "ai", 2: "human"})
+    blitz = Blitz(time_limit_minutes=1, player_ids=[1, 2])
+    blitz.consume_time(1, 57.5)
+
+    called = {"time_limit_sec": None}
+
+    def fake_compute_ai_move(**kwargs):
+        called["time_limit_sec"] = kwargs["time_limit_sec"]
+        return ("pawn", 13)
+
+    monkeypatch.setattr(session, "compute_ai_move", fake_compute_ai_move)
+
+    assert (
+        cli_mod._auto_play_ai_until_human_or_end(
+            session,
+            ai_mode="iterative",
+            ai_time=5,
+            ai_minimax_depth=2,
+            blitz=blitz,
+        )
+        is False
+    )
+
+    assert called["time_limit_sec"] == pytest.approx(2.5)
+
+
 def test_keyboard_interrupt_during_ai_turn_exits_cleanly(
     monkeypatch, capsys
 ):
