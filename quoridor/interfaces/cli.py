@@ -100,7 +100,11 @@ def _configure_logging(verbose: bool, debug: bool) -> None:
         level = logging.DEBUG
     elif verbose:
         level = logging.INFO
-    logging.basicConfig(level=level, format="%(levelname)s: %(message)s")
+    logging.basicConfig(
+        level=level,
+        format="%(levelname)s: %(message)s",
+        force=True,
+    )
     LOGGER.debug(
         "Logging configured with level=%s", logging.getLevelName(level)
     )
@@ -193,6 +197,8 @@ def _main_interactive(argv: list[str]) -> int:
         ai_mode=args.ai_mode,
         ai_time=args.ai_time,
         ai_minimax_depth=args.ai_minimax_depth,
+        verbose=args.verbose,
+        debug=args.debug,
     )
     return 0
 

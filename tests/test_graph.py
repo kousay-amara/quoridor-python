@@ -106,6 +106,18 @@ def test_get_all_legal_pawn_moves_simple():
     assert 41 in moves
 
 
+def test_custom_board_size_uses_correct_adjacency_and_moves():
+    board = QuoridorBoard(size=5)
+
+    assert len(board.graph.adj) == 25
+    assert sorted(board.graph.adj[7]) == [2, 6, 8, 12]
+    assert sorted(board.graph.adj[12]) == [7, 11, 13, 17]
+
+    moves = sorted(get_all_legal_pawn_moves(board.graph, 7, [7, 13]))
+    assert moves == [2, 6, 8, 12]
+    assert 16 not in moves
+
+
 def test_is_walk_legal_invalid_nodes():
     """Couvre la ligne 9 : nœuds inexistants."""
     board = QuoridorBoard(size=9)
