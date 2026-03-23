@@ -149,26 +149,26 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         self._install_actions()
         self._bind_shortcuts()
 
-        def _build_menubar(self) -> Gtk.PopoverMenuBar:
-            file_menu = Gio.Menu()
-            file_menu.append("New Game", "win.new_game")
-            file_menu.append("Load Game", "win.load_game")
-            file_menu.append("Save Game", "win.save_game")
-            file_menu.append("Configuration", "win.show-config")
-            file_menu.append("Info", "win.show-info")
-            file_menu.append("Quit", "win.quit-app")
+    def _build_menubar(self) -> Gtk.PopoverMenuBar:
+        file_menu = Gio.Menu()
+        file_menu.append("New Game", "win.new_game")
+        file_menu.append("Load Game", "win.load_game")
+        file_menu.append("Save Game", "win.save_game")
+        file_menu.append("Configuration", "win.show-config")
+        file_menu.append("Info", "win.show-info")
+        file_menu.append("Quit", "win.quit-app")
 
-            game_menu = Gio.Menu()
-            game_menu.append("Undo", "win.undo")
-            game_menu.append("Redo", "win.redo")
-            game_menu.append("Pause", "win.pause")
-            game_menu.append("Hint", "win.hint")
+        game_menu = Gio.Menu()
+        game_menu.append("Undo", "win.undo")
+        game_menu.append("Redo", "win.redo")
+        game_menu.append("Pause", "win.pause")
+        game_menu.append("Hint", "win.hint")
 
-            menu_model = Gio.Menu()
-            menu_model.append_submenu("File", file_menu)
-            menu_model.append_submenu("Game", game_menu)
+        menu_model = Gio.Menu()
+        menu_model.append_submenu("File", file_menu)
+        menu_model.append_submenu("Game", game_menu)
 
-            return Gtk.PopoverMenuBar(menu_model=menu_model)
+        return Gtk.PopoverMenuBar(menu_model=menu_model)
 
     def _build_new_session(self, *, size: int, players: int) -> GameSession:
         positions = initial_player_positions(size, players)
