@@ -1,5 +1,3 @@
-"""GTK GUI for Quoridor demo."""
-
 from __future__ import annotations
 
 import math
@@ -125,16 +123,18 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         self.area.set_content_height(total)
         self.area.set_draw_func(self._draw)
 
+        menubar = self._build_menubar()
+
         root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         root.set_margin_top(10)
         root.set_margin_bottom(10)
         root.set_margin_start(10)
         root.set_margin_end(10)
-        root.append(controls)
+        root.append(menubar)
         root.append(self.area)
         root.append(self.status)
         self.set_child(root)
-
+        
         self._drag_pid = None
         self._drag_start = None
         self._drag_offset = (0, 0)
@@ -148,6 +148,27 @@ class QuoridorWindow(Gtk.ApplicationWindow):
 
         self._install_actions()
         self._bind_shortcuts()
+
+        def _build_menubar(self) -> Gtk.PopoverMenuBar:
+            file_menu = Gio.Menu()
+            file_menu.append("New Game", "win.new_game")
+            file_menu.append("Load Game", "win.load_game")
+            file_menu.append("Save Game", "win.save_game")
+            file_menu.append("Configuration", "win.show-config")
+            file_menu.append("Info", "win.show-info")
+            file_menu.append("Quit", "win.quit-app")
+
+            game_menu = Gio.Menu()
+            game_menu.append("Undo", "win.undo")
+            game_menu.append("Redo", "win.redo")
+            game_menu.append("Pause", "win.pause")
+            game_menu.append("Hint", "win.hint")
+
+            menu_model = Gio.Menu()
+            menu_model.append_submenu("File", file_menu)
+            menu_model.append_submenu("Game", game_menu)
+
+            return Gtk.PopoverMenuBar(menu_model=menu_model)
 
     def _build_new_session(self, *, size: int, players: int) -> GameSession:
         positions = initial_player_positions(size, players)
@@ -217,16 +238,22 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         return self._ox + col * (cs + GAP), self._oy + row * (cs + GAP)
 
     def _xy_to_cell(self, x, y):
-        """Convert pixel coordinates to a board cell, if any."""
         size = self._board_size()
         cs = self._cell_size()
-        col = int((x - self._ox) / (cs + GAP))
-        row = int((y - self._oy) / (cs + GAP))
+        step = cs + GAP
+        col = int((x - self._ox) / step)
+        row = int((y - self._oy) / step)
         if 0 <= row < size and 0 <= col < size:
-            return row, col
+            in_cell_x = (x - self._ox) - col * step
+            in_cell_y = (y - self._oy) - row * step
+            if in_cell_x <= cs and in_cell_y <= cs:
+                return row, col
         return None
 
     def _on_drag_begin(self, gesture, start_x, start_y):
+        if self._paused:
+            self._set_status("Game is paused.")
+            return  
         cell = self._xy_to_cell(start_x, start_y)
         if cell is not None:
             row, col = cell
