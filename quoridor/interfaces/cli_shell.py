@@ -45,6 +45,7 @@ from ..network import (
     DiscoveryBroadcaster,
     DiscoveredServer,
     discover_servers,
+    remember_server,
 )
 
 _ = gettext.gettext
@@ -1250,6 +1251,7 @@ def _command_server(state: _ShellState, line: str) -> bool:
             port = _parse_server_port(parts[2])
         server = DiscoveryBroadcaster(port=port)
         server.start()
+        remember_server(server.name, "127.0.0.1", server.port)
         state.network_server = server
         print(f"Server started on port {server.port}.")
         return False

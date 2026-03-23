@@ -9,8 +9,17 @@ DEFAULT_SERVER_PORT = 12345
 DISCOVERY_PORT = 12346
 DISCOVERY_TIMEOUT_SEC = 0.25
 DISCOVERY_BROADCAST_INTERVAL_SEC = 10.0
+DISCOVERY_ENTRY_TTL_SEC = 30.0
 _DISCOVERY_BUFFER_SIZE = 1024
 _DISCOVERY_PREFIX = "QUORIDOR_SERVER"
+
+
+_discovery_cache = {}
+
+
+def remember_server(name: str, host: str, port: int) -> None:
+    server = DiscoveredServer(name, host, _validate_port(port))
+    _discovery_cache[(server.host, server.port)] = (server, time.time())
 
 
 class DiscoveredServer:
@@ -139,41 +148,53 @@ def discover_servers(
 ) -> list[DiscoveredServer]:
     """Listen for UDP discovery announcements on the local network."""
     listen_port = _validate_port(listen_port)
-    if timeout_sec <= 0:
-        return []
 
-    discovered = {}
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    try:
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        sock.bind(("", listen_port))
-        deadline = time.time() + timeout_sec
-        while True:
-            remaining = deadline - time.time()
-            if remaining <= 0:
-                break
-            sock.settimeout(remaining)
-            try:
-                message, address = sock.recvfrom(_DISCOVERY_BUFFER_SIZE)
-            except socket.timeout:
-                break
+    now = time.time()
+    expired_keys = [
+        key
+        for key, (_server, last_seen_time) in _discovery_cache.items()
+        if now - last_seen_time > DISCOVERY_ENTRY_TTL_SEC
+    ]
+    for key in expired_keys:
+        del _discovery_cache[key]
 
-            parsed = parse_discovery_message(
-                message.decode("ascii", errors="ignore")
-            )
-            if parsed is None:
-                continue
+    if timeout_sec > 0:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            sock.bind(("", listen_port))
+            deadline = time.time() + timeout_sec
+            while True:
+                remaining = deadline - time.time()
+                if remaining <= 0:
+                    break
+                sock.settimeout(remaining)
+                try:
+                    message, address = sock.recvfrom(_DISCOVERY_BUFFER_SIZE)
+                except socket.timeout:
+                    break
 
-            name, port = parsed
-            discovered[(address[0], port)] = DiscoveredServer(
-                name=name,
-                host=address[0],
-                port=port,
-            )
-    finally:
-        sock.close()
+                parsed = parse_discovery_message(
+                    message.decode("ascii", errors="ignore")
+                )
+                if parsed is None:
+                    continue
+
+                name, port = parsed
+                remember_server(name, address[0], port)
+        finally:
+            sock.close()
+
+    now = time.time()
+    servers = []
+    for key, value in list(_discovery_cache.items()):
+        server, last_seen = value
+        if now - last_seen > DISCOVERY_ENTRY_TTL_SEC:
+            del _discovery_cache[key]
+            continue
+        servers.append(server)
 
     return sorted(
-        discovered.values(),
+        servers,
         key=lambda item: (item.name.lower(), item.host, item.port),
     )

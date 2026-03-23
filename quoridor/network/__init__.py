@@ -4,6 +4,7 @@ from .basic_network import (
     DEFAULT_SERVER_HOST,
     DEFAULT_SERVER_PORT,
     DISCOVERY_BROADCAST_INTERVAL_SEC,
+    DISCOVERY_ENTRY_TTL_SEC,
     DISCOVERY_PORT,
     DISCOVERY_TIMEOUT_SEC,
     DiscoveryBroadcaster,
@@ -12,12 +13,14 @@ from .basic_network import (
     format_discovery_message,
     parse_discovery_message,
     parse_endpoint,
+    remember_server,
 )
 
 __all__ = [
     "DEFAULT_SERVER_HOST",
     "DEFAULT_SERVER_PORT",
     "DISCOVERY_BROADCAST_INTERVAL_SEC",
+    "DISCOVERY_ENTRY_TTL_SEC",
     "DISCOVERY_PORT",
     "DISCOVERY_TIMEOUT_SEC",
     "DiscoveryBroadcaster",
@@ -26,4 +29,5 @@ __all__ = [
     "format_discovery_message",
     "parse_discovery_message",
     "parse_endpoint",
+    "remember_server",
 ]
