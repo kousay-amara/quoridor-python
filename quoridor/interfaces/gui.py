@@ -683,10 +683,11 @@ class QuoridorWindow(Gtk.ApplicationWindow):
             cr.fill()
 
 
-def main():
+def main(argv: list[str] | None = None):
     app = Gtk.Application(application_id="fr.ubordeaux.quoridor.demo")
     app.connect("activate", lambda a: QuoridorWindow(a).present())
-    return app.run(sys.argv)
+    gui_argv = [sys.argv[0]] if argv is None else argv
+    return app.run(gui_argv)
 
 
 if __name__ == "__main__":

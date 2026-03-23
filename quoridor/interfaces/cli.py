@@ -153,7 +153,7 @@ def _main_gui() -> int:
         )
         return result.returncode
 
-    return gui_mod.main()
+    return gui_mod.main([sys.argv[0]])
 
 
 def _main_interactive(argv: list[str]) -> int:
