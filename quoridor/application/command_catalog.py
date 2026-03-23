@@ -63,6 +63,21 @@ COMMAND_CATALOG: tuple[CommandHelp, ...] = (
         "show time",
         "Display remaining blitz time for each player.",
     ),
+    CommandHelp(
+        "server list",
+        "server list",
+        "Display game servers discovered on the local network.",
+    ),
+    CommandHelp(
+        "server start",
+        "server start [PORT]",
+        "Start local UDP discovery broadcasts for a game server.",
+    ),
+    CommandHelp(
+        "server stop",
+        "server stop",
+        "Stop local UDP discovery broadcasts.",
+    ),
     CommandHelp("pause", "pause", "Toggle blitz timer pause/resume."),
     CommandHelp(
         "moves",
@@ -91,7 +106,8 @@ COMMAND_CATALOG: tuple[CommandHelp, ...] = (
 
 OVERVIEW_TEXT = (
     "Commands: new [ARGS], help [CMD], load, save, set, hint, show board, "
-    "show history, show configuration, show time, pause, moves, move, wall, "
+    "show history, show configuration, show time, server list, server start, "
+    "server stop, pause, moves, move, wall, "
     "undo, redo, quit\n"
     "Use: help <command>"
 )
@@ -108,6 +124,9 @@ COMPLETION_COMMANDS = [
     "show history",
     "show configuration",
     "show time",
+    "server list",
+    "server start",
+    "server stop",
     "pause",
     "moves",
     "move ",
