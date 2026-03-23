@@ -685,6 +685,58 @@ def test_show_time_and_pause_commands(monkeypatch, capsys):
     assert "Timer paused: yes" in out
 
 
+def test_pause_blocks_gameplay_commands_until_resumed(monkeypatch, capsys):
+    _run_shell(
+        monkeypatch,
+        ["pause", "move e1-e2", "hint", "undo", "redo", "pause", "move e1-e2", "quit", "n"],
+        blitz=True,
+        time_limit=1,
+    )
+
+    out = capsys.readouterr().out
+    assert "Blitz timer paused." in out
+    assert out.count("Game is paused.") == 4
+    assert "Blitz timer resumed." in out
+    assert "Player 1: e2, Player 2: e9" in out
+
+
+def test_auto_play_ai_does_not_run_while_blitz_paused(monkeypatch):
+    state = GameState(
+        board_size=9,
+        current_player=1,
+        player_positions={1: 4, 2: 76},
+        remaining_walls={1: 20, 2: 20},
+        vertical_walls=[],
+        horizontal_walls=[],
+    )
+    session = GameSession(state=state, player_types={1: "ai", 2: "human"})
+    blitz = Blitz(time_limit_minutes=1, player_ids=[1, 2])
+    blitz.toggle_pause()
+
+    called = {"count": 0}
+
+    def fake_compute_ai_move(**_kwargs):
+        called["count"] += 1
+        return ("pawn", 13)
+
+    monkeypatch.setattr(session, "compute_ai_move", fake_compute_ai_move)
+
+    assert (
+        cli_mod._auto_play_ai_until_human_or_end(
+            session,
+            ai_mode="iterative",
+            ai_time=5,
+            ai_minimax_depth=2,
+            blitz=blitz,
+        )
+        is False
+    )
+
+    assert called["count"] == 0
+    assert session.state.player_positions[1] == 4
+    assert session.state.current_player == 1
+
+
 def test_blitz_timeout_causes_loss(monkeypatch, capsys):
     moments = iter([0.0, 61.0])
     monkeypatch.setattr(cli_shell.time, "time", lambda: next(moments))

@@ -579,6 +579,17 @@ def _handle_set(state: "_ShellState", line: str) -> None:
     print("Use 'new' to apply this setting to a fresh game.")
 
 
+def _is_game_paused(blitz: Blitz) -> bool:
+    return blitz.is_enabled() and blitz.paused
+
+
+def _pause_blocks_gameplay(blitz: Blitz) -> bool:
+    if _is_game_paused(blitz):
+        print("Game is paused.")
+        return True
+    return False
+
+
 def _auto_play_ai_until_human_or_end(
     session: GameSession,
     ai_mode: str,
@@ -589,6 +600,9 @@ def _auto_play_ai_until_human_or_end(
 ) -> bool:
     if blitz is None:
         blitz = Blitz(time_limit_minutes=0)
+
+    if _is_game_paused(blitz):
+        return False
 
     while session.player_types.get(session.state.current_player) == "ai":
         current_ai = session.state.current_player
@@ -787,8 +801,13 @@ def _handle_hint(
     ai_mode: str,
     ai_time: int,
     ai_minimax_depth: int | None,
+    *,
+    blitz: Blitz,
 ) -> None:
     from . import cli as cli_mod
+
+    if _is_game_paused(blitz):
+        raise ValueError("Game is paused.")
 
     current = session.state.current_player
     if ai_mode == "mcts":
@@ -856,7 +875,7 @@ def _handle_wall(
     )
 
 
-def _handle_undo(session: GameSession, line: str) -> bool:
+def _handle_undo(session: GameSession, line: str, *, blitz: Blitz) -> bool:
     current = session.state.current_player
     parts = line.split()
     if len(parts) > 2:
@@ -881,7 +900,10 @@ def _handle_undo(session: GameSession, line: str) -> bool:
     return total_undone > 0
 
 
-def _handle_redo(session: GameSession, line: str) -> bool:
+def _handle_redo(session: GameSession, line: str, *, blitz: Blitz) -> bool:
+    if _is_game_paused(blitz):
+        raise ValueError("Game is paused.")
+
     current = session.state.current_player
     parts = line.split()
     if len(parts) > 2:
@@ -1110,12 +1132,16 @@ def _command_set(state: _ShellState, line: str) -> bool:
 
 
 def _command_hint(state: _ShellState, _line: str) -> bool:
+    if _pause_blocks_gameplay(state.blitz):
+        return False
+
     try:
         _handle_hint(
             state.session,
             state.current_ai_mode,
             state.current_ai_time,
             state.current_ai_minimax_depth,
+            blitz=state.blitz,
         )
     except Exception as exc:
         print(f"No hint available: {exc}")
@@ -1156,6 +1182,9 @@ def _command_moves(state: _ShellState, _line: str) -> bool:
 
 
 def _command_move(state: _ShellState, line: str) -> bool:
+    if _pause_blocks_gameplay(state.blitz):
+        return False
+
     has_unsaved_changes, should_break = _handle_move(
         state.session,
         line[5:],
@@ -1169,6 +1198,9 @@ def _command_move(state: _ShellState, line: str) -> bool:
 
 
 def _command_wall(state: _ShellState, line: str) -> bool:
+    if _pause_blocks_gameplay(state.blitz):
+        return False
+
     has_unsaved_changes, should_break = _handle_wall(
         state.session,
         line[5:],
@@ -1182,18 +1214,27 @@ def _command_wall(state: _ShellState, line: str) -> bool:
 
 
 def _command_undo(state: _ShellState, line: str) -> bool:
-    if _handle_undo(state.session, line):
+    if _pause_blocks_gameplay(state.blitz):
+        return False
+
+    if _handle_undo(state.session, line, blitz=state.blitz):
         state.has_unsaved_changes = True
     return False
 
 
 def _command_redo(state: _ShellState, line: str) -> bool:
-    if _handle_redo(state.session, line):
+    if _pause_blocks_gameplay(state.blitz):
+        return False
+
+    if _handle_redo(state.session, line, blitz=state.blitz):
         state.has_unsaved_changes = True
     return False
 
 
 def _command_shorthand_move(state: _ShellState, line: str) -> bool:
+    if _pause_blocks_gameplay(state.blitz):
+        return False
+
     has_unsaved_changes, should_break = _handle_move(
         state.session,
         line,
@@ -1207,6 +1248,9 @@ def _command_shorthand_move(state: _ShellState, line: str) -> bool:
 
 
 def _command_shorthand_wall(state: _ShellState, line: str) -> bool:
+    if _pause_blocks_gameplay(state.blitz):
+        return False
+
     has_unsaved_changes, should_break = _handle_wall(
         state.session,
         line,
