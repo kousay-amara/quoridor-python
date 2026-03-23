@@ -71,12 +71,12 @@ COMMAND_CATALOG: tuple[CommandHelp, ...] = (
     CommandHelp(
         "server start",
         "server start [PORT]",
-        "Start local UDP discovery broadcasts for a game server.",
+        "Start a local game server and broadcast it on the network.",
     ),
     CommandHelp(
         "server stop",
         "server stop",
-        "Stop local UDP discovery broadcasts.",
+        "Stop the local game server and disconnect its client.",
     ),
     CommandHelp("pause", "pause", "Toggle blitz timer pause/resume."),
     CommandHelp(

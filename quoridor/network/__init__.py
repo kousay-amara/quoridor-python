@@ -1,6 +1,7 @@
 """Network helpers for Quoridor."""
 
 from .basic_network import (
+    BasicNetworkServer,
     DEFAULT_SERVER_HOST,
     DEFAULT_SERVER_PORT,
     DISCOVERY_BROADCAST_INTERVAL_SEC,
@@ -17,6 +18,7 @@ from .basic_network import (
 )
 
 __all__ = [
+    "BasicNetworkServer",
     "DEFAULT_SERVER_HOST",
     "DEFAULT_SERVER_PORT",
     "DISCOVERY_BROADCAST_INTERVAL_SEC",

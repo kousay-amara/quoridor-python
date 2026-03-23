@@ -7,14 +7,20 @@ import time
 DEFAULT_SERVER_HOST = "localhost"
 DEFAULT_SERVER_PORT = 12345
 DISCOVERY_PORT = 12346
-DISCOVERY_TIMEOUT_SEC = 0.25
 DISCOVERY_BROADCAST_INTERVAL_SEC = 10.0
+DISCOVERY_TIMEOUT_SEC = DISCOVERY_BROADCAST_INTERVAL_SEC + 0.5
 DISCOVERY_ENTRY_TTL_SEC = 30.0
+CLIENT_TIMEOUT_SEC = 60.0
+_SOCKET_TIMEOUT_SEC = 0.5
 _DISCOVERY_BUFFER_SIZE = 1024
 _DISCOVERY_PREFIX = "QUORIDOR_SERVER"
 
 
 _discovery_cache = {}
+
+
+def _send_line(sock: socket.socket, message: str) -> None:
+    sock.sendall(f"{message}\n".encode("ascii", errors="strict"))
 
 
 def remember_server(name: str, host: str, port: int) -> None:
@@ -86,6 +92,193 @@ class DiscoveryBroadcaster:
                     break
         finally:
             sock.close()
+
+
+class BasicNetworkServer:
+    def __init__(
+        self,
+        *,
+        host: str = "",
+        port: int = DEFAULT_SERVER_PORT,
+        name: str = "quoridor-server",
+        discovery_port: int = DISCOVERY_PORT,
+        broadcast_interval_sec: float = DISCOVERY_BROADCAST_INTERVAL_SEC,
+        client_timeout_sec: float = CLIENT_TIMEOUT_SEC,
+    ) -> None:
+        self.host = host
+        self.port = _validate_port(port)
+        self.name = name.strip() or "quoridor-server"
+        self.discovery_port = _validate_port(discovery_port)
+        self.broadcast_interval_sec = broadcast_interval_sec
+        self.client_timeout_sec = client_timeout_sec
+        self._broadcaster = DiscoveryBroadcaster(
+            port=self.port,
+            name=self.name,
+            discovery_port=self.discovery_port,
+            interval_sec=self.broadcast_interval_sec,
+        )
+        self._stop_requested = threading.Event()
+        self._listener = None
+        self._accept_thread = None
+        self._client_monitor_thread = None
+        self._client = None
+        self._last_client_activity = None
+        self._lock = threading.Lock()
+
+    def running(self) -> bool:
+        return self._accept_thread is not None and self._accept_thread.is_alive()
+
+    def start(self) -> None:
+        if self.running():
+            return
+
+        listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        listener.settimeout(_SOCKET_TIMEOUT_SEC)
+        try:
+            listener.bind((self.host, self.port))
+            listener.listen(1)
+        except OSError:
+            listener.close()
+            raise
+
+        self._listener = listener
+        self._stop_requested.clear()
+        remember_server(self.name, "127.0.0.1", self.port)
+        self._broadcaster.start()
+        self._accept_thread = threading.Thread(
+            target=self._accept_loop,
+            name="quoridor-network-accept",
+            daemon=True,
+        )
+        self._accept_thread.start()
+
+    def stop(self) -> None:
+        self._stop_requested.set()
+        self._broadcaster.stop()
+
+        listener = self._listener
+        self._listener = None
+        if listener is not None:
+            try:
+                listener.close()
+            except OSError:
+                pass
+
+        with self._lock:
+            client = self._client
+            self._client = None
+            self._last_client_activity = None
+
+        if client is not None:
+            try:
+                _send_line(client, "SERVER_STOPPING")
+                _send_line(client, "BYE")
+            except OSError:
+                pass
+            try:
+                client.close()
+            except OSError:
+                pass
+
+        accept_thread = self._accept_thread
+        if accept_thread is not None:
+            accept_thread.join(timeout=0.5)
+        self._accept_thread = None
+
+        monitor_thread = self._client_monitor_thread
+        if monitor_thread is not None:
+            monitor_thread.join(timeout=0.5)
+        self._client_monitor_thread = None
+
+    def _accept_loop(self) -> None:
+        assert self._listener is not None
+        while not self._stop_requested.is_set():
+            try:
+                conn, _address = self._listener.accept()
+            except socket.timeout:
+                continue
+            except OSError:
+                break
+
+            conn.settimeout(_SOCKET_TIMEOUT_SEC)
+            with self._lock:
+                if self._client is not None:
+                    try:
+                        _send_line(conn, "ERROR BUSY")
+                    except OSError:
+                        pass
+                    try:
+                        conn.close()
+                    except OSError:
+                        pass
+                    continue
+                self._client = conn
+                self._last_client_activity = time.time()
+
+            try:
+                _send_line(conn, f"WELCOME {self.name} {self.port}")
+            except OSError:
+                self._close_client(conn)
+                continue
+
+            self._client_monitor_thread = threading.Thread(
+                target=self._monitor_client,
+                args=(conn,),
+                name="quoridor-network-client",
+                daemon=True,
+            )
+            self._client_monitor_thread.start()
+
+    def _monitor_client(self, conn: socket.socket) -> None:
+        try:
+            while not self._stop_requested.is_set():
+                with self._lock:
+                    if self._client is not conn:
+                        break
+                    last_client_activity = self._last_client_activity
+
+                if (
+                    last_client_activity is not None
+                    and time.time() - last_client_activity
+                    > self.client_timeout_sec
+                ):
+                    try:
+                        _send_line(conn, "ERROR TIMEOUT")
+                        _send_line(conn, "BYE")
+                    except OSError:
+                        pass
+                    break
+
+                try:
+                    data = conn.recv(1, socket.MSG_PEEK)
+                except socket.timeout:
+                    continue
+                except OSError:
+                    break
+
+                if not data:
+                    break
+
+                with self._lock:
+                    if self._client is conn:
+                        self._last_client_activity = time.time()
+
+                if self._stop_requested.wait(_SOCKET_TIMEOUT_SEC):
+                    break
+        finally:
+            self._close_client(conn)
+
+    def _close_client(self, conn: socket.socket) -> None:
+        try:
+            conn.close()
+        except OSError:
+            pass
+
+        with self._lock:
+            if self._client is conn:
+                self._client = None
+                self._last_client_activity = None
 
 
 def _validate_port(port: int) -> int:

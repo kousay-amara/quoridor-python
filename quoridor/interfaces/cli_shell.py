@@ -41,11 +41,10 @@ from .cli_render import (
 from .contest_parser import ContestError
 from .cli_io import _prompt_save_before_quit
 from ..network import (
+    BasicNetworkServer,
     DEFAULT_SERVER_PORT,
-    DiscoveryBroadcaster,
     DiscoveredServer,
     discover_servers,
-    remember_server,
 )
 
 _ = gettext.gettext
@@ -1249,9 +1248,12 @@ def _command_server(state: _ShellState, line: str) -> bool:
         port = DEFAULT_SERVER_PORT
         if len(parts) == 3:
             port = _parse_server_port(parts[2])
-        server = DiscoveryBroadcaster(port=port)
-        server.start()
-        remember_server(server.name, "127.0.0.1", server.port)
+        server = BasicNetworkServer(port=port)
+        try:
+            server.start()
+        except OSError as exc:
+            print(f"Cannot start server on port {port}: {exc}")
+            return False
         state.network_server = server
         print(f"Server started on port {server.port}.")
         return False
@@ -1339,7 +1341,7 @@ class _ShellState:
     blitz_enabled: bool
     time_limit: float
     blitz: Blitz
-    network_server: DiscoveryBroadcaster | None = None
+    network_server: BasicNetworkServer | None = None
 
 
 class _BaseCommand:
