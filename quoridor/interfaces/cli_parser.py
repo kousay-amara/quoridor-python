@@ -10,6 +10,7 @@ from .cli_constants import (
     AI_MINIMAX_DEPTH_DEFAULT,
     AI_MODE_DEFAULT,
     AI_MODE_ITERATIVE,
+    AI_MODE_MINIMAX,
     AI_MODE_MCTS,
     AI_TIME_DEFAULT,
     BOARD_SIZE_DEFAULT,
@@ -164,7 +165,7 @@ def _build_parser(
     )
     parser.add_argument(
         "--ai-mode",
-        choices=[AI_MODE_DEFAULT, AI_MODE_ITERATIVE, AI_MODE_MCTS],
+        choices=[AI_MODE_MINIMAX, AI_MODE_ITERATIVE, AI_MODE_MCTS],
         default=AI_MODE_DEFAULT,
         help=_("AI mode"),
     )
@@ -172,13 +173,13 @@ def _build_parser(
         "--ai-time",
         type=int,
         default=AI_TIME_DEFAULT,
-        help=_("AI thinking time in seconds"),
+        help=_("AI thinking time in seconds (iterative, mcts)"),
     )
     parser.add_argument(
         "--ai-minimax-depth",
         type=int,
         default=AI_MINIMAX_DEPTH_DEFAULT,
-        help=_("maximum minimax search depth"),
+        help=_("minimax depth (fixed for minimax, max for iterative)"),
     )
     parser.set_defaults(
         verbose=bool(defaults["verbose"]), blitz=bool(defaults["blitz"])
@@ -211,5 +212,12 @@ def _is_contest_on_cli(argv: list[str]) -> bool:
 def _is_time_passed_on_cli(argv: list[str]) -> bool:
     return any(
         token in {"-t", "--time"} or token.startswith("--time=")
+        for token in argv
+    )
+
+
+def _is_ai_time_passed_on_cli(argv: list[str]) -> bool:
+    return any(
+        token == "--ai-time" or token.startswith("--ai-time=")
         for token in argv
     )

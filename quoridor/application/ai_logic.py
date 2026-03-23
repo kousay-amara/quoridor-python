@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+from typing import Callable
+
 from ..core.game_state import GameState
 from ..rules.pawn_rules import get_all_legal_pawn_moves
 from ..rules.wall_rules import get_all_legal_wall_placements
@@ -9,7 +13,10 @@ SCORING_MATERIAL = 2
 SCORING_HYBRID = 3
 
 
-def get_all_legal_moves(state: GameState):
+def get_all_legal_moves(
+    state: GameState,
+    deadline_check: Callable[[], None] | None = None,
+):
     moves = []
     current_id = state.current_player
     if not state.is_player_active(current_id):
@@ -23,7 +30,12 @@ def get_all_legal_moves(state: GameState):
         moves.append(("pawn", target))
 
     if state.remaining_walls.get(current_id, 0) > 0:
-        moves.extend(get_all_legal_wall_placements(state))
+        moves.extend(
+            get_all_legal_wall_placements(
+                state,
+                deadline_check=deadline_check,
+            )
+        )
 
     return moves
 

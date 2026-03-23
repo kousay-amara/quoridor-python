@@ -28,10 +28,12 @@ from ..rules.win_rules import has_player_won
 from .cli_constants import (
     AI_MODE_DEFAULT,
     AI_MODE_ITERATIVE,
+    AI_MODE_MINIMAX,
     AI_MODE_MCTS,
     UNBALANCED_PLAYERS_COUNT,
     WALL_TOKEN_MIN_LENGTH,
 )
+from .cli_parser import _is_ai_time_passed_on_cli
 from .cli_render import (
     _format_hint_move,
     _print_moves,
@@ -301,10 +303,14 @@ def _print_shell_startup(
             if config.ai_minimax_depth is None
             else config.ai_minimax_depth
         )
+        time_label = (
+            ""
+            if config.ai_mode == AI_MODE_MINIMAX
+            else f", time={config.ai_time}s"
+        )
         print(
             f"AI players: {ai_players} "
-            f"(mode={config.ai_mode}, depth={depth_label}, "
-            f"time={config.ai_time}s)"
+            f"(mode={config.ai_mode}, depth={depth_label}{time_label})"
         )
     if blitz_state.is_enabled():
         _print_blitz_times(blitz_state)
@@ -375,7 +381,7 @@ def _build_new_argument_parser(
     )
     parser.add_argument(
         "--ai-mode",
-        choices=[AI_MODE_DEFAULT, AI_MODE_ITERATIVE, AI_MODE_MCTS],
+        choices=[AI_MODE_MINIMAX, AI_MODE_ITERATIVE, AI_MODE_MCTS],
         default=current_config.ai_mode,
     )
     parser.add_argument(
@@ -416,8 +422,12 @@ def _parse_new_config(state: "_ShellState", line: str) -> _ShellConfig:
         raise ValueError("--ai-time must be > 0")
     if args.ai_minimax_depth is not None and args.ai_minimax_depth <= 0:
         raise ValueError("--ai-minimax-depth must be > 0")
+    if args.ai_mode == AI_MODE_MINIMAX and args.ai_minimax_depth is None:
+        raise ValueError("--ai-mode minimax requires --ai-minimax-depth")
     if any(pid > args.players for pid in args.ai_player):
         raise ValueError("--ai-player id must be <= --players")
+    if args.ai_mode == AI_MODE_MINIMAX and _is_ai_time_passed_on_cli(argv):
+        print("warning: --ai-time is ignored in minimax mode")
 
     return _ShellConfig(
         verbose=current_config.verbose,
@@ -545,13 +555,15 @@ def _handle_set(state: "_ShellState", line: str) -> None:
     elif param == "ai_mode":
         normalized = value.lower()
         if normalized not in {
-            AI_MODE_DEFAULT,
+            AI_MODE_MINIMAX,
             AI_MODE_ITERATIVE,
             AI_MODE_MCTS,
         }:
             raise ValueError(
                 "ai_mode must be one of: minimax, iterative, mcts"
             )
+        if normalized == AI_MODE_MINIMAX and state.ai_minimax_depth is None:
+            raise ValueError("ai_mode=minimax requires ai_minimax_depth")
         state.ai_mode = normalized
         parsed_value = state.ai_mode
     elif param == "ai_time":
@@ -562,6 +574,10 @@ def _handle_set(state: "_ShellState", line: str) -> None:
     elif param == "ai_minimax_depth":
         normalized = value.lower()
         if normalized in {"auto", "none"}:
+            if state.ai_mode == AI_MODE_MINIMAX:
+                raise ValueError(
+                    "ai_minimax_depth cannot be auto/none in minimax mode"
+                )
             state.ai_minimax_depth = None
         else:
             state.ai_minimax_depth = int(value)
@@ -814,7 +830,7 @@ def _handle_hint(
         move = cli_mod.mcts_search(session.state, time_limit=ai_time)
         if move is None:
             raise ValueError("no legal moves available for hint")
-    elif ai_mode == "iterative" or ai_minimax_depth is None:
+    elif ai_mode == "iterative":
         move = cli_mod.find_best_move_iterative(
             session.state,
             ai_player_id=current,
@@ -822,6 +838,8 @@ def _handle_hint(
             max_depth=ai_minimax_depth,
         )
     elif ai_mode == "minimax":
+        if ai_minimax_depth is None:
+            raise ValueError("minimax mode requires ai_minimax_depth")
         move = cli_mod.find_best_move_minimax(
             session.state,
             ai_player_id=current,
@@ -1609,9 +1627,14 @@ def _run_interactive_shell(
     session_ai_players = _session_ai_players(session)
     if session_ai_players:
         depth_label = "auto" if ai_minimax_depth is None else ai_minimax_depth
+        time_label = (
+            ""
+            if ai_mode == AI_MODE_MINIMAX
+            else f", time={ai_time}s"
+        )
         print(
             f"AI players: {session_ai_players} "
-            f"(mode={ai_mode}, depth={depth_label}, time={ai_time}s)"
+            f"(mode={ai_mode}, depth={depth_label}{time_label})"
         )
     if blitz_state.is_enabled():
         _print_blitz_times(blitz_state)

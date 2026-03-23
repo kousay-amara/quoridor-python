@@ -527,6 +527,8 @@ def test_main_interactive_version_and_validation(monkeypatch, capsys):
         cli_mod._main_interactive(["--ai-time", "0"])
     with pytest.raises(SystemExit):
         cli_mod._main_interactive(["--ai-minimax-depth", "0"])
+    with pytest.raises(SystemExit):
+        cli_mod._main_interactive(["--ai-mode", "minimax"])
 
 
 def test_main_interactive_gui_path(monkeypatch):
@@ -640,6 +642,7 @@ def test_main_interactive_passes_explicit_ai_depth(monkeypatch):
     )
 
     assert cli_mod._main_interactive(["--ai-minimax-depth", "4"]) == 0
+    assert captured[-1]["ai_mode"] == "iterative"
     assert captured[-1]["ai_minimax_depth"] == 4
 
 

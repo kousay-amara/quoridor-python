@@ -12,8 +12,12 @@ def is_wall_legal(
     player_positions: List[int],
     wall_edges: List[Tuple[int, int]],
     player_target_funcs: List[Callable[[int], bool]],
+    deadline_check: Callable[[], None] | None = None,
 ) -> bool:
     """Check whether placing a wall is legal (no player is blocked)."""
+    if deadline_check is not None:
+        deadline_check()
+
     # A wall cannot be placed on already removed edges.
     for n1, n2 in wall_edges:
         if n1 not in graph.adj or n2 not in graph.adj[n1]:
@@ -24,6 +28,8 @@ def is_wall_legal(
 
     try:
         for i, pos in enumerate(player_positions):
+            if deadline_check is not None:
+                deadline_check()
             is_at_target = player_target_funcs[i]
 
             if not bfs_has_path(graph, pos, is_at_target):
@@ -55,7 +61,10 @@ def get_player_target_funcs(
     return targets
 
 
-def get_all_legal_wall_placements(state: GameState):
+def get_all_legal_wall_placements(
+    state: GameState,
+    deadline_check: Callable[[], None] | None = None,
+):
     legal_walls = []
     size = state.board_size
     player_ids = state.active_player_ids()
@@ -66,8 +75,16 @@ def get_all_legal_wall_placements(state: GameState):
     for r in range(size - 1):
         for c in range(size - 1):
             for orientation in ["h", "v"]:
+                if deadline_check is not None:
+                    deadline_check()
                 edges = get_edges_for_wall_at(r, c, orientation, size)
 
-                if is_wall_legal(state.graph, positions, edges, targets):
+                if is_wall_legal(
+                    state.graph,
+                    positions,
+                    edges,
+                    targets,
+                    deadline_check=deadline_check,
+                ):
                     legal_walls.append(("wall", edges, orientation))
     return legal_walls

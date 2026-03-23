@@ -214,7 +214,7 @@ class GameSession:
     def compute_ai_move(
         self,
         *,
-        mode: str = "minimax",
+        mode: str = "iterative",
         depth: int | None = None,
         time_limit_sec: float = 5.0,
     ) -> AIMove:
@@ -228,7 +228,7 @@ class GameSession:
                 self.state,
                 time_limit=time_limit_sec,
             )
-        elif mode == "iterative" or depth is None:
+        elif mode == "iterative":
             move = find_best_move_iterative(
                 self.state,
                 ai_player_id=player_id,
@@ -236,6 +236,8 @@ class GameSession:
                 max_depth=depth,
             )
         elif mode == "minimax":
+            if depth is None:
+                raise ValueError("minimax mode requires a fixed depth")
             move = find_best_move_minimax(
                 self.state,
                 ai_player_id=player_id,
@@ -279,7 +281,7 @@ class GameSession:
     def play_ai_turn(
         self,
         *,
-        mode: str = "minimax",
+        mode: str = "iterative",
         depth: int | None = None,
         time_limit_sec: float = 5.0,
     ) -> MoveRecord:

@@ -123,3 +123,30 @@ def test_iterative_deepening_respects_max_depth(monkeypatch):
 
     assert depth_calls == [1, 2]
     assert move == ("pawn", 2)
+
+
+def test_find_best_move_minimax_passes_deadline_into_move_generation(monkeypatch):
+    state = _build_state()
+    captured = {"used": False}
+
+    def fake_get_all_legal_moves(current_state, deadline_check=None):
+        del current_state
+        assert deadline_check is not None
+        captured["used"] = True
+        deadline_check()
+        return [("pawn", 13)]
+
+    monkeypatch.setattr(engine, "get_all_legal_moves", fake_get_all_legal_moves)
+
+    try:
+        engine.find_best_move_minimax(
+            state=state,
+            ai_player_id=1,
+            depth=1,
+            deadline_ts=0.0,
+        )
+        assert False, "SearchTimeout expected"
+    except engine.SearchTimeout:
+        pass
+
+    assert captured["used"] is True

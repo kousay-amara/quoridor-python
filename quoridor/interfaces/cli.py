@@ -16,11 +16,13 @@ from ..application.minimax_engine import (
     find_best_move_iterative,
 )
 from ..config import DEFAULTS, load_or_init_config
+from .cli_constants import AI_MODE_MINIMAX
 from .contest_parser import ContestError, parse_contest_file
 from .cli_parser import (
     QuoridorArgumentParser,
     _build_contest_parser,
     _build_parser,
+    _is_ai_time_passed_on_cli,
     _is_contest_on_cli,
     _is_time_passed_on_cli,
     _player_id_type,
@@ -175,6 +177,8 @@ def _main_interactive(argv: list[str]) -> int:
         parser.error("--ai-time must be > 0")
     if args.ai_minimax_depth is not None and args.ai_minimax_depth <= 0:
         parser.error("--ai-minimax-depth must be > 0")
+    if args.ai_mode == AI_MODE_MINIMAX and args.ai_minimax_depth is None:
+        parser.error("--ai-mode minimax requires --ai-minimax-depth")
 
     _configure_logging(args.verbose, args.debug)
     LOGGER.debug("Loaded defaults from .qoridorrc: %s", defaults)
@@ -186,6 +190,10 @@ def _main_interactive(argv: list[str]) -> int:
             "warning: --time is ignored unless --blitz is enabled\n"
         )
         time_limit = float(defaults.get("time", DEFAULTS["time"]))
+    if args.ai_mode == AI_MODE_MINIMAX and _is_ai_time_passed_on_cli(argv):
+        sys.stderr.write(
+            "warning: --ai-time is ignored in minimax mode\n"
+        )
     _run_interactive_shell(
         blitz=args.blitz,
         time_limit=time_limit,

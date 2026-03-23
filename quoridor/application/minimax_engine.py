@@ -46,6 +46,16 @@ def _check_deadline(deadline_ts: float | None) -> None:
         raise SearchTimeout("minimax search reached its deadline")
 
 
+def _deadline_checker(deadline_ts: float | None) -> Callable[[], None] | None:
+    if deadline_ts is None:
+        return None
+
+    def _check() -> None:
+        _check_deadline(deadline_ts)
+
+    return _check
+
+
 def minimax_alpha_beta(
     state: GameState,
     depth: int,
@@ -66,7 +76,10 @@ def minimax_alpha_beta(
     if depth <= 0:
         return float(eval_fn(state, ai_player_id))
 
-    legal_moves = get_all_legal_moves(state)
+    legal_moves = get_all_legal_moves(
+        state,
+        deadline_check=_deadline_checker(deadline_ts),
+    )
     if not legal_moves:
         return float(eval_fn(state, ai_player_id))
 
@@ -124,7 +137,10 @@ def find_best_move_minimax(
     deadline_ts: float | None = None,
 ) -> Move:
     """Choose the best legal move for ai_player_id with fixed-depth minimax."""
-    legal_moves = get_all_legal_moves(state)
+    legal_moves = get_all_legal_moves(
+        state,
+        deadline_check=_deadline_checker(deadline_ts),
+    )
     if not legal_moves:
         raise ValueError("no legal moves available for AI")
 
@@ -176,6 +192,7 @@ def find_best_move_iterative(
 
     while max_depth is None or depth <= max_depth:
         try:
+            _check_deadline(deadline_ts)
             best_move = find_best_move_minimax(
                 state=state,
                 ai_player_id=ai_player_id,
