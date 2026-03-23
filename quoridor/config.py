@@ -25,7 +25,9 @@ def _write_minimal_config(path: Path) -> None:
         parser.write(stream)
 
 
-def load_or_init_config(path: Path | None = None) -> dict[str, bool | int | float]:
+def load_or_init_config(
+    path: Path | None = None,
+) -> dict[str, bool | int | float]:
     """Load defaults from .qoridorrc, creating it if missing.
 
     If the config file exists but is invalid, print a warning and return

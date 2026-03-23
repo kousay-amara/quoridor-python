@@ -168,7 +168,11 @@ class ActionRegistry:
 
     handlers: dict[ActionType, Callable[[], None]]
 
-    def register(self, action: ActionType, callback: Callable[[], None]) -> None:
+    def register(
+        self,
+        action: ActionType,
+        callback: Callable[[], None],
+    ) -> None:
         self.handlers[action] = callback
 
     def execute(self, action: ActionType) -> None:

@@ -32,25 +32,43 @@ COMMAND_CATALOG: tuple[CommandHelp, ...] = (
     CommandHelp("history", "history", _HISTORY_DESCRIPTION),
     CommandHelp("show history", "show history", _HISTORY_DESCRIPTION),
     CommandHelp("load", "load FILE", "Load a game position from FILE."),
-    CommandHelp("save", "save FILE", "Save the current game position to FILE."),
+    CommandHelp(
+        "save",
+        "save FILE",
+        "Save the current game position to FILE.",
+    ),
     CommandHelp(
         "set",
         "set PARAM=VALUE",
         (
-            "Update the runtime configuration (example: set ai_mode=mcts or "
-            "set time=0.5). Use new to apply board or blitz changes to a fresh game."
+            "Update the runtime configuration (example: "
+            "set ai_mode=mcts or set time=0.5). "
+            "Use new to apply board or blitz changes "
+            "to a fresh game."
         ),
     ),
-    CommandHelp("hint", "hint", "Show a suggested move for the current player."),
+    CommandHelp(
+        "hint",
+        "hint",
+        "Show a suggested move for the current player.",
+    ),
     CommandHelp("show board", "show board", "Display only the current board."),
     CommandHelp(
         "show configuration",
         "show configuration",
         "Display current runtime configuration.",
     ),
-    CommandHelp("show time", "show time", "Display remaining blitz time for each player."),
+    CommandHelp(
+        "show time",
+        "show time",
+        "Display remaining blitz time for each player.",
+    ),
     CommandHelp("pause", "pause", "Toggle blitz timer pause/resume."),
-    CommandHelp("moves", "moves", "Display legal pawn moves for the current player."),
+    CommandHelp(
+        "moves",
+        "moves",
+        "Display legal pawn moves for the current player.",
+    ),
     CommandHelp(
         "move",
         "move <FROM-TO>",
@@ -62,7 +80,11 @@ COMMAND_CATALOG: tuple[CommandHelp, ...] = (
         "Place a wall (example: wall e2h or wall e2v). Shorthand: e2h/e2v.",
     ),
     CommandHelp("undo", "undo [N]", "Undo the last move-group (or N groups)."),
-    CommandHelp("redo", "redo [N]", "Redo the last undone move-group (or N groups)."),
+    CommandHelp(
+        "redo",
+        "redo [N]",
+        "Redo the last undone move-group (or N groups).",
+    ),
     CommandHelp("quit", "quit", "Exit the program."),
 )
 

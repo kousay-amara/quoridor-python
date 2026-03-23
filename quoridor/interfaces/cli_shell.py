@@ -477,7 +477,6 @@ def _parse_set_ai_players(raw: str, *, players: int) -> list[int]:
     return parsed
 
 
-
 def _sync_runtime_config_from_session(state: "_ShellState") -> None:
     state.players = len(state.session.state.player_positions)
     state.board_size = state.session.state.board_size
@@ -545,8 +544,14 @@ def _handle_set(state: "_ShellState", line: str) -> None:
         parsed_value = state.ai_players
     elif param == "ai_mode":
         normalized = value.lower()
-        if normalized not in {AI_MODE_DEFAULT, AI_MODE_ITERATIVE, AI_MODE_MCTS}:
-            raise ValueError("ai_mode must be one of: minimax, iterative, mcts")
+        if normalized not in {
+            AI_MODE_DEFAULT,
+            AI_MODE_ITERATIVE,
+            AI_MODE_MCTS,
+        }:
+            raise ValueError(
+                "ai_mode must be one of: minimax, iterative, mcts"
+            )
         state.ai_mode = normalized
         parsed_value = state.ai_mode
     elif param == "ai_time":
@@ -587,7 +592,9 @@ def _auto_play_ai_until_human_or_end(
 
     while session.player_types.get(session.state.current_player) == "ai":
         current_ai = session.state.current_player
-        before_blitz_snapshot = blitz.snapshot() if blitz.is_enabled() else None
+        before_blitz_snapshot = (
+            blitz.snapshot() if blitz.is_enabled() else None
+        )
         effective_ai_time = _effective_ai_time_limit(
             ai_time,
             blitz=blitz,
@@ -730,7 +737,9 @@ def _handle_load(
         fallback_walls_per_player=session.state.remaining_walls,
     )
     try:
-        loaded_blitz_snapshot = cli_mod._load_blitz_snapshot_from_file(file_path)
+        loaded_blitz_snapshot = (
+            cli_mod._load_blitz_snapshot_from_file(file_path)
+        )
     except (OSError, ValueError):
         loaded_blitz_snapshot = None
 
@@ -1523,7 +1532,9 @@ def _run_interactive_shell(
             fallback_walls_per_player=fallback_remaining_walls,
         )
         try:
-            loaded_blitz_snapshot = cli_mod._load_blitz_snapshot_from_file(save_file)
+            loaded_blitz_snapshot = (
+                cli_mod._load_blitz_snapshot_from_file(save_file)
+            )
         except (OSError, ValueError):
             loaded_blitz_snapshot = None
         has_unsaved_changes = False

@@ -89,11 +89,24 @@ def mcts_search(root_state, time_limit=5.0, exploration_weight=1.41):
             p_id = rollout_state.current_player
             b_size = rollout_state.board_size
 
-            pawn_moves = [m for m in moves if getattr(m, 'action', '') == 'move_pawn']
+            pawn_moves = [
+                m
+                for m in moves
+                if getattr(m, 'action', '') == 'move_pawn'
+            ]
 
             if pawn_moves and random.random() < 0.7:
-                best_dist = min(get_dist_to_goal(p_id, m.to_pos, b_size) for m in pawn_moves)
-                best_moves = [m for m in pawn_moves if get_dist_to_goal(p_id, m.to_pos, b_size) == best_dist]
+                best_dist = min(
+                    get_dist_to_goal(p_id, m.to_pos, b_size)
+                    for m in pawn_moves
+                )
+                best_moves = [
+                    m
+                    for m in pawn_moves
+                    if get_dist_to_goal(
+                        p_id, m.to_pos, b_size
+                    ) == best_dist
+                ]
                 move_to_apply = random.choice(best_moves)
             else:
                 move_to_apply = random.choice(moves)

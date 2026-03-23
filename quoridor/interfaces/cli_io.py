@@ -69,7 +69,10 @@ def _save_session_to_file(
     save_session(path, session, blitz_snapshot=snapshot)
 
 
-def _prompt_save_before_quit(session: GameSession, blitz: Blitz | None = None) -> bool:
+def _prompt_save_before_quit(
+    session: GameSession,
+    blitz: Blitz | None = None,
+) -> bool:
     """Return True when the caller should quit."""
     try:
         choice = input("Save the game before quitting? [Y/N] ").strip()

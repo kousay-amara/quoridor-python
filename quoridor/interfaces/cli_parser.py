@@ -83,7 +83,9 @@ def _positive_time_type(raw: str) -> float:
     return value
 
 
-def _build_parser(defaults: dict[str, bool | int | float]) -> argparse.ArgumentParser:
+def _build_parser(
+    defaults: dict[str, bool | int | float],
+) -> argparse.ArgumentParser:
     parser = QuoridorArgumentParser(
         prog="quoridor",
         description=_("Quoridor game command-line interface."),

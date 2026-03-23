@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from ..core.move_record import BlitzSnapshot, GameSnapshot, MoveRecord, PlayerType
+from ..core.move_record import (
+    BlitzSnapshot,
+    GameSnapshot,
+    MoveRecord,
+    PlayerType,
+)
 
 
 class HistoryManager:
@@ -31,7 +36,9 @@ class HistoryManager:
         self,
         apply_snapshot: Callable[[GameSnapshot], None],
         requester_type: PlayerType = "human",
-        apply_blitz_snapshot: Callable[[BlitzSnapshot | None], None] | None = None,
+        apply_blitz_snapshot: (
+            Callable[[BlitzSnapshot | None], None] | None
+        ) = None,
     ) -> list[MoveRecord]:
         """Undo moves until the previous human boundary is reached."""
         self._ensure_human_requester(requester_type)
@@ -65,7 +72,9 @@ class HistoryManager:
         self,
         apply_snapshot: Callable[[GameSnapshot], None],
         requester_type: PlayerType = "human",
-        apply_blitz_snapshot: Callable[[BlitzSnapshot | None], None] | None = None,
+        apply_blitz_snapshot: (
+            Callable[[BlitzSnapshot | None], None] | None
+        ) = None,
     ) -> list[MoveRecord]:
         """Redo moves until the next human boundary is reached."""
         self._ensure_human_requester(requester_type)

@@ -39,7 +39,10 @@ if __package__ in {None, ""}:
         ShortcutManager,
     )
 else:
-    from ..application.game_session import GameSession, initial_player_positions
+    from ..application.game_session import (
+        GameSession,
+        initial_player_positions,
+    )
     from ..application.minimax_engine import find_best_move_minimax
     from ..core.validators import validate_pawn_move, validate_wall
     from ..application.persistence_service import load_session, save_session
@@ -254,7 +257,10 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         )
         if valid:
             self.session.place_wall(current, edges, orient)
-            self._set_status(f"Player {current} placed {orient} wall at ({row}, {col}).")
+            self._set_status(
+                f"Player {current} placed {orient} wall "
+                f"at ({row}, {col})."
+            )
         else:
             self._set_status(error)
         self.area.queue_draw()
@@ -281,7 +287,10 @@ class QuoridorWindow(Gtk.ApplicationWindow):
             )
             if valid:
                 self.session.play_pawn_move(self._drag_pid, to_node)
-                self._set_status(f"Player {self._drag_pid} moved to ({row}, {col}).")
+                self._set_status(
+                    f"Player {self._drag_pid} moved "
+                    f"to ({row}, {col})."
+                )
             else:
                 self._set_status(error)
         self._drag_pid = None
@@ -309,7 +318,7 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         if in_gap_y and not in_gap_x and row_idx < size - 1:
             return ("horizontal", row_idx, col_idx)
         return None
-    
+
     def _gap_to_wall_edges(self, orientation, row, col):
         size = self._board_size()
         if orientation == "vertical" and row + 1 < size and col + 1 < size:
@@ -328,7 +337,10 @@ class QuoridorWindow(Gtk.ApplicationWindow):
 
     def _action_new_game(self) -> None:
         players = len(self.session.state.player_positions)
-        self.session = self._build_new_session(size=self._board_size(), players=players)
+        self.session = self._build_new_session(
+            size=self._board_size(),
+            players=players,
+        )
         self._paused = False
         self.area.queue_draw()
         self._set_status("New game started.")
@@ -451,7 +463,10 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         save_button = Gtk.Button(label="Save")
         cancel_button = Gtk.Button(label="Cancel")
 
-        reset_button.connect("clicked", lambda _b: self._reset_shortcut_entries(entries))
+        reset_button.connect(
+            "clicked",
+            lambda _b: self._reset_shortcut_entries(entries),
+        )
         save_button.connect(
             "clicked", lambda _b: self._save_shortcut_entries(window, entries)
         )
@@ -475,7 +490,10 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         window.destroy()
         return False
 
-    def _reset_shortcut_entries(self, entries: dict[ActionType, Gtk.Entry]) -> None:
+    def _reset_shortcut_entries(
+        self,
+        entries: dict[ActionType, Gtk.Entry],
+    ) -> None:
         defaults = ShortcutManager.with_defaults()
         for action_type, entry in entries.items():
             entry.set_text(defaults.get(action_type))
@@ -636,6 +654,7 @@ class QuoridorWindow(Gtk.ApplicationWindow):
             cr.set_source_rgb(*color)
             cr.arc(cx, cy, cs * 0.35, 0, math.pi * 2)
             cr.fill()
+
 
 def main():
     app = Gtk.Application(application_id="fr.ubordeaux.quoridor.demo")

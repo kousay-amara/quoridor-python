@@ -56,7 +56,7 @@ def serialize_history(session: GameSession) -> str:
     lines = ["[history]"]
 
     for idx in range(0, len(active_records), player_count):
-        turn = active_records[idx : idx + player_count]
+        turn = active_records[idx: idx + player_count]
         turn_text = " ".join(
             f"{record.player_id} {record_to_notation(record)};"
             for record in turn
@@ -151,7 +151,8 @@ def _validated_current_settings(raw_text: str) -> dict[str, str]:
         raise ValueError("missing [settings] section")
     if "blitz" in sections:
         raise ValueError(
-            "legacy [blitz] section is not supported; use blitz fields in [settings]"
+            "legacy [blitz] section is not supported; "
+            "use blitz fields in [settings]"
         )
 
     values = _parse_key_value_lines(
@@ -229,7 +230,9 @@ def parse_player_types(raw_text: str) -> dict[int, str]:
 
         player_type = player_type_raw.strip().lower()
         if player_type not in {"human", "ai"}:
-            raise ValueError(f"invalid player type in settings: {player_type_raw}")
+            raise ValueError(
+                f"invalid player type in settings: {player_type_raw}"
+            )
         parsed[player_id] = player_type
 
     return parsed
@@ -346,7 +349,8 @@ def replay_history(
         final_state.current_player != position.current_player
         or final_state.player_positions != position.positions
         or final_state.remaining_walls != remaining_walls
-        or sorted(final_state.vertical_walls) != sorted(position.vertical_walls)
+        or sorted(final_state.vertical_walls)
+        != sorted(position.vertical_walls)
         or sorted(final_state.horizontal_walls)
         != sorted(position.horizontal_walls)
     ):
