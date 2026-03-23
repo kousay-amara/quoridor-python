@@ -20,6 +20,8 @@ if __package__ in {None, ""}:
         GameSession,
         initial_player_positions,
     )
+    from quoridor.core.validators import validate_pawn_move, validate_wall
+
     from quoridor.application.minimax_engine import (  # noqa: E402
         find_best_move_minimax,
     )
@@ -39,6 +41,7 @@ if __package__ in {None, ""}:
 else:
     from ..application.game_session import GameSession, initial_player_positions
     from ..application.minimax_engine import find_best_move_minimax
+    from ..core.validators import validate_pawn_move, validate_wall
     from ..application.persistence_service import load_session, save_session
     from ..core.game_state import GameState
     from .gui_shortcuts import (
@@ -61,6 +64,9 @@ PLAYER_COLORS = {
     3: (0.2, 0.65, 0.3),
     4: (0.75, 0.58, 0.2),
 }
+COLOR_BACKGROUND = (0.86, 0.82, 0.73)
+COLOR_CELL = (0.96, 0.93, 0.91)
+COLOR_WALL = (0.55, 0.27, 0.07)
 
 
 class QuoridorWindow(Gtk.ApplicationWindow):
@@ -126,9 +132,15 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         root.append(self.status)
         self.set_child(root)
 
-        click = Gtk.GestureClick()
-        click.connect("pressed", self._on_click)
-        self.area.add_controller(click)
+        self._drag_pid = None
+        self._drag_start = None
+        self._drag_offset = (0, 0)
+
+        self._drag_ctrl = Gtk.GestureDrag()
+        self._drag_ctrl.connect("drag-begin", self._on_drag_begin)
+        self._drag_ctrl.connect("drag-update", self._on_drag_update)
+        self._drag_ctrl.connect("drag-end", self._on_drag_end)
+        self.area.add_controller(self._drag_ctrl)
         self._ox = self._oy = MARGIN
 
         self._install_actions()
@@ -211,12 +223,108 @@ class QuoridorWindow(Gtk.ApplicationWindow):
             return row, col
         return None
 
-    def _on_click(self, _gesture, _n, x, y):
-        cell = self._xy_to_cell(x, y)
-        if cell:
+    def _on_drag_begin(self, gesture, start_x, start_y):
+        cell = self._xy_to_cell(start_x, start_y)
+        if cell is not None:
             row, col = cell
             size = self._board_size()
-            print(f"Clic sur case ({row}, {col}) = node {row * size + col}")
+            node = row * size + col
+            current = self.session.state.current_player
+            if self.session.state.player_positions[current] == node:
+                self._drag_pid = current
+                self._drag_start = (start_x, start_y)
+                self._drag_offset = (0, 0)
+                return
+        gap = self._xy_to_gap(start_x, start_y)
+        if gap is None:
+            return
+        orientation, row, col = gap
+        edges, orient = self._gap_to_wall_edges(orientation, row, col)
+        if edges is None:
+            return
+        current = self.session.state.current_player
+        positions = [
+            self.session.state.player_positions[p]
+            for p in sorted(self.session.state.player_positions)
+        ]
+        target_funcs = self.session._build_player_target_funcs()
+        valid, error = validate_wall(
+            self.session.state.graph, positions, edges,
+            target_funcs, self.session.state.remaining_walls, current
+        )
+        if valid:
+            self.session.place_wall(current, edges, orient)
+            self._set_status(f"Player {current} placed {orient} wall at ({row}, {col}).")
+        else:
+            self._set_status(error)
+        self.area.queue_draw()
+
+    def _on_drag_update(self, gesture, offset_x, offset_y):
+        if self._drag_pid is None:
+            return
+        self._drag_offset = (offset_x, offset_y)
+        self.area.queue_draw()
+
+    def _on_drag_end(self, gesture, offset_x, offset_y):
+        if self._drag_pid is None:
+            return
+        sx, sy = self._drag_start
+        target = self._xy_to_cell(sx + offset_x, sy + offset_y)
+        if target:
+            row, col = target
+            size = self._board_size()
+            to_node = row * size + col
+            from_node = self.session.state.player_positions[self._drag_pid]
+            all_pos = list(self.session.state.player_positions.values())
+            valid, error = validate_pawn_move(
+                self.session.state.graph, from_node, to_node, all_pos, size
+            )
+            if valid:
+                self.session.play_pawn_move(self._drag_pid, to_node)
+                self._set_status(f"Player {self._drag_pid} moved to ({row}, {col}).")
+            else:
+                self._set_status(error)
+        self._drag_pid = None
+        self._drag_start = None
+        self._drag_offset = (0, 0)
+        self.area.queue_draw()
+
+    def _xy_to_gap(self, x, y):
+        cs = self._cell_size()
+        size = self._board_size()
+        rel_x = x - self._ox
+        rel_y = y - self._oy
+        step = cs + GAP
+
+        col_idx = int(rel_x / step)
+        row_idx = int(rel_y / step)
+        in_cell_x = rel_x - col_idx * step
+        in_cell_y = rel_y - row_idx * step
+
+        in_gap_x = in_cell_x >= cs
+        in_gap_y = in_cell_y >= cs
+
+        if in_gap_x and not in_gap_y and col_idx < size - 1:
+            return ("vertical", row_idx, col_idx)
+        if in_gap_y and not in_gap_x and row_idx < size - 1:
+            return ("horizontal", row_idx, col_idx)
+        return None
+    
+    def _gap_to_wall_edges(self, orientation, row, col):
+        size = self._board_size()
+        if orientation == "vertical" and row + 1 < size and col + 1 < size:
+            n1 = row * size + col
+            n2 = row * size + col + 1
+            n3 = (row + 1) * size + col
+            n4 = (row + 1) * size + col + 1
+            return [(n1, n2), (n3, n4)], "vertical"
+        if orientation == "horizontal" and row + 1 < size and col + 1 < size:
+            n1 = row * size + col
+            n2 = (row + 1) * size + col
+            n3 = row * size + col + 1
+            n4 = (row + 1) * size + col + 1
+            return [(n1, n2), (n3, n4)], "horizontal"
+        return None, None
 
     def _action_new_game(self) -> None:
         players = len(self.session.state.player_positions)
@@ -462,17 +570,26 @@ class QuoridorWindow(Gtk.ApplicationWindow):
     def _draw(self, _area, cr, _w, _h):
         size = self._board_size()
         cs = self._cell_size()
+        self._update_origin(cs, size)
+        self._draw_background(cr)
+        self._draw_cells(cr, cs, size)
+        self._draw_walls(cr, cs, size)
+        self._draw_players(cr, cs, size)
+
+    def _update_origin(self, cs, size):
         board = size * cs + (size - 1) * GAP
         self._ox = (self.area.get_width() - board) / 2
         self._oy = (self.area.get_height() - board) / 2
 
-        cr.set_source_rgb(0.86, 0.82, 0.73)
+    def _draw_background(self, cr):
+        cr.set_source_rgb(*COLOR_BACKGROUND)
         cr.paint()
 
+    def _draw_cells(self, cr, cs, size):
         for r in range(size):
             for c in range(size):
                 x, y = self._cell_xy(r, c)
-                cr.set_source_rgb(0.96, 0.93, 0.91)
+                cr.set_source_rgb(*COLOR_CELL)
                 cr.rectangle(x, y, cs, cs)
                 cr.fill()
                 cr.set_source_rgb(0, 0, 0)
@@ -480,7 +597,8 @@ class QuoridorWindow(Gtk.ApplicationWindow):
                 cr.rectangle(x, y, cs, cs)
                 cr.stroke()
 
-        cr.set_source_rgb(0.55, 0.27, 0.07)
+    def _draw_walls(self, cr, cs, size):
+        cr.set_source_rgb(*COLOR_WALL)
         for walls, vertical in [
             (self.session.state.vertical_walls, True),
             (self.session.state.horizontal_walls, False),
@@ -493,25 +611,31 @@ class QuoridorWindow(Gtk.ApplicationWindow):
                     cr.rectangle(
                         self._ox + col * (cs + GAP) + cs,
                         self._oy + row * (cs + GAP),
-                        GAP,
-                        cs,
+                        GAP, cs,
                     )
                 else:
                     cr.rectangle(
                         self._ox + col * (cs + GAP),
                         self._oy + row * (cs + GAP) + cs,
-                        cs,
-                        GAP,
+                        cs, GAP,
                     )
                 cr.fill()
 
+    def _draw_players(self, cr, cs, size):
         for pid, pos in self.session.state.player_positions.items():
             x, y = self._cell_xy(*divmod(pos, size))
+            cx = x + cs / 2
+            cy = y + cs / 2
+
+            if pid == self._drag_pid and self._drag_start:
+                ox, oy = self._drag_offset
+                cx = self._drag_start[0] + ox
+                cy = self._drag_start[1] + oy
+
             color = PLAYER_COLORS.get(pid, (0.25, 0.25, 0.25))
             cr.set_source_rgb(*color)
-            cr.arc(x + cs / 2, y + cs / 2, cs * 0.35, 0, math.pi * 2)
+            cr.arc(cx, cy, cs * 0.35, 0, math.pi * 2)
             cr.fill()
-
 
 def main():
     app = Gtk.Application(application_id="fr.ubordeaux.quoridor.demo")
