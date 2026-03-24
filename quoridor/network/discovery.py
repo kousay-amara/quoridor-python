@@ -25,11 +25,9 @@ class DiscoveredServer:
         self.port = port
 
 
-
 def remember_server(name: str, host: str, port: int) -> None:
     server = DiscoveredServer(name, host, _validate_port(port))
     _discovery_cache[(server.host, server.port)] = (server, time.time())
-
 
 
 def format_discovery_message(name: str, port: int) -> str:
@@ -39,7 +37,6 @@ def format_discovery_message(name: str, port: int) -> str:
     if not server_name:
         raise ValueError("server name must not be empty")
     return f"{_DISCOVERY_PREFIX} {server_name} {port}"
-
 
 
 def parse_discovery_message(message: str) -> tuple[str, int] | None:
@@ -109,7 +106,6 @@ class DiscoveryBroadcaster:
                     break
         finally:
             sock.close()
-
 
 
 def discover_servers(

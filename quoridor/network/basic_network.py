@@ -1,6 +1,22 @@
+"""Compatibility helpers and lazy exports for the network package."""
+
 from __future__ import annotations
 
 import socket
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .client import NetworkClient
+    from .discovery import (
+        DiscoveredServer,
+        DiscoveryBroadcaster,
+        discover_servers,
+        format_discovery_message,
+        parse_discovery_message,
+        remember_server,
+    )
+    from .server import NetworkServer
+
 
 DEFAULT_SERVER_HOST = "localhost"
 DEFAULT_SERVER_PORT = 12345
@@ -66,18 +82,6 @@ def parse_endpoint(
         return host, default_port
     return host, _validate_port(int(port_text))
 
-"""Backward-compatible network exports."""
-
-from .client import NetworkClient
-from .discovery import (
-    DiscoveredServer,
-    DiscoveryBroadcaster,
-    discover_servers,
-    format_discovery_message,
-    parse_discovery_message,
-    remember_server,
-)
-from .server import NetworkServer
 
 __all__ = [
     "CLIENT_TIMEOUT_SEC",
@@ -97,3 +101,26 @@ __all__ = [
     "parse_endpoint",
     "remember_server",
 ]
+
+
+def __getattr__(name: str):
+    if name == "NetworkClient":
+        from .client import NetworkClient
+
+        return NetworkClient
+    if name == "NetworkServer":
+        from .server import NetworkServer
+
+        return NetworkServer
+    if name in {
+        "DiscoveredServer",
+        "DiscoveryBroadcaster",
+        "discover_servers",
+        "format_discovery_message",
+        "parse_discovery_message",
+        "remember_server",
+    }:
+        from . import discovery
+
+        return getattr(discovery, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

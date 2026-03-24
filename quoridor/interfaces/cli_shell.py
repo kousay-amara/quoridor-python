@@ -26,7 +26,6 @@ from ..core.notation import get_edges_for_wall, get_node_from_notation
 from ..core.validators import validate_pawn_move, validate_wall
 from ..rules.win_rules import has_player_won
 from .cli_constants import (
-    AI_MODE_DEFAULT,
     AI_MODE_ITERATIVE,
     AI_MODE_MINIMAX,
     AI_MODE_MCTS,

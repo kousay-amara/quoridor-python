@@ -36,7 +36,6 @@ if __package__ in {None, ""}:
         ShortcutError,
         ShortcutManager,
     )
-    from quoridor.application.blitz import Blitz
 else:
     from ..application.game_session import (
         GameSession,
@@ -54,7 +53,6 @@ else:
         ShortcutError,
         ShortcutManager,
     )
-    from ..application.blitz import Blitz
 
 SIZE = 9
 DEFAULT_WALLS = 10
@@ -73,8 +71,13 @@ COLOR_WALL = (0.55, 0.27, 0.07)
 
 
 class QuoridorWindow(Gtk.ApplicationWindow):
-    def __init__(self, app: Gtk.Application, num_players=2, board_size=9,
-             walls=10):
+    def __init__(
+        self,
+        app: Gtk.Application,
+        num_players=2,
+        board_size=9,
+        walls=10,
+    ):
         super().__init__(application=app, title="Quoridor")
         self.set_default_size(680, 760)
 
@@ -91,9 +94,9 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         self.action_registry = ActionRegistry(handlers={})
 
         self.session = self._build_new_session(
-        size=board_size,
-        players=num_players,
-        walls=walls,
+            size=board_size,
+            players=num_players,
+            walls=walls,
         )
         self.status = Gtk.Label(label="Ready.")
         self.status.set_xalign(0.0)
@@ -115,7 +118,7 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         root.append(self.area)
         root.append(self.status)
         self.set_child(root)
-        
+
         self._drag_pid = None
         self._drag_start = None
         self._drag_offset = (0, 0)
@@ -151,8 +154,9 @@ class QuoridorWindow(Gtk.ApplicationWindow):
 
         return Gtk.PopoverMenuBar(menu_model=menu_model)
 
-    def _build_new_session(self, *, size: int, players: int, 
-                       walls: int = 20) -> GameSession:
+    def _build_new_session(
+        self, *, size: int, players: int, walls: int = 20
+    ) -> GameSession:
         positions = initial_player_positions(size, players)
         state = GameState(
             board_size=size,
@@ -235,7 +239,7 @@ class QuoridorWindow(Gtk.ApplicationWindow):
     def _on_drag_begin(self, gesture, start_x, start_y):
         if self._paused:
             self._set_status("Game is paused.")
-            return  
+            return
         cell = self._xy_to_cell(start_x, start_y)
         if cell is not None:
             row, col = cell
@@ -664,15 +668,20 @@ class QuoridorWindow(Gtk.ApplicationWindow):
             cr.arc(cx, cy, cs * 0.35, 0, math.pi * 2)
             cr.fill()
 
+
 def main(num_players=2, board_size=9, walls=20):
     app = Gtk.Application(application_id="fr.ubordeaux.quoridor.demo")
-    app.connect("activate", lambda a: QuoridorWindow(
-        a,
-        num_players=num_players,
-        board_size=board_size,
-        walls=walls,
-    ).present())
+    app.connect(
+        "activate",
+        lambda a: QuoridorWindow(
+            a,
+            num_players=num_players,
+            board_size=board_size,
+            walls=walls,
+        ).present(),
+    )
     return app.run([sys.argv[0]])
+
 
 if __name__ == "__main__":
     sys.exit(main())

@@ -110,7 +110,11 @@ COMMAND_CATALOG: tuple[CommandHelp, ...] = (
         "redo [N]",
         "Redo the last undone move-group (or N groups).",
     ),
-    CommandHelp("quit", "quit", "Disconnect from the server or exit the program."),
+    CommandHelp(
+        "quit",
+        "quit",
+        "Disconnect from the server or exit the program.",
+    ),
 )
 
 

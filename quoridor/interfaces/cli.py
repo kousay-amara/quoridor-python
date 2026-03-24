@@ -161,6 +161,7 @@ def _main_gui(args) -> int:
         walls=args.walls,
     )
 
+
 def _main_interactive(argv: list[str]) -> int:
     setup_i18n()
     defaults = load_or_init_config()

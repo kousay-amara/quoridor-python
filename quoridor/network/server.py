@@ -49,7 +49,10 @@ class NetworkServer:
         self._lock = threading.Lock()
 
     def running(self) -> bool:
-        return self._accept_thread is not None and self._accept_thread.is_alive()
+        return (
+            self._accept_thread is not None
+            and self._accept_thread.is_alive()
+        )
 
     def start(self) -> None:
         if self.running():
