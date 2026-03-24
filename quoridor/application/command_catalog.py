@@ -78,6 +78,16 @@ COMMAND_CATALOG: tuple[CommandHelp, ...] = (
         "server stop",
         "Stop the local game server and disconnect its client.",
     ),
+    CommandHelp(
+        "join",
+        "join [IP[:PORT]]",
+        "Connect to a game server (default: localhost:12345).",
+    ),
+    CommandHelp(
+        "ping",
+        "ping",
+        "Ping the connected game server and display round-trip time.",
+    ),
     CommandHelp("pause", "pause", "Toggle blitz timer pause/resume."),
     CommandHelp(
         "moves",
@@ -100,14 +110,14 @@ COMMAND_CATALOG: tuple[CommandHelp, ...] = (
         "redo [N]",
         "Redo the last undone move-group (or N groups).",
     ),
-    CommandHelp("quit", "quit", "Exit the program."),
+    CommandHelp("quit", "quit", "Disconnect from the server or exit the program."),
 )
 
 
 OVERVIEW_TEXT = (
     "Commands: new [ARGS], help [CMD], load, save, set, hint, show board, "
     "show history, show configuration, show time, server list, server start, "
-    "server stop, pause, moves, move, wall, "
+    "server stop, join, ping, pause, moves, move, wall, "
     "undo, redo, quit\n"
     "Use: help <command>"
 )
@@ -127,6 +137,8 @@ COMPLETION_COMMANDS = [
     "server list",
     "server start",
     "server stop",
+    "join ",
+    "ping",
     "pause",
     "moves",
     "move ",

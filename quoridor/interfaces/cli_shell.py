@@ -41,10 +41,12 @@ from .cli_render import (
 from .contest_parser import ContestError
 from .cli_io import _prompt_save_before_quit
 from ..network import (
+    NetworkClient,
     NetworkServer,
     DEFAULT_SERVER_PORT,
     DiscoveredServer,
     discover_servers,
+    parse_endpoint,
 )
 
 _ = gettext.gettext
@@ -1272,6 +1274,46 @@ def _command_server(state: _ShellState, line: str) -> bool:
     raise ValueError("unknown server action")
 
 
+def _command_join(state: _ShellState, line: str) -> bool:
+    parts = line.split(maxsplit=1)
+    if state.network_client is not None:
+        print(
+            f"Already connected to server "
+            f"{state.network_client.host}:{state.network_client.port}."
+        )
+        return False
+
+    endpoint = parts[1] if len(parts) == 2 else None
+    host, port = parse_endpoint(endpoint)
+    client = NetworkClient(host=host, port=port)
+    try:
+        client.connect()
+    except OSError as exc:
+        print(f"Cannot connect to server {host}:{port}: {exc}")
+        return False
+
+    state.network_client = client
+    print(f"Connected to server {host}:{port}.")
+    return False
+
+
+def _command_ping(state: _ShellState, _line: str) -> bool:
+    if state.network_client is None:
+        print("Not connected to any server.")
+        return False
+
+    try:
+        round_trip_ms = state.network_client.ping()
+    except OSError as exc:
+        state.network_client.close()
+        state.network_client = None
+        print(f"Connection lost: {exc}")
+        return False
+
+    print(f"PONG TIME={round(round_trip_ms)}ms")
+    return False
+
+
 def _command_undo(state: _ShellState, line: str) -> bool:
     if _handle_undo(state.session, line):
         state.has_unsaved_changes = True
@@ -1311,6 +1353,17 @@ def _command_shorthand_wall(state: _ShellState, line: str) -> bool:
 
 
 def _command_quit(state: _ShellState, _line: str) -> bool:
+    if state.network_client is not None:
+        client = state.network_client
+        state.network_client = None
+        try:
+            client.quit()
+            print("Disconnected from server.")
+        except OSError as exc:
+            client.close()
+            print(f"Disconnected from server: {exc}")
+        return False
+
     _handle_quit(
         state.session,
         state.has_unsaved_changes,
@@ -1342,6 +1395,7 @@ class _ShellState:
     time_limit: float
     blitz: Blitz
     network_server: NetworkServer | None = None
+    network_client: NetworkClient | None = None
 
 
 class _BaseCommand:
@@ -1475,6 +1529,23 @@ class _ServerCommand(_BaseCommand):
         return _command_server(state, line)
 
 
+class _JoinCommand(_BaseCommand):
+    def matches(self, line: str) -> bool:
+        line_lower = line.lower()
+        return line_lower == "join" or line_lower.startswith("join ")
+
+    def run(self, state: _ShellState, line: str) -> bool:
+        return _command_join(state, line)
+
+
+class _PingCommand(_BaseCommand):
+    def matches(self, line: str) -> bool:
+        return line.lower() == "ping"
+
+    def run(self, state: _ShellState, line: str) -> bool:
+        return _command_ping(state, line)
+
+
 class _MovesCommand(_BaseCommand):
     def matches(self, line: str) -> bool:
         return line.lower() == "moves"
@@ -1577,6 +1648,8 @@ def _build_command_registry() -> _CommandRegistry:
             _ShowConfigurationCommand(),
             _ShowTimeCommand(),
             _ServerCommand(),
+            _JoinCommand(),
+            _PingCommand(),
             _PauseCommand(),
             _MovesCommand(),
             _MoveCommand(),
