@@ -159,7 +159,6 @@ def _main_gui(args) -> int:
         num_players=args.players,
         board_size=args.size,
         walls=args.walls,
-        blitz_minutes=args.time if args.blitz else 0,
     )
 
 def _main_interactive(argv: list[str]) -> int:
@@ -173,7 +172,7 @@ def _main_interactive(argv: list[str]) -> int:
         return 0
 
     if args.gui:
-        return _main_gui()
+        return _main_gui(args)
 
     if any(pid > args.players for pid in args.ai_player):
         parser.error("--ai-player id must be <= --players")

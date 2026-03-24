@@ -74,7 +74,7 @@ COLOR_WALL = (0.55, 0.27, 0.07)
 
 class QuoridorWindow(Gtk.ApplicationWindow):
     def __init__(self, app: Gtk.Application, num_players=2, board_size=9,
-             walls=10, blitz_minutes=0):
+             walls=10):
         super().__init__(application=app, title="Quoridor")
         self.set_default_size(680, 760)
 
@@ -83,7 +83,6 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         self._num_players = num_players
         self._init_board_size = board_size
         self._init_walls = walls
-        self._init_blitz_minutes = blitz_minutes
         self._shortcut_window: Gtk.Window | None = None
         self._shortcut_entries: dict[ActionType, Gtk.Entry] = {}
 
@@ -95,7 +94,6 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         size=board_size,
         players=num_players,
         walls=walls,
-        blitz_minutes=blitz_minutes,
         )
         self.status = Gtk.Label(label="Ready.")
         self.status.set_xalign(0.0)
@@ -351,7 +349,6 @@ class QuoridorWindow(Gtk.ApplicationWindow):
             size=self._init_board_size,
             players=self._num_players,
             walls=self._init_walls,
-            blitz_minutes=self._init_blitz_minutes,
         )
         self._paused = False
         self.area.queue_draw()
@@ -667,14 +664,13 @@ class QuoridorWindow(Gtk.ApplicationWindow):
             cr.arc(cx, cy, cs * 0.35, 0, math.pi * 2)
             cr.fill()
 
-def main(num_players=2, board_size=9, walls=20, blitz_minutes=0):
+def main(num_players=2, board_size=9, walls=20):
     app = Gtk.Application(application_id="fr.ubordeaux.quoridor.demo")
     app.connect("activate", lambda a: QuoridorWindow(
         a,
         num_players=num_players,
         board_size=board_size,
         walls=walls,
-        blitz_minutes=blitz_minutes,
     ).present())
     return app.run([sys.argv[0]])
 
