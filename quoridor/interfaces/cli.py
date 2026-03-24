@@ -133,7 +133,7 @@ def _main_contest(argv: list[str]) -> int:
     return 0
 
 
-def _main_gui() -> int:
+def _main_gui(args) -> int:
     try:
         from . import gui as gui_mod
     except ModuleNotFoundError as exc:
@@ -155,8 +155,12 @@ def _main_gui() -> int:
         )
         return result.returncode
 
-    return gui_mod.main([sys.argv[0]])
-
+    return gui_mod.main(
+        num_players=args.players,
+        board_size=args.size,
+        walls=args.walls,
+        blitz_minutes=args.time if args.blitz else 0,
+    )
 
 def _main_interactive(argv: list[str]) -> int:
     setup_i18n()

@@ -36,6 +36,7 @@ if __package__ in {None, ""}:
         ShortcutError,
         ShortcutManager,
     )
+    from quoridor.application.blitz import Blitz
 else:
     from ..application.game_session import (
         GameSession,
@@ -53,6 +54,7 @@ else:
         ShortcutError,
         ShortcutManager,
     )
+    from ..application.blitz import Blitz
 
 SIZE = 9
 DEFAULT_WALLS = 10
@@ -71,12 +73,17 @@ COLOR_WALL = (0.55, 0.27, 0.07)
 
 
 class QuoridorWindow(Gtk.ApplicationWindow):
-    def __init__(self, app: Gtk.Application):
+    def __init__(self, app: Gtk.Application, num_players=2, board_size=9,
+             walls=10, blitz_minutes=0):
         super().__init__(application=app, title="Quoridor")
         self.set_default_size(680, 760)
 
         self._app = app
         self._paused = False
+        self._num_players = num_players
+        self._init_board_size = board_size
+        self._init_walls = walls
+        self._init_blitz_minutes = blitz_minutes
         self._shortcut_window: Gtk.Window | None = None
         self._shortcut_entries: dict[ActionType, Gtk.Entry] = {}
 
@@ -84,36 +91,12 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         self.shortcut_manager = self.config_manager.load_shortcuts()
         self.action_registry = ActionRegistry(handlers={})
 
-        self.session = self._build_new_session(size=SIZE, players=2)
-
-        controls = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        new_button = Gtk.Button(label="New")
-        load_button = Gtk.Button(label="Load")
-        save_button = Gtk.Button(label="Save")
-        undo_button = Gtk.Button(label="Undo")
-        redo_button = Gtk.Button(label="Redo")
-        hint_button = Gtk.Button(label="Hint")
-        pause_button = Gtk.Button(label="Pause")
-
-        new_button.connect("clicked", lambda _b: self._action_new_game())
-        load_button.connect("clicked", self._on_load_clicked)
-        save_button.connect("clicked", self._on_save_clicked)
-        undo_button.connect("clicked", lambda _b: self._action_undo())
-        redo_button.connect("clicked", lambda _b: self._action_redo())
-        hint_button.connect("clicked", lambda _b: self._action_hint())
-        pause_button.connect("clicked", lambda _b: self._action_pause())
-
-        for widget in [
-            new_button,
-            load_button,
-            save_button,
-            undo_button,
-            redo_button,
-            hint_button,
-            pause_button,
-        ]:
-            controls.append(widget)
-
+        self.session = self._build_new_session(
+        size=board_size,
+        players=num_players,
+        walls=walls,
+        blitz_minutes=blitz_minutes,
+        )
         self.status = Gtk.Label(label="Ready.")
         self.status.set_xalign(0.0)
 
@@ -154,9 +137,9 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         file_menu.append("New Game", "win.new_game")
         file_menu.append("Load Game", "win.load_game")
         file_menu.append("Save Game", "win.save_game")
-        file_menu.append("Configuration", "win.show-config")
-        file_menu.append("Info", "win.show-info")
-        file_menu.append("Quit", "win.quit-app")
+        file_menu.append("Configuration", "win.show_config")
+        file_menu.append("Info", "win.show_info")
+        file_menu.append("Quit", "win.quit_app")
 
         game_menu = Gio.Menu()
         game_menu.append("Undo", "win.undo")
@@ -170,13 +153,14 @@ class QuoridorWindow(Gtk.ApplicationWindow):
 
         return Gtk.PopoverMenuBar(menu_model=menu_model)
 
-    def _build_new_session(self, *, size: int, players: int) -> GameSession:
+    def _build_new_session(self, *, size: int, players: int, 
+                       walls: int = 20) -> GameSession:
         positions = initial_player_positions(size, players)
         state = GameState(
             board_size=size,
             current_player=1,
             player_positions=positions,
-            remaining_walls={p: DEFAULT_WALLS for p in positions},
+            remaining_walls={p: walls for p in positions},
             vertical_walls=[],
             horizontal_walls=[],
         )
@@ -363,10 +347,11 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         return None, None
 
     def _action_new_game(self) -> None:
-        players = len(self.session.state.player_positions)
         self.session = self._build_new_session(
-            size=self._board_size(),
-            players=players,
+            size=self._init_board_size,
+            players=self._num_players,
+            walls=self._init_walls,
+            blitz_minutes=self._init_blitz_minutes,
         )
         self._paused = False
         self.area.queue_draw()
@@ -682,13 +667,16 @@ class QuoridorWindow(Gtk.ApplicationWindow):
             cr.arc(cx, cy, cs * 0.35, 0, math.pi * 2)
             cr.fill()
 
-
-def main(argv: list[str] | None = None):
+def main(num_players=2, board_size=9, walls=20, blitz_minutes=0):
     app = Gtk.Application(application_id="fr.ubordeaux.quoridor.demo")
-    app.connect("activate", lambda a: QuoridorWindow(a).present())
-    gui_argv = [sys.argv[0]] if argv is None else argv
-    return app.run(gui_argv)
-
+    app.connect("activate", lambda a: QuoridorWindow(
+        a,
+        num_players=num_players,
+        board_size=board_size,
+        walls=walls,
+        blitz_minutes=blitz_minutes,
+    ).present())
+    return app.run([sys.argv[0]])
 
 if __name__ == "__main__":
     sys.exit(main())
