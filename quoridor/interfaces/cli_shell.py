@@ -42,6 +42,14 @@ from .cli_render import (
 )
 from .contest_parser import ContestError
 from .cli_io import _prompt_save_before_quit
+from ..network import (
+    NetworkClient,
+    NetworkServer,
+    DEFAULT_SERVER_PORT,
+    DiscoveredServer,
+    discover_servers,
+    parse_endpoint,
+)
 
 _ = gettext.gettext
 
@@ -1231,6 +1239,131 @@ def _command_wall(state: _ShellState, line: str) -> bool:
     return should_break
 
 
+def _parse_server_port(value: str) -> int:
+    try:
+        port = int(value)
+    except ValueError as exc:
+        raise ValueError(f"invalid port: {value}") from exc
+    if not 1 <= port <= 65535:
+        raise ValueError(f"invalid port: {value}")
+    return port
+
+
+def _command_server(state: _ShellState, line: str) -> bool:
+    parts = line.split()
+    if len(parts) < 2:
+        raise ValueError("Invalid format. Use: server list|start [PORT]|stop")
+
+    action = parts[1].lower()
+    if action == "list":
+        if len(parts) != 2:
+            raise ValueError("Invalid format. Use: server list")
+        servers = discover_servers()
+        unique_servers = []
+        seen_server_keys = set()
+        for server in servers:
+            server_key = (server.name, server.port)
+            if server_key in seen_server_keys:
+                continue
+            seen_server_keys.add(server_key)
+            unique_servers.append(server)
+        servers = unique_servers
+        if state.network_server is not None:
+            local_server = DiscoveredServer(
+                state.network_server.name,
+                "127.0.0.1",
+                state.network_server.port,
+            )
+            servers = [
+                server
+                for server in servers
+                if (server.name, server.port)
+                != (local_server.name, local_server.port)
+            ]
+            servers = [local_server, *servers]
+        if not servers:
+            print("No network servers found.")
+            return False
+        print("Discovered servers:")
+        for server in servers:
+            print(f"- {server.name} ({server.host}:{server.port})")
+        return False
+
+    if action == "start":
+        if len(parts) > 3:
+            raise ValueError("Invalid format. Use: server start [PORT]")
+        if state.network_server is not None:
+            print(
+                f"Server already running on port {state.network_server.port}."
+            )
+            return False
+        port = DEFAULT_SERVER_PORT
+        if len(parts) == 3:
+            port = _parse_server_port(parts[2])
+        server = NetworkServer(port=port)
+        try:
+            server.start()
+        except OSError as exc:
+            print(f"Cannot start server on port {port}: {exc}")
+            return False
+        state.network_server = server
+        print(f"Server started on port {server.port}.")
+        return False
+
+    if action == "stop":
+        if len(parts) != 2:
+            raise ValueError("Invalid format. Use: server stop")
+        if state.network_server is None:
+            print("Server is not running.")
+            return False
+        state.network_server.stop()
+        state.network_server = None
+        print("Server stopped.")
+        return False
+
+    raise ValueError("unknown server action")
+
+
+def _command_join(state: _ShellState, line: str) -> bool:
+    parts = line.split(maxsplit=1)
+    if state.network_client is not None:
+        print(
+            f"Already connected to server "
+            f"{state.network_client.host}:{state.network_client.port}."
+        )
+        return False
+
+    endpoint = parts[1] if len(parts) == 2 else None
+    host, port = parse_endpoint(endpoint)
+    client = NetworkClient(host=host, port=port)
+    try:
+        client.connect()
+    except OSError as exc:
+        print(f"Cannot connect to server {host}:{port}: {exc}")
+        return False
+
+    state.network_client = client
+    print(f"Connected to server {host}:{port}.")
+    return False
+
+
+def _command_ping(state: _ShellState, _line: str) -> bool:
+    if state.network_client is None:
+        print("Not connected to any server.")
+        return False
+
+    try:
+        round_trip_ms = state.network_client.ping()
+    except OSError as exc:
+        state.network_client.close()
+        state.network_client = None
+        print(f"Connection lost: {exc}")
+        return False
+
+    print(f"PONG TIME={round(round_trip_ms)}ms")
+    return False
+
+
 def _command_undo(state: _ShellState, line: str) -> bool:
     if _pause_blocks_gameplay(state.blitz):
         return False
@@ -1282,11 +1415,25 @@ def _command_shorthand_wall(state: _ShellState, line: str) -> bool:
 
 
 def _command_quit(state: _ShellState, _line: str) -> bool:
+    if state.network_client is not None:
+        client = state.network_client
+        state.network_client = None
+        try:
+            client.quit()
+            print("Disconnected from server.")
+        except OSError as exc:
+            client.close()
+            print(f"Disconnected from server: {exc}")
+        return False
+
     _handle_quit(
         state.session,
         state.has_unsaved_changes,
         blitz=state.blitz,
     )
+    if state.network_server is not None:
+        state.network_server.stop()
+        state.network_server = None
     return True
 
 
@@ -1309,6 +1456,8 @@ class _ShellState:
     blitz_enabled: bool
     time_limit: float
     blitz: Blitz
+    network_server: NetworkServer | None = None
+    network_client: NetworkClient | None = None
 
 
 class _BaseCommand:
@@ -1433,6 +1582,32 @@ class _PauseCommand(_BaseCommand):
         return _command_pause(state, line)
 
 
+class _ServerCommand(_BaseCommand):
+    def matches(self, line: str) -> bool:
+        line_lower = line.lower()
+        return line_lower == "server" or line_lower.startswith("server ")
+
+    def run(self, state: _ShellState, line: str) -> bool:
+        return _command_server(state, line)
+
+
+class _JoinCommand(_BaseCommand):
+    def matches(self, line: str) -> bool:
+        line_lower = line.lower()
+        return line_lower == "join" or line_lower.startswith("join ")
+
+    def run(self, state: _ShellState, line: str) -> bool:
+        return _command_join(state, line)
+
+
+class _PingCommand(_BaseCommand):
+    def matches(self, line: str) -> bool:
+        return line.lower() == "ping"
+
+    def run(self, state: _ShellState, line: str) -> bool:
+        return _command_ping(state, line)
+
+
 class _MovesCommand(_BaseCommand):
     def matches(self, line: str) -> bool:
         return line.lower() == "moves"
@@ -1534,6 +1709,9 @@ def _build_command_registry() -> _CommandRegistry:
             _ShowBoardCommand(),
             _ShowConfigurationCommand(),
             _ShowTimeCommand(),
+            _ServerCommand(),
+            _JoinCommand(),
+            _PingCommand(),
             _PauseCommand(),
             _MovesCommand(),
             _MoveCommand(),
