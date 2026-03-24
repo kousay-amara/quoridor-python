@@ -1,7 +1,7 @@
 """Network helpers for Quoridor."""
 
 from .basic_network import (
-    BasicNetworkServer,
+    NetworkServer,
     DEFAULT_SERVER_HOST,
     DEFAULT_SERVER_PORT,
     DISCOVERY_BROADCAST_INTERVAL_SEC,
@@ -10,6 +10,7 @@ from .basic_network import (
     DISCOVERY_TIMEOUT_SEC,
     DiscoveryBroadcaster,
     DiscoveredServer,
+    NetworkClient,
     discover_servers,
     format_discovery_message,
     parse_discovery_message,
@@ -18,7 +19,7 @@ from .basic_network import (
 )
 
 __all__ = [
-    "BasicNetworkServer",
+    "NetworkServer",
     "DEFAULT_SERVER_HOST",
     "DEFAULT_SERVER_PORT",
     "DISCOVERY_BROADCAST_INTERVAL_SEC",
@@ -27,6 +28,7 @@ __all__ = [
     "DISCOVERY_TIMEOUT_SEC",
     "DiscoveryBroadcaster",
     "DiscoveredServer",
+    "NetworkClient",
     "discover_servers",
     "format_discovery_message",
     "parse_discovery_message",

@@ -41,7 +41,7 @@ from .cli_render import (
 from .contest_parser import ContestError
 from .cli_io import _prompt_save_before_quit
 from ..network import (
-    BasicNetworkServer,
+    NetworkServer,
     DEFAULT_SERVER_PORT,
     DiscoveredServer,
     discover_servers,
@@ -1248,7 +1248,7 @@ def _command_server(state: _ShellState, line: str) -> bool:
         port = DEFAULT_SERVER_PORT
         if len(parts) == 3:
             port = _parse_server_port(parts[2])
-        server = BasicNetworkServer(port=port)
+        server = NetworkServer(port=port)
         try:
             server.start()
         except OSError as exc:
@@ -1341,7 +1341,7 @@ class _ShellState:
     blitz_enabled: bool
     time_limit: float
     blitz: Blitz
-    network_server: BasicNetworkServer | None = None
+    network_server: NetworkServer | None = None
 
 
 class _BaseCommand:

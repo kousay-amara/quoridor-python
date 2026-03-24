@@ -23,6 +23,23 @@ def _send_line(sock: socket.socket, message: str) -> None:
     sock.sendall(f"{message}\n".encode("ascii", errors="strict"))
 
 
+def _recv_line(
+    sock: socket.socket,
+    buffer: str,
+) -> tuple[str | None, str, bool]:
+    while "\n" not in buffer:
+        try:
+            data = sock.recv(_DISCOVERY_BUFFER_SIZE)
+        except socket.timeout:
+            return None, buffer, False
+        if not data:
+            return None, buffer, True
+        buffer += data.decode("ascii", errors="ignore")
+
+    line, buffer = buffer.split("\n", 1)
+    return line.rstrip("\r"), buffer, False
+
+
 def remember_server(name: str, host: str, port: int) -> None:
     server = DiscoveredServer(name, host, _validate_port(port))
     _discovery_cache[(server.host, server.port)] = (server, time.time())
@@ -86,15 +103,13 @@ class DiscoveryBroadcaster:
                         )
                     except OSError:
                         continue
-                if self.interval_sec <= 0:
-                    break
                 if self._stop_requested.wait(self.interval_sec):
                     break
         finally:
             sock.close()
 
 
-class BasicNetworkServer:
+class NetworkServer:
     def __init__(
         self,
         *,
@@ -118,10 +133,10 @@ class BasicNetworkServer:
             interval_sec=self.broadcast_interval_sec,
         )
         self._stop_requested = threading.Event()
-        self._listener = None
+        self._listener_sock = None
         self._accept_thread = None
-        self._client_monitor_thread = None
-        self._client = None
+        self._client_thread = None
+        self._client_sock = None
         self._last_client_activity = None
         self._lock = threading.Lock()
 
@@ -132,17 +147,17 @@ class BasicNetworkServer:
         if self.running():
             return
 
-        listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        listener.settimeout(_SOCKET_TIMEOUT_SEC)
+        listener_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        listener_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        listener_sock.settimeout(_SOCKET_TIMEOUT_SEC)
         try:
-            listener.bind((self.host, self.port))
-            listener.listen(1)
+            listener_sock.bind((self.host, self.port))
+            listener_sock.listen(1)
         except OSError:
-            listener.close()
+            listener_sock.close()
             raise
 
-        self._listener = listener
+        self._listener_sock = listener_sock
         self._stop_requested.clear()
         remember_server(self.name, "127.0.0.1", self.port)
         self._broadcaster.start()
@@ -157,85 +172,79 @@ class BasicNetworkServer:
         self._stop_requested.set()
         self._broadcaster.stop()
 
-        listener = self._listener
-        self._listener = None
-        if listener is not None:
+        if self._listener_sock is not None:
             try:
-                listener.close()
+                self._listener_sock.close()
             except OSError:
                 pass
+            self._listener_sock = None
 
         with self._lock:
-            client = self._client
-            self._client = None
+            if self._client_sock is not None:
+                try:
+                    _send_line(self._client_sock, "SERVER_STOPPING")
+                    _send_line(self._client_sock, "BYE")
+                except OSError:
+                    pass
+                try:
+                    self._client_sock.close()
+                except OSError:
+                    pass
+                self._client_sock = None
             self._last_client_activity = None
 
-        if client is not None:
-            try:
-                _send_line(client, "SERVER_STOPPING")
-                _send_line(client, "BYE")
-            except OSError:
-                pass
-            try:
-                client.close()
-            except OSError:
-                pass
-
-        accept_thread = self._accept_thread
-        if accept_thread is not None:
-            accept_thread.join(timeout=0.5)
+        if self._accept_thread is not None:
+            self._accept_thread.join(timeout=0.5)
         self._accept_thread = None
 
-        monitor_thread = self._client_monitor_thread
-        if monitor_thread is not None:
-            monitor_thread.join(timeout=0.5)
-        self._client_monitor_thread = None
+        if self._client_thread is not None:
+            self._client_thread.join(timeout=0.5)
+        self._client_thread = None
 
     def _accept_loop(self) -> None:
-        assert self._listener is not None
+        assert self._listener_sock is not None
         while not self._stop_requested.is_set():
             try:
-                conn, _address = self._listener.accept()
+                client_sock, _address = self._listener_sock.accept()
             except socket.timeout:
                 continue
             except OSError:
                 break
 
-            conn.settimeout(_SOCKET_TIMEOUT_SEC)
+            client_sock.settimeout(_SOCKET_TIMEOUT_SEC)
             with self._lock:
-                if self._client is not None:
+                if self._client_sock is not None:
                     try:
-                        _send_line(conn, "ERROR BUSY")
+                        _send_line(client_sock, "ERROR BUSY")
                     except OSError:
                         pass
                     try:
-                        conn.close()
+                        client_sock.close()
                     except OSError:
                         pass
                     continue
-                self._client = conn
+                self._client_sock = client_sock
                 self._last_client_activity = time.time()
 
             try:
-                _send_line(conn, f"WELCOME {self.name} {self.port}")
+                _send_line(client_sock, f"WELCOME {self.name} {self.port}")
             except OSError:
-                self._close_client(conn)
+                self._close_client(client_sock)
                 continue
 
-            self._client_monitor_thread = threading.Thread(
-                target=self._monitor_client,
-                args=(conn,),
+            self._client_thread = threading.Thread(
+                target=self._client_loop,
+                args=(client_sock,),
                 name="quoridor-network-client",
                 daemon=True,
             )
-            self._client_monitor_thread.start()
+            self._client_thread.start()
 
-    def _monitor_client(self, conn: socket.socket) -> None:
+    def _client_loop(self, client_sock: socket.socket) -> None:
+        buffer = ""
         try:
             while not self._stop_requested.is_set():
                 with self._lock:
-                    if self._client is not conn:
-                        break
                     last_client_activity = self._last_client_activity
 
                 if (
@@ -244,42 +253,142 @@ class BasicNetworkServer:
                     > self.client_timeout_sec
                 ):
                     try:
-                        _send_line(conn, "ERROR TIMEOUT")
-                        _send_line(conn, "BYE")
+                        _send_line(client_sock, "ERROR TIMEOUT")
+                        _send_line(client_sock, "BYE")
                     except OSError:
                         pass
                     break
 
-                try:
-                    data = conn.recv(1, socket.MSG_PEEK)
-                except socket.timeout:
+                line, buffer, closed = _recv_line(client_sock, buffer)
+                if closed:
+                    break
+                if line is None:
                     continue
-                except OSError:
-                    break
-
-                if not data:
-                    break
 
                 with self._lock:
-                    if self._client is conn:
-                        self._last_client_activity = time.time()
+                    self._last_client_activity = time.time()
 
-                if self._stop_requested.wait(_SOCKET_TIMEOUT_SEC):
+                command = line.strip()
+                if not command:
+                    continue
+
+                command_upper = command.upper()
+                if command_upper == "PING":
+                    started_at = time.time()
+                    response_ms = round((time.time() - started_at) * 1000.0)
+                    _send_line(client_sock, f"PONG TIME={response_ms}ms")
+                    continue
+
+                if command_upper == "QUIT":
+                    _send_line(client_sock, "BYE")
                     break
-        finally:
-            self._close_client(conn)
 
-    def _close_client(self, conn: socket.socket) -> None:
+                _send_line(client_sock, "ERROR UNKNOWN_COMMAND")
+        finally:
+            self._close_client(client_sock)
+
+    def _close_client(self, client_sock: socket.socket) -> None:
         try:
-            conn.close()
+            client_sock.close()
         except OSError:
             pass
 
         with self._lock:
-            if self._client is conn:
-                self._client = None
+            if self._client_sock is client_sock:
+                self._client_sock = None
                 self._last_client_activity = None
 
+
+class NetworkClient:
+    def __init__(
+        self,
+        *,
+        host: str = DEFAULT_SERVER_HOST,
+        port: int = DEFAULT_SERVER_PORT,
+    ) -> None:
+        self.host = host
+        self.port = _validate_port(port)
+        self._sock = None
+        self._buffer = ""
+
+    def connected(self) -> bool:
+        return self._sock is not None
+
+    def connect(self) -> None:
+        if self.connected():
+            return
+
+        sock = socket.create_connection(
+            (self.host, self.port),
+            timeout=_SOCKET_TIMEOUT_SEC,
+        )
+        sock.settimeout(_SOCKET_TIMEOUT_SEC)
+        try:
+            while True:
+                line, buffer, closed = _recv_line(sock, "")
+                if closed:
+                    raise OSError("server closed the connection")
+                if line is None:
+                    continue
+                if not line.startswith("WELCOME "):
+                    raise OSError(f"unexpected server response: {line}")
+                self._sock = sock
+                self._buffer = buffer
+                return
+        except OSError:
+            try:
+                sock.close()
+            except OSError:
+                pass
+            raise
+
+    def send_command(self, command: str) -> str:
+        if self._sock is None:
+            raise OSError("client is not connected")
+
+        _send_line(self._sock, command)
+        while True:
+            line, self._buffer, closed = _recv_line(
+                self._sock,
+                self._buffer,
+            )
+            if closed:
+                self.close()
+                raise OSError("server closed the connection")
+            if line is None:
+                continue
+            return line
+
+    def ping(self) -> float:
+        started_at = time.time()
+        response = self.send_command("PING")
+        round_trip_ms = (time.time() - started_at) * 1000.0
+        if response == "PONG":
+            return round_trip_ms
+        if response.startswith("PONG TIME=") and response.endswith("ms"):
+            return round_trip_ms
+        raise OSError(f"unexpected ping response: {response}")
+
+    def quit(self) -> None:
+        if self._sock is None:
+            return
+        try:
+            response = self.send_command("QUIT")
+        except OSError:
+            self.close()
+            return
+        self.close()
+        if response != "BYE":
+            raise OSError(f"unexpected quit response: {response}")
+
+    def close(self) -> None:
+        if self._sock is not None:
+            try:
+                self._sock.close()
+            except OSError:
+                pass
+        self._sock = None
+        self._buffer = ""
 
 def _validate_port(port: int) -> int:
     """Validate a TCP or UDP port."""
