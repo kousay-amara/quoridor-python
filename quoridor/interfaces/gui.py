@@ -83,6 +83,7 @@ class QuoridorWindow(Gtk.ApplicationWindow):
 
         self._app = app
         self._paused = False
+        self._game_over = False
         self._num_players = num_players
         self._init_board_size = board_size
         self._init_walls = walls
@@ -240,6 +241,9 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         if self._paused:
             self._set_status("Game is paused.")
             return
+        if self._game_over:
+            self._set_status("Game is over. Start a new game.")
+            return
         cell = self._xy_to_cell(start_x, start_y)
         if cell is not None:
             row, col = cell
@@ -300,10 +304,17 @@ class QuoridorWindow(Gtk.ApplicationWindow):
             )
             if valid:
                 self.session.play_pawn_move(self._drag_pid, to_node)
-                self._set_status(
-                    f"Player {self._drag_pid} moved "
-                    f"to ({row}, {col})."
-                )
+                winner = self.session.winner_id()
+                if winner is not None:
+                    self._set_status(
+                    f"Player {winner} wins!"
+                    )
+                    self._game_over = True
+                else:
+                    self._set_status(
+                        f"Player {self._drag_pid} moved "
+                        f"to ({row}, {col})."
+                    )
             else:
                 self._set_status(error)
         self._drag_pid = None
@@ -355,6 +366,7 @@ class QuoridorWindow(Gtk.ApplicationWindow):
             walls=self._init_walls,
         )
         self._paused = False
+        self._game_over = False
         self.area.queue_draw()
         self._set_status("New game started.")
 
@@ -533,15 +545,16 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         window.close()
 
     def _on_save_clicked(self, _button) -> None:
-        dialog = Gtk.FileChooserNative(
+        dialog = Gtk.FileChooserDialog(
             title="Save Quoridor game",
             transient_for=self,
+            modal=True,
             action=Gtk.FileChooserAction.SAVE,
-            accept_label="Save",
-            cancel_label="Cancel",
         )
+        dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
+        dialog.add_button("Save", Gtk.ResponseType.ACCEPT)
         dialog.connect("response", self._on_save_response)
-        dialog.show()
+        dialog.present()
 
     def _on_save_response(self, dialog, response_id) -> None:
         if response_id != Gtk.ResponseType.ACCEPT:
@@ -563,15 +576,16 @@ class QuoridorWindow(Gtk.ApplicationWindow):
             self._set_status(f"Save failed: {exc}")
 
     def _on_load_clicked(self, _button) -> None:
-        dialog = Gtk.FileChooserNative(
+        dialog = Gtk.FileChooserDialog(
             title="Load Quoridor game",
             transient_for=self,
+            modal=True,
             action=Gtk.FileChooserAction.OPEN,
-            accept_label="Load",
-            cancel_label="Cancel",
         )
+        dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
+        dialog.add_button("Load", Gtk.ResponseType.ACCEPT)
         dialog.connect("response", self._on_load_response)
-        dialog.show()
+        dialog.present()
 
     def _on_load_response(self, dialog, response_id) -> None:
         if response_id != Gtk.ResponseType.ACCEPT:
@@ -593,6 +607,7 @@ class QuoridorWindow(Gtk.ApplicationWindow):
                 fallback_walls_per_player=self.session.state.remaining_walls,
             )
             self._paused = False
+            self._game_over = False
             self.area.queue_draw()
             self._set_status(f"Loaded from: {path}")
         except Exception as exc:
