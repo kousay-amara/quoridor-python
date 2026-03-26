@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ..application.constants import WALLS_DEFAULT
+
 PLAYER_COUNT_MIN = 2
 PLAYER_COUNT_MAX = 4
 PLAYER_COUNT_SUPPORTED = {2, 3, 4}
