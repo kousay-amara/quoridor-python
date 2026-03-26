@@ -103,8 +103,6 @@ class Blitz:
         remaining_times[player_id] = 0.0
 
     def toggle_pause(self) -> bool:
-        if not self.is_enabled():
-            raise ValueError("blitz mode is not enabled")
         self.paused = not self.paused
         return self.paused
 

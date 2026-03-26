@@ -48,6 +48,16 @@ def test_paused_blitz_does_not_consume_time():
     assert blitz.input_timeout_for(1) == 60.0
 
 
+def test_pause_can_be_toggled_even_when_blitz_is_disabled():
+    blitz = Blitz(time_limit_minutes=0)
+
+    assert blitz.is_enabled() is False
+    assert blitz.paused is False
+    assert blitz.toggle_pause() is True
+    assert blitz.paused is True
+    assert blitz.toggle_pause() is False
+
+
 def test_blitz_snapshot_roundtrip_with_pause_and_remaining_times():
     blitz = Blitz(time_limit_minutes=2, player_ids=[1, 2])
     blitz.consume_time(1, 10.0)

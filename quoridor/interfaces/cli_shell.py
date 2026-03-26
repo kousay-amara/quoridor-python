@@ -597,7 +597,7 @@ def _handle_set(state: "_ShellState", line: str) -> None:
 
 
 def _is_game_paused(blitz: Blitz) -> bool:
-    return blitz.is_enabled() and blitz.paused
+    return blitz.paused
 
 
 def _pause_blocks_gameplay(blitz: Blitz) -> bool:
@@ -1150,11 +1150,11 @@ def _command_show_time(state: _ShellState, _line: str) -> bool:
 
 
 def _command_pause(state: _ShellState, _line: str) -> bool:
-    if not state.blitz.is_enabled():
-        print("Blitz mode is not enabled.")
-        return False
     is_paused = state.blitz.toggle_pause()
-    print("Blitz timer paused." if is_paused else "Blitz timer resumed.")
+    if state.blitz.is_enabled():
+        print("Blitz timer paused." if is_paused else "Blitz timer resumed.")
+    else:
+        print("Game paused." if is_paused else "Game resumed.")
     return False
 
 

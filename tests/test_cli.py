@@ -510,6 +510,32 @@ def test_pause_blocks_gameplay_commands_until_resumed(monkeypatch, capsys):
     assert "Player 1: e2, Player 2: e9" in out
 
 
+def test_pause_also_blocks_gameplay_when_blitz_is_disabled(
+    monkeypatch,
+    capsys,
+):
+    captured = run_shell(
+        monkeypatch,
+        capsys,
+        [
+            "pause",
+            "move e1-e2",
+            "hint",
+            "pause",
+            "move e1-e2",
+            "quit",
+            "n",
+        ],
+        blitz=False,
+    )
+
+    out = captured.out
+    assert "Game paused." in out
+    assert out.count("Game is paused.") >= 2
+    assert "Game resumed." in out
+    assert "Player 1: e2, Player 2: e9" in out
+
+
 def test_auto_play_ai_does_not_run_while_blitz_is_paused(monkeypatch):
     state = GameState(
         board_size=9,
