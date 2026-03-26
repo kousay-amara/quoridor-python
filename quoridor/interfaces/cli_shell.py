@@ -1419,7 +1419,7 @@ class _PauseCommand(_BaseCommand):
         return _command_pause(state, line)
 
 
-class _ServerCommand(_BaseCommand):
+class _ServerCommand(_InvalidAsCommandError):
     def matches(self, line: str) -> bool:
         line_lower = line.lower()
         return line_lower == "server" or line_lower.startswith("server ")
@@ -1428,7 +1428,7 @@ class _ServerCommand(_BaseCommand):
         return _command_server(state, line)
 
 
-class _JoinCommand(_BaseCommand):
+class _JoinCommand(_InvalidAsCommandError):
     def matches(self, line: str) -> bool:
         line_lower = line.lower()
         return line_lower == "join" or line_lower.startswith("join ")
@@ -1437,7 +1437,7 @@ class _JoinCommand(_BaseCommand):
         return _command_join(state, line)
 
 
-class _PingCommand(_BaseCommand):
+class _PingCommand(_InvalidAsCommandError):
     def matches(self, line: str) -> bool:
         return line.lower() == "ping"
 

@@ -114,7 +114,7 @@ def command_server(state: NetworkState, line: str) -> bool:
         print("Server stopped.")
         return False
 
-    raise ValueError("unknown server action")
+    raise ValueError("Invalid format. Use: server list|start [PORT]|stop")
 
 
 def command_join(state: NetworkState, line: str) -> bool:

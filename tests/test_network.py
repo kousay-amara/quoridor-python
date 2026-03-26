@@ -7,6 +7,7 @@ import pytest
 
 import quoridor.network.discovery as discovery_mod
 from quoridor.interfaces import cli as cli_mod
+from quoridor.interfaces import cli_shell as cli_shell_mod
 from quoridor.network import (
     DEFAULT_SERVER_HOST,
     DEFAULT_SERVER_PORT,
@@ -204,4 +205,36 @@ def test_cli_server_join_ping_and_quit_cycle(
     assert "PONG TIME=" in out
     assert "Disconnected from server." in out
     assert "Server stopped." in out
+    assert "Bye." in out
+
+
+def test_cli_invalid_network_commands_do_not_crash_shell(monkeypatch, capsys):
+    monkeypatch.setattr(
+        cli_shell_mod.cli_network,
+        "start_discovery_listener",
+        lambda: None,
+    )
+    monkeypatch.setattr(
+        cli_shell_mod.cli_network,
+        "stop_discovery_listener",
+        lambda _listener: None,
+    )
+
+    _run_shell(
+        monkeypatch,
+        [
+            "server foo",
+            "join 127.0.0.1:abc",
+            "ping",
+            "quit",
+        ],
+    )
+
+    out = capsys.readouterr().out
+    assert (
+        "Invalid command: Invalid format. Use: "
+        "server list|start [PORT]|stop"
+    ) in out
+    assert "Invalid command:" in out
+    assert "Not connected to any server." in out
     assert "Bye." in out
