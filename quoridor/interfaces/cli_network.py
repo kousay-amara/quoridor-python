@@ -45,7 +45,9 @@ def stop_discovery_listener(listener: DiscoveryListener | None) -> None:
 def command_server(state: NetworkState, line: str) -> bool:
     parts = line.split()
     if len(parts) < 2:
-        raise ValueError("Invalid format. Use: server list|start [PORT]|stop")
+        raise ValueError(
+            "Invalid format. Use: server list|start [PORT]|status|stop"
+        )
 
     action = parts[1].lower()
     if action == "list":
@@ -103,6 +105,19 @@ def command_server(state: NetworkState, line: str) -> bool:
         print(f"Server started on port {server.port}.")
         return False
 
+    if action == "status":
+        if len(parts) != 2:
+            raise ValueError("Invalid format. Use: server status")
+        if state.network_server is None:
+            print("Server is not running.")
+            return False
+        status = state.network_server.status_snapshot()
+        print("Server status:")
+        print(f"- port: {status['port']}")
+        print(f"- connected clients: {status['connected_clients']}")
+        print(f"- active games: {status['active_games']}")
+        return False
+
     if action == "stop":
         if len(parts) != 2:
             raise ValueError("Invalid format. Use: server stop")
@@ -114,7 +129,9 @@ def command_server(state: NetworkState, line: str) -> bool:
         print("Server stopped.")
         return False
 
-    raise ValueError("Invalid format. Use: server list|start [PORT]|stop")
+    raise ValueError(
+        "Invalid format. Use: server list|start [PORT]|status|stop"
+    )
 
 
 def command_join(state: NetworkState, line: str) -> bool:

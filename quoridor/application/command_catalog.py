@@ -74,6 +74,14 @@ COMMAND_CATALOG: tuple[CommandHelp, ...] = (
         "Start a local game server and broadcast it on the network.",
     ),
     CommandHelp(
+        "server status",
+        "server status",
+        (
+            "Show local server status: listening port, connected "
+            "clients and active games."
+        ),
+    ),
+    CommandHelp(
         "server stop",
         "server stop",
         "Stop the local game server and disconnect its client.",
@@ -126,7 +134,8 @@ COMMAND_CATALOG: tuple[CommandHelp, ...] = (
 OVERVIEW_TEXT = (
     "Commands: new [ARGS], help [CMD], load, save, set, hint, show board, "
     "show history, show configuration, show time, server list, server start, "
-    "server stop, join, ping, players, pause, moves, move, wall, "
+    "server status, server stop, join, ping, players, pause, moves, move, "
+    "wall, "
     "undo, redo, quit\n"
     "Use: help <command>"
 )
@@ -145,6 +154,7 @@ COMPLETION_COMMANDS = [
     "show time",
     "server list",
     "server start",
+    "server status",
     "server stop",
     "join ",
     "ping",

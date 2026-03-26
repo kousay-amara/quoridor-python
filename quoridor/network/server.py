@@ -72,6 +72,15 @@ class NetworkServer:
             and self._accept_thread.is_alive()
         )
 
+    def status_snapshot(self) -> dict[str, int]:
+        with self._lock:
+            connected_clients = len(self._client_sessions)
+        return {
+            "port": self.port,
+            "connected_clients": connected_clients,
+            "active_games": 0,
+        }
+
     def start(self) -> None:
         if self.running():
             return

@@ -67,6 +67,19 @@ def _unused_port() -> int:
         return int(sock.getsockname()[1])
 
 
+def _wait_connected_clients(
+    server: NetworkServer,
+    expected_count: int,
+) -> bool:
+    deadline = time.time() + 1.0
+    while time.time() < deadline:
+        status = server.status_snapshot()
+        if status["connected_clients"] == expected_count:
+            return True
+        time.sleep(0.01)
+    return False
+
+
 def test_parse_endpoint_supports_defaults_and_explicit_values():
     assert parse_endpoint(None) == (DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT)
     assert parse_endpoint("   ") == (DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT)
@@ -217,6 +230,37 @@ def test_network_players_returns_id_name_and_status():
             server.stop()
 
 
+def test_network_server_status_snapshot_updates_with_connections():
+    port = _unused_port()
+    server = NetworkServer(port=port)
+    first_client = NetworkClient(host="127.0.0.1", port=port, name="alice")
+    second_client = NetworkClient(host="127.0.0.1", port=port, name="bob")
+
+    try:
+        server.start()
+        status = server.status_snapshot()
+        assert status["port"] == port
+        assert status["connected_clients"] == 0
+        assert status["active_games"] == 0
+
+        first_client.connect()
+        assert _wait_connected_clients(server, 1)
+
+        second_client.connect()
+        assert _wait_connected_clients(server, 2)
+
+        first_client.quit()
+        assert _wait_connected_clients(server, 1)
+
+        second_client.quit()
+        assert _wait_connected_clients(server, 0)
+    finally:
+        first_client.close()
+        second_client.close()
+        if server.running():
+            server.stop()
+
+
 def test_cli_server_join_ping_and_quit_cycle(
     monkeypatch,
     capsys,
@@ -246,6 +290,31 @@ def test_cli_server_join_ping_and_quit_cycle(
     assert "Bye." in out
 
 
+def test_cli_server_status_reports_counts(monkeypatch, capsys):
+    port = _unused_port()
+
+    _run_shell(
+        monkeypatch,
+        [
+            f"server start {port}",
+            "server status",
+            f"join 127.0.0.1:{port}",
+            "server status",
+            "quit",
+            "server status",
+            "server stop",
+            "quit",
+        ],
+    )
+
+    out = capsys.readouterr().out
+    assert out.count("Server status:") == 3
+    assert f"- port: {port}" in out
+    assert "- connected clients: 0" in out
+    assert "- connected clients: 1" in out
+    assert "- active games: 0" in out
+
+
 def test_cli_invalid_network_commands_do_not_crash_shell(monkeypatch, capsys):
     monkeypatch.setattr(
         cli_shell_mod.cli_network,
@@ -271,7 +340,7 @@ def test_cli_invalid_network_commands_do_not_crash_shell(monkeypatch, capsys):
     out = capsys.readouterr().out
     assert (
         "Invalid command: Invalid format. Use: "
-        "server list|start [PORT]|stop"
+        "server list|start [PORT]|status|stop"
     ) in out
     assert "Invalid command: Invalid format. Use: join [HOST[:PORT]]" in out
     assert "Invalid command:" in out
