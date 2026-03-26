@@ -20,6 +20,7 @@ from ..application.command_catalog import (
     help_for,
     help_overview,
 )
+from ..application.game_application_service import GameApplicationService
 from ..application.game_session import GameSession, initial_player_positions
 from ..core.game_state import GameState
 from ..core.notation import get_edges_for_wall, get_node_from_notation
@@ -41,14 +42,7 @@ from .cli_render import (
 )
 from .contest_parser import ContestError
 from .cli_io import _prompt_save_before_quit
-from ..network import (
-    NetworkClient,
-    NetworkServer,
-    DEFAULT_SERVER_PORT,
-    DiscoveredServer,
-    discover_servers,
-    parse_endpoint,
-)
+from . import cli_network
 
 _ = gettext.gettext
 
@@ -766,26 +760,12 @@ def _handle_load(
     *,
     blitz: Blitz,
 ) -> tuple[GameSession, Blitz, bool, bool]:
-    from . import cli as cli_mod
-
-    session = cli_mod._load_session_from_file(
+    service = GameApplicationService(session=session, blitz=blitz)
+    session, loaded_blitz = service.load(
         file_path,
         fallback_player_types=session.player_types,
         fallback_walls_per_player=session.state.remaining_walls,
     )
-    try:
-        loaded_blitz_snapshot = (
-            cli_mod._load_blitz_snapshot_from_file(file_path)
-        )
-    except (OSError, ValueError):
-        loaded_blitz_snapshot = None
-
-    loaded_blitz = (
-        Blitz.from_snapshot(loaded_blitz_snapshot)
-        if loaded_blitz_snapshot is not None
-        else Blitz(time_limit_minutes=0)
-    )
-    session.attach_blitz(loaded_blitz)
 
     print(_("Game loaded from {path}").format(path=file_path))
     _print_state(session)
@@ -806,9 +786,8 @@ def _handle_save(
     *,
     blitz: Blitz,
 ) -> bool:
-    from . import cli as cli_mod
-
-    cli_mod._save_session_to_file(file_path, session, blitz)
+    service = GameApplicationService(session=session, blitz=blitz)
+    service.save(file_path)
     print(_("Game saved to {path}").format(path=file_path))
     return False
 
@@ -832,28 +811,16 @@ def _handle_hint(
     if _is_game_paused(blitz):
         raise ValueError("Game is paused.")
 
+    service = GameApplicationService(session=session, blitz=blitz)
+    move = service.hint(
+        ai_mode=ai_mode,
+        ai_time=ai_time,
+        ai_minimax_depth=ai_minimax_depth,
+        mcts_fn=cli_mod.mcts_search,
+        iterative_fn=cli_mod.find_best_move_iterative,
+        minimax_fn=cli_mod.find_best_move_minimax,
+    )
     current = session.state.current_player
-    if ai_mode == "mcts":
-        move = cli_mod.mcts_search(session.state, time_limit=ai_time)
-        if move is None:
-            raise ValueError("no legal moves available for hint")
-    elif ai_mode == "iterative":
-        move = cli_mod.find_best_move_iterative(
-            session.state,
-            ai_player_id=current,
-            time_limit_sec=ai_time,
-            max_depth=ai_minimax_depth,
-        )
-    elif ai_mode == "minimax":
-        if ai_minimax_depth is None:
-            raise ValueError("minimax mode requires ai_minimax_depth")
-        move = cli_mod.find_best_move_minimax(
-            session.state,
-            ai_player_id=current,
-            depth=ai_minimax_depth,
-        )
-    else:
-        raise ValueError(f"unsupported AI mode: {ai_mode}")
     from_node = session.state.player_positions[current]
     best_hint = _format_hint_move(
         move, from_node=from_node, size=session.state.board_size
@@ -908,17 +875,12 @@ def _handle_undo(session: GameSession, line: str, *, blitz: Blitz) -> bool:
     count = 1
     if len(parts) == 2:
         count = int(parts[1])
-        if count <= 0:
-            raise ValueError("N must be > 0")
 
-    total_undone = 0
-    groups_done = 0
-    for _step in range(count):
-        undone = session.undo(requester_id=current)
-        if not undone:
-            break
-        groups_done += 1
-        total_undone += len(undone)
+    service = GameApplicationService(session=session, blitz=blitz)
+    groups_done, total_undone = service.undo_groups(
+        requester_id=current,
+        count=count,
+    )
 
     print(f"Undone groups: {groups_done}, moves: {total_undone}")
     _print_state(session)
@@ -936,17 +898,12 @@ def _handle_redo(session: GameSession, line: str, *, blitz: Blitz) -> bool:
     count = 1
     if len(parts) == 2:
         count = int(parts[1])
-        if count <= 0:
-            raise ValueError("N must be > 0")
 
-    total_redone = 0
-    groups_done = 0
-    for _step in range(count):
-        redone = session.redo(requester_id=current)
-        if not redone:
-            break
-        groups_done += 1
-        total_redone += len(redone)
+    service = GameApplicationService(session=session, blitz=blitz)
+    groups_done, total_redone = service.redo_groups(
+        requester_id=current,
+        count=count,
+    )
 
     print(f"Redone groups: {groups_done}, moves: {total_redone}")
     _print_state(session)
@@ -1239,128 +1196,19 @@ def _command_wall(state: _ShellState, line: str) -> bool:
 
 
 def _parse_server_port(value: str) -> int:
-    try:
-        port = int(value)
-    except ValueError as exc:
-        raise ValueError(f"invalid port: {value}") from exc
-    if not 1 <= port <= 65535:
-        raise ValueError(f"invalid port: {value}")
-    return port
+    return cli_network.parse_server_port(value)
 
 
 def _command_server(state: _ShellState, line: str) -> bool:
-    parts = line.split()
-    if len(parts) < 2:
-        raise ValueError("Invalid format. Use: server list|start [PORT]|stop")
-
-    action = parts[1].lower()
-    if action == "list":
-        if len(parts) != 2:
-            raise ValueError("Invalid format. Use: server list")
-        servers = discover_servers()
-        unique_servers = []
-        seen_server_keys = set()
-        for server in servers:
-            server_key = (server.name, server.port)
-            if server_key in seen_server_keys:
-                continue
-            seen_server_keys.add(server_key)
-            unique_servers.append(server)
-        servers = unique_servers
-        if state.network_server is not None:
-            local_server = DiscoveredServer(
-                state.network_server.name,
-                "127.0.0.1",
-                state.network_server.port,
-            )
-            servers = [
-                server
-                for server in servers
-                if (server.name, server.port)
-                != (local_server.name, local_server.port)
-            ]
-            servers = [local_server, *servers]
-        if not servers:
-            print("No network servers found.")
-            return False
-        print("Discovered servers:")
-        for server in servers:
-            print(f"- {server.name} ({server.host}:{server.port})")
-        return False
-
-    if action == "start":
-        if len(parts) > 3:
-            raise ValueError("Invalid format. Use: server start [PORT]")
-        if state.network_server is not None:
-            print(
-                f"Server already running on port {state.network_server.port}."
-            )
-            return False
-        port = DEFAULT_SERVER_PORT
-        if len(parts) == 3:
-            port = _parse_server_port(parts[2])
-        server = NetworkServer(port=port)
-        try:
-            server.start()
-        except OSError as exc:
-            print(f"Cannot start server on port {port}: {exc}")
-            return False
-        state.network_server = server
-        print(f"Server started on port {server.port}.")
-        return False
-
-    if action == "stop":
-        if len(parts) != 2:
-            raise ValueError("Invalid format. Use: server stop")
-        if state.network_server is None:
-            print("Server is not running.")
-            return False
-        state.network_server.stop()
-        state.network_server = None
-        print("Server stopped.")
-        return False
-
-    raise ValueError("unknown server action")
+    return cli_network.command_server(state, line)
 
 
 def _command_join(state: _ShellState, line: str) -> bool:
-    parts = line.split(maxsplit=1)
-    if state.network_client is not None:
-        print(
-            f"Already connected to server "
-            f"{state.network_client.host}:{state.network_client.port}."
-        )
-        return False
-
-    endpoint = parts[1] if len(parts) == 2 else None
-    host, port = parse_endpoint(endpoint)
-    client = NetworkClient(host=host, port=port)
-    try:
-        client.connect()
-    except OSError as exc:
-        print(f"Cannot connect to server {host}:{port}: {exc}")
-        return False
-
-    state.network_client = client
-    print(f"Connected to server {host}:{port}.")
-    return False
+    return cli_network.command_join(state, line)
 
 
 def _command_ping(state: _ShellState, _line: str) -> bool:
-    if state.network_client is None:
-        print("Not connected to any server.")
-        return False
-
-    try:
-        round_trip_ms = state.network_client.ping()
-    except OSError as exc:
-        state.network_client.close()
-        state.network_client = None
-        print(f"Connection lost: {exc}")
-        return False
-
-    print(f"PONG TIME={round(round_trip_ms)}ms")
-    return False
+    return cli_network.command_ping(state, _line)
 
 
 def _command_undo(state: _ShellState, line: str) -> bool:
@@ -1414,15 +1262,7 @@ def _command_shorthand_wall(state: _ShellState, line: str) -> bool:
 
 
 def _command_quit(state: _ShellState, _line: str) -> bool:
-    if state.network_client is not None:
-        client = state.network_client
-        state.network_client = None
-        try:
-            client.quit()
-            print("Disconnected from server.")
-        except OSError as exc:
-            client.close()
-            print(f"Disconnected from server: {exc}")
+    if cli_network.disconnect_client(state):
         return False
 
     _handle_quit(
@@ -1430,9 +1270,7 @@ def _command_quit(state: _ShellState, _line: str) -> bool:
         state.has_unsaved_changes,
         blitz=state.blitz,
     )
-    if state.network_server is not None:
-        state.network_server.stop()
-        state.network_server = None
+    cli_network.stop_server(state)
     return True
 
 
@@ -1455,8 +1293,8 @@ class _ShellState:
     blitz_enabled: bool
     time_limit: float
     blitz: Blitz
-    network_server: NetworkServer | None = None
-    network_client: NetworkClient | None = None
+    network_server: cli_network.NetworkServer | None = None
+    network_client: cli_network.NetworkClient | None = None
 
 
 class _BaseCommand:

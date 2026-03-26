@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from .constants import WALLS_DEFAULT
 from .game_session import GameSession, initial_player_positions
 from ..core.game_state import GameState
 from ..core.move_record import BlitzSnapshot
@@ -13,7 +14,6 @@ from ..core.notation import (
     get_node_from_notation,
     get_notation_from_node,
 )
-from ..interfaces.cli_constants import WALLS_DEFAULT
 from ..interfaces.contest_parser import ContestError, parse_contest_file
 
 _SECTION_RE = re.compile(r"^\[(.+)\]$")
