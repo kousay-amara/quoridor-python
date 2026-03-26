@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import socket
 import threading
-import time
+from time import time as _current_time
 
 from .basic_network import (
     DEFAULT_SERVER_PORT,
@@ -12,10 +12,12 @@ from .basic_network import (
     DISCOVERY_TIMEOUT_SEC,
     _DISCOVERY_BUFFER_SIZE,
     _DISCOVERY_PREFIX,
+    _SOCKET_TIMEOUT_SEC,
     _validate_port,
 )
 
 _discovery_cache = {}
+_discovery_cache_lock = threading.Lock()
 
 
 class DiscoveredServer:
@@ -25,9 +27,40 @@ class DiscoveredServer:
         self.port = port
 
 
+def _prune_discovery_cache_locked(now: float | None = None) -> None:
+    if now is None:
+        now = _current_time()
+
+    expired_keys = [
+        key
+        for key, (_server, last_seen_time) in _discovery_cache.items()
+        if now - last_seen_time > DISCOVERY_ENTRY_TTL_SEC
+    ]
+    for key in expired_keys:
+        del _discovery_cache[key]
+
+
+def _snapshot_discovered_servers_locked() -> list[DiscoveredServer]:
+    servers = [server for server, _last_seen in _discovery_cache.values()]
+    return sorted(
+        servers,
+        key=lambda item: (item.name.lower(), item.host, item.port),
+    )
+
+
 def remember_server(name: str, host: str, port: int) -> None:
     server = DiscoveredServer(name, host, _validate_port(port))
-    _discovery_cache[(server.host, server.port)] = (server, time.time())
+    with _discovery_cache_lock:
+        _discovery_cache[(server.host, server.port)] = (
+            server,
+            _current_time(),
+        )
+
+
+def get_discovered_servers() -> list[DiscoveredServer]:
+    with _discovery_cache_lock:
+        _prune_discovery_cache_locked()
+        return _snapshot_discovered_servers_locked()
 
 
 def format_discovery_message(name: str, port: int) -> str:
@@ -108,12 +141,75 @@ class DiscoveryBroadcaster:
             sock.close()
 
 
+class DiscoveryListener:
+    def __init__(
+        self,
+        *,
+        listen_port: int = DISCOVERY_PORT,
+        socket_timeout_sec: float = _SOCKET_TIMEOUT_SEC,
+    ) -> None:
+        self.listen_port = _validate_port(listen_port)
+        self.socket_timeout_sec = socket_timeout_sec
+        self._stop_requested = threading.Event()
+        self._thread = None
+
+    def running(self) -> bool:
+        return self._thread is not None and self._thread.is_alive()
+
+    def start(self) -> None:
+        if self.running():
+            return
+        self._stop_requested.clear()
+        self._thread = threading.Thread(
+            target=self._listen_loop,
+            name="quoridor-discovery-listener",
+            daemon=True,
+        )
+        self._thread.start()
+
+    def stop(self) -> None:
+        self._stop_requested.set()
+        thread = self._thread
+        if thread is not None:
+            thread.join(timeout=0.5)
+        self._thread = None
+
+    def _listen_loop(self) -> None:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            sock.bind(("", self.listen_port))
+            sock.settimeout(self.socket_timeout_sec)
+            while not self._stop_requested.is_set():
+                try:
+                    message, address = sock.recvfrom(_DISCOVERY_BUFFER_SIZE)
+                except socket.timeout:
+                    with _discovery_cache_lock:
+                        _prune_discovery_cache_locked()
+                    continue
+                except OSError:
+                    break
+
+                parsed = parse_discovery_message(
+                    message.decode("ascii", errors="ignore")
+                )
+                if parsed is None:
+                    continue
+
+                name, port = parsed
+                remember_server(name, address[0], port)
+                with _discovery_cache_lock:
+                    _prune_discovery_cache_locked()
+        finally:
+            sock.close()
+
+
 def discover_servers(
     *,
     timeout_sec: float = DISCOVERY_TIMEOUT_SEC,
     listen_port: int = DISCOVERY_PORT,
 ) -> list[DiscoveredServer]:
-    """Listen for UDP discovery announcements on the local network."""
+    """Listen once for UDP discovery announcements on the local network."""
     listen_port = _validate_port(listen_port)
 
     if timeout_sec > 0:
@@ -121,9 +217,9 @@ def discover_servers(
         try:
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             sock.bind(("", listen_port))
-            deadline = time.time() + timeout_sec
+            deadline = _current_time() + timeout_sec
             while True:
-                remaining = deadline - time.time()
+                remaining = deadline - _current_time()
                 if remaining <= 0:
                     break
                 sock.settimeout(remaining)
@@ -143,26 +239,16 @@ def discover_servers(
         finally:
             sock.close()
 
-    now = time.time()
-    servers = []
-    for key, value in list(_discovery_cache.items()):
-        server, last_seen = value
-        if now - last_seen > DISCOVERY_ENTRY_TTL_SEC:
-            del _discovery_cache[key]
-            continue
-        servers.append(server)
-
-    return sorted(
-        servers,
-        key=lambda item: (item.name.lower(), item.host, item.port),
-    )
+    return get_discovered_servers()
 
 
 __all__ = [
     "DiscoveredServer",
     "DiscoveryBroadcaster",
+    "DiscoveryListener",
     "discover_servers",
     "format_discovery_message",
+    "get_discovered_servers",
     "parse_discovery_message",
     "remember_server",
 ]

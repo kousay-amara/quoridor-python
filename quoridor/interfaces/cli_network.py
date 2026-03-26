@@ -7,9 +7,10 @@ from typing import Protocol
 from ..network import (
     DEFAULT_SERVER_PORT,
     DiscoveredServer,
+    DiscoveryListener,
     NetworkClient,
     NetworkServer,
-    discover_servers,
+    get_discovered_servers,
     parse_endpoint,
 )
 
@@ -29,6 +30,18 @@ def parse_server_port(value: str) -> int:
     return port
 
 
+def start_discovery_listener() -> DiscoveryListener:
+    listener = DiscoveryListener()
+    listener.start()
+    return listener
+
+
+def stop_discovery_listener(listener: DiscoveryListener | None) -> None:
+    if listener is None:
+        return
+    listener.stop()
+
+
 def command_server(state: NetworkState, line: str) -> bool:
     parts = line.split()
     if len(parts) < 2:
@@ -38,7 +51,7 @@ def command_server(state: NetworkState, line: str) -> bool:
     if action == "list":
         if len(parts) != 2:
             raise ValueError("Invalid format. Use: server list")
-        servers = discover_servers()
+        servers = get_discovered_servers()
         unique_servers = []
         seen_server_keys = set()
         for server in servers:

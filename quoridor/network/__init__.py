@@ -14,8 +14,10 @@ from .client import NetworkClient
 from .discovery import (
     DiscoveredServer,
     DiscoveryBroadcaster,
+    DiscoveryListener,
     discover_servers,
     format_discovery_message,
+    get_discovered_servers,
     parse_discovery_message,
     remember_server,
 )
@@ -32,9 +34,11 @@ __all__ = [
     "DISCOVERY_TIMEOUT_SEC",
     "DiscoveredServer",
     "DiscoveryBroadcaster",
+    "DiscoveryListener",
     "NetworkClient",
     "discover_servers",
     "format_discovery_message",
+    "get_discovered_servers",
     "parse_discovery_message",
     "parse_endpoint",
     "remember_server",

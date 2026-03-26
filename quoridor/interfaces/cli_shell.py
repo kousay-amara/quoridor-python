@@ -1685,6 +1685,7 @@ def _run_interactive_shell(
     )
 
     registry = _build_command_registry()
+    discovery_listener = cli_network.start_discovery_listener()
 
     if readline is not None:
         readline.set_history_length(MAX_HISTORY_SIZE)
@@ -1692,19 +1693,22 @@ def _run_interactive_shell(
         readline.set_completer(completer)
         readline.parse_and_bind("tab: complete")
 
-    while True:
-        if _auto_play_pending_ai(state):
-            break
+    try:
+        while True:
+            if _auto_play_pending_ai(state):
+                break
 
-        line, should_break = _read_shell_input(state, ">> ")
-        if should_break:
-            break
+            line, should_break = _read_shell_input(state, ">> ")
+            if should_break:
+                break
 
-        if not line:
-            continue
+            if not line:
+                continue
 
-        handled, should_break = registry.dispatch(state, line)
-        if should_break:
-            break
-        if not handled:
-            print(_("Invalid command."))
+            handled, should_break = registry.dispatch(state, line)
+            if should_break:
+                break
+            if not handled:
+                print(_("Invalid command."))
+    finally:
+        cli_network.stop_discovery_listener(discovery_listener)

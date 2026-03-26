@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import socket
+import time
 
 import pytest
 
@@ -10,12 +11,15 @@ from quoridor.network import (
     DEFAULT_SERVER_HOST,
     DEFAULT_SERVER_PORT,
     DiscoveryBroadcaster,
+    DiscoveryListener,
     NetworkClient,
     NetworkServer,
     discover_servers,
     format_discovery_message,
+    get_discovered_servers,
     parse_discovery_message,
     parse_endpoint,
+    remember_server,
 )
 
 
@@ -98,6 +102,43 @@ def test_discover_servers_finds_udp_broadcast():
         server.name == "quoridor-server" and server.port == server_port
         for server in servers
     )
+
+
+def test_discovery_listener_updates_cache_in_background():
+    server_port = _unused_port()
+    discovery_port = _unused_port()
+    broadcaster = DiscoveryBroadcaster(
+        port=server_port,
+        discovery_port=discovery_port,
+        interval_sec=0.05,
+    )
+    listener = DiscoveryListener(
+        listen_port=discovery_port,
+        socket_timeout_sec=0.05,
+    )
+
+    try:
+        listener.start()
+        broadcaster.start()
+
+        deadline = time.time() + 1.0
+        while time.time() < deadline:
+            servers = get_discovered_servers()
+            if any(server.port == server_port for server in servers):
+                break
+            time.sleep(0.05)
+    finally:
+        broadcaster.stop()
+        listener.stop()
+
+    assert any(server.port == server_port for server in servers)
+
+
+def test_get_discovered_servers_prunes_expired_entries(monkeypatch):
+    remember_server("alpha", "127.0.0.1", 23456)
+    monkeypatch.setattr(discovery_mod, "DISCOVERY_ENTRY_TTL_SEC", 0.0)
+
+    assert get_discovered_servers() == []
 
 
 def test_network_server_and_client_support_ping_and_quit():
