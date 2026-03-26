@@ -85,8 +85,31 @@ def _positive_time_type(raw: str) -> float:
 
 
 def _build_parser(
-    defaults: dict[str, bool | int | float],
+    defaults: dict[str, object],
 ) -> argparse.ArgumentParser:
+    ai_players_default = defaults.get("ai_players", [])
+    if isinstance(ai_players_default, list):
+        ai_players = list(ai_players_default)
+    else:
+        ai_players = []
+
+    ai_mode_default = defaults.get("ai_mode", AI_MODE_DEFAULT)
+    if ai_mode_default not in [
+        AI_MODE_MINIMAX,
+        AI_MODE_ITERATIVE,
+        AI_MODE_MCTS,
+    ]:
+        ai_mode_default = AI_MODE_DEFAULT
+
+    ai_time_default = defaults.get("ai_time", AI_TIME_DEFAULT)
+    if not isinstance(ai_time_default, int) or ai_time_default <= 0:
+        ai_time_default = AI_TIME_DEFAULT
+
+    depth_default = defaults.get("ai_minimax_depth", AI_MINIMAX_DEPTH_DEFAULT)
+    if depth_default is not None:
+        if not isinstance(depth_default, int) or depth_default <= 0:
+            depth_default = AI_MINIMAX_DEPTH_DEFAULT
+
     parser = QuoridorArgumentParser(
         prog="quoridor",
         description=_("Quoridor game command-line interface."),
@@ -157,7 +180,7 @@ def _build_parser(
     parser.add_argument(
         "--ai-player",
         action="append",
-        default=[],
+        default=ai_players,
         type=_player_id_type,
         help=_(
             "player id controlled by AI (repeat option for multiple players)"
@@ -166,19 +189,19 @@ def _build_parser(
     parser.add_argument(
         "--ai-mode",
         choices=[AI_MODE_MINIMAX, AI_MODE_ITERATIVE, AI_MODE_MCTS],
-        default=AI_MODE_DEFAULT,
+        default=ai_mode_default,
         help=_("AI mode"),
     )
     parser.add_argument(
         "--ai-time",
         type=int,
-        default=AI_TIME_DEFAULT,
+        default=ai_time_default,
         help=_("AI thinking time in seconds (iterative, mcts)"),
     )
     parser.add_argument(
         "--ai-minimax-depth",
         type=int,
-        default=AI_MINIMAX_DEPTH_DEFAULT,
+        default=depth_default,
         help=_("minimax depth (fixed for minimax, max for iterative)"),
     )
     parser.set_defaults(

@@ -804,3 +804,28 @@ def test_main_interactive_passes_explicit_ai_depth(monkeypatch):
     assert cli_mod._main_interactive(["--ai-minimax-depth", "4"]) == 0
     assert captured[-1]["ai_mode"] == "iterative"
     assert captured[-1]["ai_minimax_depth"] == 4
+
+
+def test_main_interactive_uses_ai_defaults_from_config(monkeypatch):
+    captured = []
+
+    patch_main_defaults(
+        monkeypatch,
+        players=4,
+        ai_mode="mcts",
+        ai_time=9,
+        ai_minimax_depth=3,
+        ai_players=[2, 4],
+    )
+    monkeypatch.setattr(cli_mod, "_configure_logging", lambda *_args: None)
+    monkeypatch.setattr(
+        cli_mod,
+        "_run_interactive_shell",
+        lambda **kwargs: captured.append(kwargs),
+    )
+
+    assert cli_mod._main_interactive([]) == 0
+    assert captured[-1]["ai_mode"] == "mcts"
+    assert captured[-1]["ai_time"] == 9
+    assert captured[-1]["ai_minimax_depth"] == 3
+    assert captured[-1]["ai_players"] == [2, 4]
