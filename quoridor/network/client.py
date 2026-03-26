@@ -19,9 +19,12 @@ class NetworkClient:
         *,
         host: str = DEFAULT_SERVER_HOST,
         port: int = DEFAULT_SERVER_PORT,
+        name: str = "player",
     ) -> None:
         self.host = host
         self.port = _validate_port(port)
+        self.name = name.strip() or "player"
+        self.client_id = None
         self._sock = None
         self._buffer = ""
 
@@ -46,14 +49,41 @@ class NetworkClient:
                     continue
                 if not line.startswith("WELCOME "):
                     raise OSError(f"unexpected server response: {line}")
+                _send_line(sock, f"HELLO {self.name}")
+                hello_response, hello_buffer, hello_closed = _recv_line(
+                    sock,
+                    buffer,
+                )
+                while hello_response is None and not hello_closed:
+                    hello_response, hello_buffer, hello_closed = _recv_line(
+                        sock,
+                        hello_buffer,
+                    )
+                if hello_closed:
+                    raise OSError("server closed the connection")
+                if hello_response is None:
+                    raise OSError("server did not answer HELLO")
+                if not hello_response.startswith("HELLO_OK "):
+                    raise OSError(
+                        f"unexpected server response: {hello_response}"
+                    )
+                try:
+                    self.client_id = int(
+                        hello_response.split(maxsplit=1)[1]
+                    )
+                except (IndexError, ValueError) as exc:
+                    raise OSError(
+                        f"unexpected server response: {hello_response}"
+                    ) from exc
                 self._sock = sock
-                self._buffer = buffer
+                self._buffer = hello_buffer
                 return
         except OSError:
             try:
                 sock.close()
             except OSError:
                 pass
+            self.client_id = None
             raise
 
     def send_command(self, command: str) -> str:
@@ -100,7 +130,30 @@ class NetworkClient:
             except OSError:
                 pass
         self._sock = None
+        self.client_id = None
         self._buffer = ""
+
+    def players(self) -> list[tuple[int, str, str]]:
+        response = self.send_command("PLAYERS")
+        if response == "PLAYERS":
+            return []
+        if not response.startswith("PLAYERS "):
+            raise OSError(f"unexpected players response: {response}")
+
+        payload = response[8:]
+        players = []
+        for entry in payload.split(";"):
+            parts = entry.split("|")
+            if len(parts) != 3:
+                raise OSError(f"unexpected players response: {response}")
+            try:
+                client_id = int(parts[0])
+            except ValueError as exc:
+                raise OSError(
+                    f"unexpected players response: {response}"
+                ) from exc
+            players.append((client_id, parts[1], parts[2]))
+        return players
 
 
 __all__ = ["NetworkClient"]

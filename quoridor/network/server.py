@@ -24,10 +24,16 @@ class _ClientSession:
         sock: socket.socket,
         thread: threading.Thread,
         last_activity_time: float,
+        name: str,
+        status: str,
+        buffer: str,
     ) -> None:
         self.sock = sock
         self.thread = thread
         self.last_activity_time = last_activity_time
+        self.name = name
+        self.status = status
+        self.buffer = buffer
 
 
 class NetworkServer:
@@ -158,11 +164,18 @@ class NetworkServer:
                     sock=client_sock,
                     thread=client_thread,
                     last_activity_time=time.time(),
+                    name=f"client-{client_id}",
+                    status="idle",
+                    buffer="",
                 )
 
             try:
                 _send_line(client_sock, f"WELCOME {self.name} {self.port}")
             except OSError:
+                self._close_client(client_id, client_sock)
+                continue
+
+            if not self._perform_hello(client_id, client_sock):
                 self._close_client(client_id, client_sock)
                 continue
 
@@ -173,7 +186,11 @@ class NetworkServer:
         client_id: int,
         client_sock: socket.socket,
     ) -> None:
-        buffer = ""
+        with self._lock:
+            session = self._client_sessions.get(client_id)
+            if session is None:
+                return
+            buffer = session.buffer
         try:
             while not self._stop_requested.is_set():
                 with self._lock:
@@ -223,6 +240,16 @@ class NetworkServer:
                         break
                     continue
 
+                if command_upper == "PLAYERS":
+                    try:
+                        _send_line(
+                            client_sock,
+                            self._format_players_response(),
+                        )
+                    except OSError:
+                        break
+                    continue
+
                 if command_upper == "QUIT":
                     try:
                         _send_line(client_sock, "BYE")
@@ -251,6 +278,90 @@ class NetworkServer:
             session = self._client_sessions.get(client_id)
             if session is not None and session.sock is client_sock:
                 del self._client_sessions[client_id]
+
+    def _perform_hello(
+        self,
+        client_id: int,
+        client_sock: socket.socket,
+    ) -> bool:
+        buffer = ""
+        deadline = time.time() + 5.0
+        while not self._stop_requested.is_set():
+            if time.time() > deadline:
+                try:
+                    _send_line(client_sock, "ERROR HELLO_TIMEOUT")
+                    _send_line(client_sock, "BYE")
+                except OSError:
+                    pass
+                return False
+
+            try:
+                line, buffer, closed = _recv_line(client_sock, buffer)
+            except OSError:
+                return False
+
+            if closed:
+                return False
+            if line is None:
+                continue
+
+            if not line.upper().startswith("HELLO "):
+                try:
+                    _send_line(client_sock, "ERROR HELLO_REQUIRED")
+                    _send_line(client_sock, "BYE")
+                except OSError:
+                    pass
+                return False
+
+            raw_name = line[6:].strip()
+            client_name = self._parse_client_name(raw_name)
+            if client_name is None:
+                try:
+                    _send_line(client_sock, "ERROR INVALID_NAME")
+                    _send_line(client_sock, "BYE")
+                except OSError:
+                    pass
+                return False
+
+            with self._lock:
+                session = self._client_sessions.get(client_id)
+                if session is None:
+                    return False
+                session.name = client_name
+                session.status = "idle"
+                session.buffer = buffer
+
+            try:
+                _send_line(client_sock, f"HELLO_OK {client_id}")
+            except OSError:
+                return False
+            return True
+        return False
+
+    def _parse_client_name(self, raw_name: str) -> str | None:
+        name = raw_name.strip()
+        if not name or len(name) > 32:
+            return None
+        if any(not (char.isalnum() or char in {"-", "_"}) for char in name):
+            return None
+        return name
+
+    def _format_players_response(self) -> str:
+        with self._lock:
+            players = [
+                (client_id, session.name, session.status)
+                for client_id, session in self._client_sessions.items()
+            ]
+
+        players.sort(key=lambda item: item[0])
+        if not players:
+            return "PLAYERS"
+
+        payload = ";".join(
+            f"{client_id}|{name}|{status}"
+            for client_id, name, status in players
+        )
+        return f"PLAYERS {payload}"
 
 
 __all__ = ["NetworkServer"]

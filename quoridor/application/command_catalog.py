@@ -88,6 +88,11 @@ COMMAND_CATALOG: tuple[CommandHelp, ...] = (
         "ping",
         "Ping the connected game server and display round-trip time.",
     ),
+    CommandHelp(
+        "players",
+        "players",
+        "List players connected to the current game server.",
+    ),
     CommandHelp("pause", "pause", "Toggle blitz timer pause/resume."),
     CommandHelp(
         "moves",
@@ -121,7 +126,7 @@ COMMAND_CATALOG: tuple[CommandHelp, ...] = (
 OVERVIEW_TEXT = (
     "Commands: new [ARGS], help [CMD], load, save, set, hint, show board, "
     "show history, show configuration, show time, server list, server start, "
-    "server stop, join, ping, pause, moves, move, wall, "
+    "server stop, join, ping, players, pause, moves, move, wall, "
     "undo, redo, quit\n"
     "Use: help <command>"
 )
@@ -143,6 +148,7 @@ COMPLETION_COMMANDS = [
     "server stop",
     "join ",
     "ping",
+    "players",
     "pause",
     "moves",
     "move ",

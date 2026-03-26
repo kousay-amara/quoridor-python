@@ -165,8 +165,8 @@ def test_network_server_and_client_support_ping_and_quit():
 def test_network_server_accepts_multiple_clients():
     port = _unused_port()
     server = NetworkServer(port=port)
-    first_client = NetworkClient(host="127.0.0.1", port=port)
-    second_client = NetworkClient(host="127.0.0.1", port=port)
+    first_client = NetworkClient(host="127.0.0.1", port=port, name="alice")
+    second_client = NetworkClient(host="127.0.0.1", port=port, name="bob")
 
     try:
         server.start()
@@ -190,6 +190,33 @@ def test_network_server_accepts_multiple_clients():
             server.stop()
 
 
+def test_network_players_returns_id_name_and_status():
+    port = _unused_port()
+    server = NetworkServer(port=port)
+    first_client = NetworkClient(host="127.0.0.1", port=port, name="alice")
+    second_client = NetworkClient(host="127.0.0.1", port=port, name="bob")
+
+    try:
+        server.start()
+        first_client.connect()
+        second_client.connect()
+
+        players = first_client.players()
+
+        assert len(players) == 2
+        assert players[0][0] == 1
+        assert players[0][1] == "alice"
+        assert players[0][2] == "idle"
+        assert players[1][0] == 2
+        assert players[1][1] == "bob"
+        assert players[1][2] == "idle"
+    finally:
+        first_client.close()
+        second_client.close()
+        if server.running():
+            server.stop()
+
+
 def test_cli_server_join_ping_and_quit_cycle(
     monkeypatch,
     capsys,
@@ -201,6 +228,7 @@ def test_cli_server_join_ping_and_quit_cycle(
         [
             f"server start {port}",
             f"join 127.0.0.1:{port}",
+            "players",
             "ping",
             "quit",
             "server stop",
@@ -211,6 +239,7 @@ def test_cli_server_join_ping_and_quit_cycle(
     out = capsys.readouterr().out
     assert f"Server started on port {port}." in out
     assert f"Connected to server 127.0.0.1:{port}." in out
+    assert "Connected players:" in out
     assert "PONG TIME=" in out
     assert "Disconnected from server." in out
     assert "Server stopped." in out

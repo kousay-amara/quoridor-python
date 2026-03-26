@@ -162,6 +162,32 @@ def command_ping(state: NetworkState, _line: str) -> bool:
     return False
 
 
+def command_players(state: NetworkState, line: str) -> bool:
+    if line.strip().lower() != "players":
+        raise ValueError("Invalid format. Use: players")
+
+    if state.network_client is None:
+        print("Not connected to any server.")
+        return False
+
+    try:
+        players = state.network_client.players()
+    except OSError as exc:
+        state.network_client.close()
+        state.network_client = None
+        print(f"Connection lost: {exc}")
+        return False
+
+    if not players:
+        print("No connected players.")
+        return False
+
+    print("Connected players:")
+    for client_id, name, status in players:
+        print(f"- {client_id}: {name} ({status})")
+    return False
+
+
 def disconnect_client(state: NetworkState) -> bool:
     if state.network_client is None:
         return False
