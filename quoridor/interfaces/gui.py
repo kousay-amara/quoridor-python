@@ -14,20 +14,14 @@ if __package__ in {None, ""}:
     if str(project_root) not in sys.path:
         sys.path.insert(0, str(project_root))
 
+    from quoridor.application.game_application_service import (  # noqa: E402
+        GameApplicationService,
+    )
     from quoridor.application.game_session import (  # noqa: E402
         GameSession,
         initial_player_positions,
     )
     from quoridor.core.validators import validate_pawn_move, validate_wall
-
-    from quoridor.application.minimax_engine import (  # noqa: E402
-        find_best_move_minimax,
-    )
-    from quoridor.application.persistence_service import (  # noqa: E402
-        load_session,
-        save_session,
-    )
-    from quoridor.core.game_state import GameState  # noqa: E402
     from quoridor.interfaces.gui_shortcuts import (  # noqa: E402
         ACTION_LABELS,
         ActionRegistry,
@@ -36,15 +30,24 @@ if __package__ in {None, ""}:
         ShortcutError,
         ShortcutManager,
     )
+    from quoridor.interfaces.gui_constants import (  # noqa: E402
+        CELL,
+        COLOR_BACKGROUND,
+        COLOR_CELL,
+        COLOR_WALL,
+        DEFAULT_WALLS,
+        GAP,
+        MARGIN,
+        PLAYER_COLORS,
+        SIZE,
+    )
 else:
+    from ..application.game_application_service import GameApplicationService
     from ..application.game_session import (
         GameSession,
         initial_player_positions,
     )
-    from ..application.minimax_engine import find_best_move_minimax
     from ..core.validators import validate_pawn_move, validate_wall
-    from ..application.persistence_service import load_session, save_session
-    from ..core.game_state import GameState
     from .gui_shortcuts import (
         ACTION_LABELS,
         ActionRegistry,
@@ -53,21 +56,17 @@ else:
         ShortcutError,
         ShortcutManager,
     )
-
-SIZE = 9
-DEFAULT_WALLS = 10
-MARGIN = 30
-GAP = 6
-CELL = 46
-PLAYER_COLORS = {
-    1: (0.2, 0.4, 0.8),
-    2: (0.8, 0.2, 0.2),
-    3: (0.2, 0.65, 0.3),
-    4: (0.75, 0.58, 0.2),
-}
-COLOR_BACKGROUND = (0.86, 0.82, 0.73)
-COLOR_CELL = (0.96, 0.93, 0.91)
-COLOR_WALL = (0.55, 0.27, 0.07)
+    from .gui_constants import (
+        CELL,
+        COLOR_BACKGROUND,
+        COLOR_CELL,
+        COLOR_WALL,
+        DEFAULT_WALLS,
+        GAP,
+        MARGIN,
+        PLAYER_COLORS,
+        SIZE,
+    )
 
 
 class QuoridorWindow(Gtk.ApplicationWindow):
@@ -76,7 +75,7 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         app: Gtk.Application,
         num_players=2,
         board_size=9,
-        walls=10,
+        walls=DEFAULT_WALLS,
     ):
         super().__init__(application=app, title="Quoridor")
         self.set_default_size(680, 760)
@@ -99,6 +98,7 @@ class QuoridorWindow(Gtk.ApplicationWindow):
             players=num_players,
             walls=walls,
         )
+        self.service = GameApplicationService(session=self.session, blitz=None)
         self.status = Gtk.Label(label="Ready.")
         self.status.set_xalign(0.0)
 
@@ -159,16 +159,11 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         self, *, size: int, players: int, walls: int = 20
     ) -> GameSession:
         positions = initial_player_positions(size, players)
-        state = GameState(
+        return GameApplicationService.new_session(
             board_size=size,
-            current_player=1,
-            player_positions=positions,
-            remaining_walls={p: walls for p in positions},
-            vertical_walls=[],
-            horizontal_walls=[],
-        )
-        return GameSession(
-            state=state, player_types={p: "human" for p in positions}
+            players=players,
+            walls_per_player=walls,
+            player_types={p: "human" for p in positions},
         )
 
     def _install_actions(self) -> None:
@@ -363,6 +358,7 @@ class QuoridorWindow(Gtk.ApplicationWindow):
             players=self._num_players,
             walls=self._init_walls,
         )
+        self.service.set_context(session=self.session, blitz=None)
         self._paused = False
         self._game_over = False
         self.area.queue_draw()
@@ -393,32 +389,38 @@ class QuoridorWindow(Gtk.ApplicationWindow):
     def _action_undo(self) -> None:
         current = self.session.state.current_player
         try:
-            undone = self.session.undo(requester_id=current)
+            _groups, total = self.service.undo_groups(
+                requester_id=current,
+                count=1,
+            )
         except Exception as exc:
             self._set_status(f"Undo failed: {exc}")
             return
 
-        if not undone:
+        if total == 0:
             self._set_status("Nothing to undo.")
             return
 
         self.area.queue_draw()
-        self._set_status(f"Undid {len(undone)} move(s).")
+        self._set_status(f"Undid {total} move(s).")
 
     def _action_redo(self) -> None:
         current = self.session.state.current_player
         try:
-            redone = self.session.redo(requester_id=current)
+            _groups, total = self.service.redo_groups(
+                requester_id=current,
+                count=1,
+            )
         except Exception as exc:
             self._set_status(f"Redo failed: {exc}")
             return
 
-        if not redone:
+        if total == 0:
             self._set_status("Nothing to redo.")
             return
 
         self.area.queue_draw()
-        self._set_status(f"Redid {len(redone)} move(s).")
+        self._set_status(f"Redid {total} move(s).")
 
     def _action_pause(self) -> None:
         self._paused = not self._paused
@@ -431,10 +433,10 @@ class QuoridorWindow(Gtk.ApplicationWindow):
 
         current = self.session.state.current_player
         try:
-            move = find_best_move_minimax(
-                self.session.state,
-                ai_player_id=current,
-                depth=1,
+            move = self.service.hint(
+                ai_mode="minimax",
+                ai_time=2,
+                ai_minimax_depth=1,
             )
         except Exception as exc:
             self._set_status(f"Hint unavailable: {exc}")
@@ -568,7 +570,7 @@ class QuoridorWindow(Gtk.ApplicationWindow):
             return
 
         try:
-            save_session(path, self.session)
+            self.service.save(path)
             self._set_status(f"Saved to: {path}")
         except OSError as exc:
             self._set_status(f"Save failed: {exc}")
@@ -599,7 +601,7 @@ class QuoridorWindow(Gtk.ApplicationWindow):
             return
 
         try:
-            self.session = load_session(
+            self.session, _blitz = self.service.load(
                 path,
                 fallback_player_types=self.session.player_types,
                 fallback_walls_per_player=self.session.state.remaining_walls,
