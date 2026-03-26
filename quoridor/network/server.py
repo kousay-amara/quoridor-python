@@ -45,7 +45,7 @@ class NetworkServer:
         self._accept_thread = None
         self._client_thread = None
         self._client_sock = None
-        self._last_client_activity = None
+        self._last_client_activity_time = None
         self._lock = threading.Lock()
 
     def running(self) -> bool:
@@ -102,7 +102,7 @@ class NetworkServer:
                 except OSError:
                     pass
                 self._client_sock = None
-            self._last_client_activity = None
+            self._last_client_activity_time = None
 
         if self._accept_thread is not None:
             self._accept_thread.join(timeout=0.5)
@@ -135,7 +135,7 @@ class NetworkServer:
                         pass
                     continue
                 self._client_sock = client_sock
-                self._last_client_activity = time.time()
+                self._last_client_activity_time = time.time()
 
             try:
                 _send_line(client_sock, f"WELCOME {self.name} {self.port}")
@@ -156,11 +156,11 @@ class NetworkServer:
         try:
             while not self._stop_requested.is_set():
                 with self._lock:
-                    last_client_activity = self._last_client_activity
+                    last_client_activity_time = self._last_client_activity_time
 
                 if (
-                    last_client_activity is not None
-                    and time.time() - last_client_activity
+                    last_client_activity_time is not None
+                    and time.time() - last_client_activity_time
                     > self.client_timeout_sec
                 ):
                     try:
@@ -177,7 +177,7 @@ class NetworkServer:
                     continue
 
                 with self._lock:
-                    self._last_client_activity = time.time()
+                    self._last_client_activity_time = time.time()
 
                 command = line.strip()
                 if not command:
@@ -207,7 +207,7 @@ class NetworkServer:
         with self._lock:
             if self._client_sock is client_sock:
                 self._client_sock = None
-                self._last_client_activity = None
+                self._last_client_activity_time = None
 
 
 __all__ = ["NetworkServer"]

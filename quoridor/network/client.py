@@ -77,8 +77,6 @@ class NetworkClient:
         started_at = time.time()
         response = self.send_command("PING")
         round_trip_ms = (time.time() - started_at) * 1000.0
-        if response == "PONG":
-            return round_trip_ms
         if response.startswith("PONG TIME=") and response.endswith("ms"):
             return round_trip_ms
         raise OSError(f"unexpected ping response: {response}")

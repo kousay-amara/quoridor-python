@@ -116,15 +116,6 @@ def discover_servers(
     """Listen for UDP discovery announcements on the local network."""
     listen_port = _validate_port(listen_port)
 
-    now = time.time()
-    expired_keys = [
-        key
-        for key, (_server, last_seen_time) in _discovery_cache.items()
-        if now - last_seen_time > DISCOVERY_ENTRY_TTL_SEC
-    ]
-    for key in expired_keys:
-        del _discovery_cache[key]
-
     if timeout_sec > 0:
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         try:
