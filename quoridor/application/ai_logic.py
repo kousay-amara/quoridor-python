@@ -59,9 +59,6 @@ def apply_move(state: GameState, move: tuple) -> None:
         else:
             state.vertical_walls.extend(edges)
 
-        #for edge in edges:
-         #state.graph.remove_edge(*edge)
-
         state.remaining_walls[state.current_player] -= 1
 
     state._rebuild_graph()

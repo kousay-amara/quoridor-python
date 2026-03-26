@@ -306,9 +306,7 @@ class QuoridorWindow(Gtk.ApplicationWindow):
                 self.session.play_pawn_move(self._drag_pid, to_node)
                 winner = self.session.winner_id()
                 if winner is not None:
-                    self._set_status(
-                    f"Player {winner} wins!"
-                    )
+                    self._set_status(f"Player {winner} wins!")
                     self._game_over = True
                 else:
                     self._set_status(

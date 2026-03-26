@@ -47,7 +47,7 @@ def validate_wall(
         if n2 not in graph.adj.get(n1, []):
             return False, "A wall already exists there."
     if _has_crossing_wall(graph, wall_edges):
-        return False, "A wall already crosses this position."    
+        return False, "A wall already crosses this position."
     if not is_wall_legal(graph, player_positions, wall_edges, target_funcs):
         return False, "This wall would completely block a player's path."
     return True, None
