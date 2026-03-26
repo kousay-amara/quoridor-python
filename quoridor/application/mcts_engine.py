@@ -8,6 +8,54 @@ from quoridor.application.ai_logic import (
     apply_move,
 )
 from quoridor.rules.win_rules import has_player_won
+from quoridor.utils.graph import get_shortest_path_length
+from quoridor.rules.wall_rules import get_all_legal_wall_placements
+
+
+def get_blocking_walls(state, opponent_id):
+    """Return best walls to block opponent"""
+
+    opp_pos = state.player_positions[opponent_id]
+    b_size = state.board_size
+
+    if opponent_id == 1:
+        is_target = lambda node: node // b_size == b_size - 1
+    else:
+        is_target = lambda node: node // b_size == 0
+
+    current_path_len = get_shortest_path_length(state.graph, opp_pos, is_target)
+
+    blocking = []
+    for wall_move in get_all_legal_wall_placements(state):
+        new_state = clone_state(state)
+        apply_move(new_state, wall_move)
+        new_path_len = get_shortest_path_length(new_state.graph, opp_pos, is_target)
+        if new_path_len > current_path_len:
+            blocking.append(wall_move)
+
+    return blocking
+
+
+def get_tree_moves(state):
+    current_id = state.current_player
+    if not state.is_player_active(current_id):
+        return []
+    current_pos = state.player_positions[current_id]
+    all_pos = list(state.player_positions.values())
+
+    from quoridor.rules.pawn_rules import get_all_legal_pawn_moves
+    pawn_targets = get_all_legal_pawn_moves(state.graph, current_pos, all_pos)
+    moves = [('pawn', t) for t in pawn_targets]
+
+    if state.remaining_walls.get(current_id, 0) > 0:
+        opponent_ids = [p for p in state.active_player_ids() if p != current_id]
+        for opp_id in opponent_ids:
+            opp_dist = get_dist_to_goal(opp_id, state.player_positions[opp_id], state.board_size)
+            if opp_dist <= 5:
+                blocking = get_blocking_walls(state, opp_id)
+                moves += random.sample(blocking, min(3, len(blocking)))
+
+    return moves
 
 
 class MCTSNode:
@@ -18,15 +66,9 @@ class MCTSNode:
         self.childrens = []
         self.wins = 0
         self.visits = 0
-
-        all_moves = get_all_legal_moves(state)
-        self.untried_moves = sorted(
-            all_moves,
-            key=lambda m: 0 if getattr(m, 'action', '') == 'move_pawn' else 1
-        )
+        self.untried_moves = get_tree_moves(state)
 
     def uct_select_child(self, exploration_weight):
-        """Choose a child using UCT Formula"""
         return max(
             self.childrens,
             key=lambda c: (c.wins / c.visits)
@@ -35,18 +77,12 @@ class MCTSNode:
 
 
 def get_dist_to_goal(player_id, pos_index, board_size):
-    """
-    Calcul Manhattan distance to victory
-    """
     y = pos_index // board_size
-    target_y = 0 if player_id == 1 else board_size - 1
+    target_y = board_size - 1 if player_id == 1 else 0
     return abs(y - target_y)
 
 
 def check_any_winner(state):
-    """
-    Check if any player won.
-    """
     for p_id in state.active_player_ids():
         pos = state.player_positions.get(p_id)
         if pos is not None and has_player_won(p_id, pos, state.board_size):
@@ -55,11 +91,12 @@ def check_any_winner(state):
 
 
 def mcts_search(root_state, time_limit=5.0, exploration_weight=1.41):
-    """Perform MCTS search"""
     root_node = MCTSNode(root_state)
     start_time = time.time()
+    iterations = 0
 
     while time.time() - start_time < time_limit:
+        iterations += 1
         node = root_node
 
         # Selection
@@ -78,16 +115,15 @@ def mcts_search(root_state, time_limit=5.0, exploration_weight=1.41):
 
         # Simulation
         rollout_state = clone_state(node.state)
-        max_moves = 300  # Security against infinite games
+        max_moves = 300
         winner = None
 
         while max_moves > 0:
-            moves = get_all_legal_moves(rollout_state)
-            if not moves:
-                break
-
             p_id = rollout_state.current_player
             b_size = rollout_state.board_size
+            current_pos = rollout_state.player_positions[p_id]
+            all_pos = list(rollout_state.player_positions.values())
+
 
             pawn_moves = [
                 m
@@ -116,18 +152,71 @@ def mcts_search(root_state, time_limit=5.0, exploration_weight=1.41):
 
             winner = check_any_winner(rollout_state)
             if winner is not None:
+=======
+            from quoridor.rules.pawn_rules import get_all_legal_pawn_moves
+            pawn_targets = get_all_legal_pawn_moves(rollout_state.graph, current_pos, all_pos)
+
+            if not pawn_targets:
+
                 break
 
+            from quoridor.utils.graph import get_shortest_path_length
+
+            if random.random() < 0.85:
+                if p_id == 1:
+                    is_target = lambda node: node // b_size == b_size - 1
+                else:
+                    is_target = lambda node: node // b_size == 0
+
+                best_dist = min(
+                    get_shortest_path_length(rollout_state.graph, t, is_target)
+                    for t in pawn_targets
+                )
+                best_targets = [
+                    t for t in pawn_targets
+                    if get_shortest_path_length(rollout_state.graph, t, is_target) == best_dist
+                ]
+                target = random.choice(best_targets)
+            
+            
+            else:
+                target = random.choice(pawn_targets)
+
+            rollout_state.player_positions[p_id] = target
+            max_moves -= 1
+
+            if has_player_won(p_id, target, b_size):
+                winner = p_id
+                break
+
+            pids = sorted(rollout_state.player_positions.keys())
+            idx = pids.index(p_id)
+            active = rollout_state.active_player_ids()
+            for offset in range(1, len(pids) + 1):
+                next_p = pids[(idx + offset) % len(pids)]
+                if next_p in active:
+                    rollout_state.current_player = next_p
+                    break
+        
         # Backpropagation
         temp_node = node
         while temp_node is not None:
             temp_node.visits += 1
-            node_player = temp_node.state.current_player
-            temp_node.wins += 1 if winner == node_player else 0
+            if temp_node.parent is not None:
+                player_who_moved = temp_node.parent.state.current_player
+            else:
+                player_who_moved = root_state.current_player
+            temp_node.wins += 1 if winner == player_who_moved else 0
             temp_node = temp_node.parent
+        
 
     if not root_node.childrens:
         legal_moves = get_all_legal_moves(root_state)
         return random.choice(legal_moves) if legal_moves else None
 
+<<<<<<< HEAD
     return max(root_node.childrens, key=lambda c: c.visits).move
+=======
+    best = max(root_node.childrens, key=lambda c: c.visits)
+    return best.move
+>>>>>>> 2a26bb0 (mcts fix)

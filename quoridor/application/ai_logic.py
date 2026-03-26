@@ -54,13 +54,13 @@ def apply_move(state: GameState, move: tuple) -> None:
     elif move_type == "wall":
         edges, orientation = move[1], move[2]
 
-        if orientation == "horizontal":
+        if orientation in ("horizontal", "h"):
             state.horizontal_walls.extend(edges)
         else:
             state.vertical_walls.extend(edges)
 
-        # for edge in edges:
-        # state.graph.remove_edge(*edge)
+        #for edge in edges:
+         #state.graph.remove_edge(*edge)
 
         state.remaining_walls[state.current_player] -= 1
 
