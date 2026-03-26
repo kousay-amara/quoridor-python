@@ -244,7 +244,7 @@ def test_undo_and_redo_reject_invalid_counts(monkeypatch, capsys):
 
     out = captured.out
     assert "Invalid command: N must be > 0" in out
-    assert "invalid literal for int() with base 10: 'abc'" in out
+    assert "Invalid command: N must be an integer" in out
 
 
 def test_show_history_prints_turns_grouped_by_move(monkeypatch, capsys):

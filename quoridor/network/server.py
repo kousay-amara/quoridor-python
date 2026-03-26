@@ -170,7 +170,10 @@ class NetworkServer:
                         pass
                     break
 
-                line, buffer, closed = _recv_line(client_sock, buffer)
+                try:
+                    line, buffer, closed = _recv_line(client_sock, buffer)
+                except OSError:
+                    break
                 if closed:
                     break
                 if line is None:
@@ -187,14 +190,23 @@ class NetworkServer:
                 if command_upper == "PING":
                     started_at = time.time()
                     response_ms = round((time.time() - started_at) * 1000.0)
-                    _send_line(client_sock, f"PONG TIME={response_ms}ms")
+                    try:
+                        _send_line(client_sock, f"PONG TIME={response_ms}ms")
+                    except OSError:
+                        break
                     continue
 
                 if command_upper == "QUIT":
-                    _send_line(client_sock, "BYE")
+                    try:
+                        _send_line(client_sock, "BYE")
+                    except OSError:
+                        pass
                     break
 
-                _send_line(client_sock, "ERROR UNKNOWN_COMMAND")
+                try:
+                    _send_line(client_sock, "ERROR UNKNOWN_COMMAND")
+                except OSError:
+                    break
         finally:
             self._close_client(client_sock)
 

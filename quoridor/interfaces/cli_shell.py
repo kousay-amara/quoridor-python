@@ -474,6 +474,20 @@ def _parse_set_bool(raw: str) -> bool:
     raise ValueError("boolean value expected (true/false)")
 
 
+def _parse_int(raw: str, *, field_name: str) -> int:
+    try:
+        return int(raw)
+    except ValueError as exc:
+        raise ValueError(f"{field_name} must be an integer") from exc
+
+
+def _parse_positive_int(raw: str, *, field_name: str) -> int:
+    value = _parse_int(raw, field_name=field_name)
+    if value <= 0:
+        raise ValueError(f"{field_name} must be > 0")
+    return value
+
+
 def _parse_set_ai_players(raw: str, *, players: int) -> list[int]:
     from . import cli_parser as parser_mod
 
@@ -539,7 +553,9 @@ def _handle_set(state: "_ShellState", line: str) -> None:
             raise ValueError("ai_players ids must be <= players")
         state.players = parsed_value
     elif param == "walls_per_player":
-        state.walls_per_player = int(value)
+        state.walls_per_player = _parse_int(
+            value, field_name="walls_per_player"
+        )
         parsed_value = state.walls_per_player
     elif param == "board_size":
         state.board_size = parser_mod._size_type(value)
@@ -568,9 +584,7 @@ def _handle_set(state: "_ShellState", line: str) -> None:
         state.ai_mode = normalized
         parsed_value = state.ai_mode
     elif param == "ai_time":
-        state.ai_time = int(value)
-        if state.ai_time <= 0:
-            raise ValueError("ai_time must be > 0")
+        state.ai_time = _parse_positive_int(value, field_name="ai_time")
         parsed_value = state.ai_time
     elif param == "ai_minimax_depth":
         normalized = value.lower()
@@ -581,9 +595,9 @@ def _handle_set(state: "_ShellState", line: str) -> None:
                 )
             state.ai_minimax_depth = None
         else:
-            state.ai_minimax_depth = int(value)
-            if state.ai_minimax_depth <= 0:
-                raise ValueError("ai_minimax_depth must be > 0")
+            state.ai_minimax_depth = _parse_positive_int(
+                value, field_name="ai_minimax_depth"
+            )
         parsed_value = state.ai_minimax_depth
     else:
         raise ValueError(f"unsupported setting: {param}")
@@ -874,7 +888,7 @@ def _handle_undo(session: GameSession, line: str, *, blitz: Blitz) -> bool:
         raise ValueError("Invalid format. Use: undo [N]")
     count = 1
     if len(parts) == 2:
-        count = int(parts[1])
+        count = _parse_positive_int(parts[1], field_name="N")
 
     service = GameApplicationService(session=session, blitz=blitz)
     groups_done, total_undone = service.undo_groups(
@@ -897,7 +911,7 @@ def _handle_redo(session: GameSession, line: str, *, blitz: Blitz) -> bool:
         raise ValueError("Invalid format. Use: redo [N]")
     count = 1
     if len(parts) == 2:
-        count = int(parts[1])
+        count = _parse_positive_int(parts[1], field_name="N")
 
     service = GameApplicationService(session=session, blitz=blitz)
     groups_done, total_redone = service.redo_groups(
@@ -1061,8 +1075,7 @@ def _command_help(_state: _ShellState, line: str) -> bool:
 def _command_load(state: _ShellState, line: str) -> bool:
     file_path = line[5:].strip()
     if not file_path:
-        print("Invalid format. Use: load FILE")
-        return False
+        raise ValueError("Invalid format. Use: load FILE")
     try:
         session, blitz, has_unsaved_changes, should_break = _handle_load(
             state.session,
@@ -1094,8 +1107,7 @@ def _command_history(state: _ShellState, _line: str) -> bool:
 def _command_save(state: _ShellState, line: str) -> bool:
     file_path = line[5:].strip()
     if not file_path:
-        print("Invalid format. Use: save FILE")
-        return False
+        raise ValueError("Invalid format. Use: save FILE")
     try:
         state.has_unsaved_changes = _handle_save(
             state.session,

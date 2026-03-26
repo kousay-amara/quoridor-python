@@ -235,6 +235,7 @@ def test_cli_invalid_network_commands_do_not_crash_shell(monkeypatch, capsys):
         "Invalid command: Invalid format. Use: "
         "server list|start [PORT]|stop"
     ) in out
+    assert "Invalid command: Invalid format. Use: join [HOST[:PORT]]" in out
     assert "Invalid command:" in out
     assert "Not connected to any server." in out
     assert "Bye." in out

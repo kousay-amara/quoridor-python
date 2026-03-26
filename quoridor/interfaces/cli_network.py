@@ -127,7 +127,12 @@ def command_join(state: NetworkState, line: str) -> bool:
         return False
 
     endpoint = parts[1] if len(parts) == 2 else None
-    host, port = parse_endpoint(endpoint)
+    try:
+        host, port = parse_endpoint(endpoint)
+    except ValueError as exc:
+        raise ValueError(
+            "Invalid format. Use: join [HOST[:PORT]]"
+        ) from exc
     client = NetworkClient(host=host, port=port)
     try:
         client.connect()
