@@ -162,7 +162,7 @@ def test_network_server_and_client_support_ping_and_quit():
             server.stop()
 
 
-def test_network_server_rejects_second_client():
+def test_network_server_accepts_multiple_clients():
     port = _unused_port()
     server = NetworkServer(port=port)
     first_client = NetworkClient(host="127.0.0.1", port=port)
@@ -171,9 +171,18 @@ def test_network_server_rejects_second_client():
     try:
         server.start()
         first_client.connect()
+        second_client.connect()
 
-        with pytest.raises(OSError, match="ERROR BUSY"):
-            second_client.connect()
+        assert first_client.connected()
+        assert second_client.connected()
+        assert first_client.ping() >= 0
+        assert second_client.ping() >= 0
+
+        first_client.quit()
+        second_client.quit()
+
+        assert not first_client.connected()
+        assert not second_client.connected()
     finally:
         first_client.close()
         second_client.close()

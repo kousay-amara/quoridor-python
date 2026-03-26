@@ -17,6 +17,19 @@ from .basic_network import (
 )
 
 
+class _ClientSession:
+    def __init__(
+        self,
+        *,
+        sock: socket.socket,
+        thread: threading.Thread,
+        last_activity_time: float,
+    ) -> None:
+        self.sock = sock
+        self.thread = thread
+        self.last_activity_time = last_activity_time
+
+
 class NetworkServer:
     def __init__(
         self,
@@ -43,10 +56,9 @@ class NetworkServer:
         self._stop_requested = threading.Event()
         self._listener_sock = None
         self._accept_thread = None
-        self._client_thread = None
-        self._client_sock = None
-        self._last_client_activity_time = None
-        self._lock = threading.Lock()
+        self._client_sessions: dict[int, _ClientSession] = {}
+        self._next_client_id = 1
+        self._lock = threading.RLock()
 
     def running(self) -> bool:
         return (
@@ -63,7 +75,7 @@ class NetworkServer:
         listener_sock.settimeout(_SOCKET_TIMEOUT_SEC)
         try:
             listener_sock.bind((self.host, self.port))
-            listener_sock.listen(1)
+            listener_sock.listen(16)
         except OSError:
             listener_sock.close()
             raise
@@ -91,26 +103,34 @@ class NetworkServer:
             self._listener_sock = None
 
         with self._lock:
-            if self._client_sock is not None:
-                try:
-                    _send_line(self._client_sock, "SERVER_STOPPING")
-                    _send_line(self._client_sock, "BYE")
-                except OSError:
-                    pass
-                try:
-                    self._client_sock.close()
-                except OSError:
-                    pass
-                self._client_sock = None
-            self._last_client_activity_time = None
+            sessions = list(self._client_sessions.items())
+            self._client_sessions = {}
+
+        for _client_id, session in sessions:
+            try:
+                _send_line(session.sock, "SERVER_STOPPING")
+                _send_line(session.sock, "BYE")
+            except OSError:
+                pass
+            try:
+                session.sock.close()
+            except OSError:
+                pass
+
+        current_thread = threading.current_thread()
+        with self._lock:
+            client_threads = [session.thread for _, session in sessions]
 
         if self._accept_thread is not None:
             self._accept_thread.join(timeout=0.5)
         self._accept_thread = None
 
-        if self._client_thread is not None:
-            self._client_thread.join(timeout=0.5)
-        self._client_thread = None
+        for client_thread in client_threads:
+            if (
+                client_thread is not current_thread
+                and client_thread.is_alive()
+            ):
+                client_thread.join(timeout=0.5)
 
     def _accept_loop(self) -> None:
         assert self._listener_sock is not None
@@ -124,39 +144,43 @@ class NetworkServer:
 
             client_sock.settimeout(_SOCKET_TIMEOUT_SEC)
             with self._lock:
-                if self._client_sock is not None:
-                    try:
-                        _send_line(client_sock, "ERROR BUSY")
-                    except OSError:
-                        pass
-                    try:
-                        client_sock.close()
-                    except OSError:
-                        pass
-                    continue
-                self._client_sock = client_sock
-                self._last_client_activity_time = time.time()
+                client_id = self._next_client_id
+                self._next_client_id += 1
+
+            client_thread = threading.Thread(
+                target=self._client_loop,
+                args=(client_id, client_sock),
+                name=f"quoridor-network-client-{client_id}",
+                daemon=True,
+            )
+            with self._lock:
+                self._client_sessions[client_id] = _ClientSession(
+                    sock=client_sock,
+                    thread=client_thread,
+                    last_activity_time=time.time(),
+                )
 
             try:
                 _send_line(client_sock, f"WELCOME {self.name} {self.port}")
             except OSError:
-                self._close_client(client_sock)
+                self._close_client(client_id, client_sock)
                 continue
 
-            self._client_thread = threading.Thread(
-                target=self._client_loop,
-                args=(client_sock,),
-                name="quoridor-network-client",
-                daemon=True,
-            )
-            self._client_thread.start()
+            client_thread.start()
 
-    def _client_loop(self, client_sock: socket.socket) -> None:
+    def _client_loop(
+        self,
+        client_id: int,
+        client_sock: socket.socket,
+    ) -> None:
         buffer = ""
         try:
             while not self._stop_requested.is_set():
                 with self._lock:
-                    last_client_activity_time = self._last_client_activity_time
+                    session = self._client_sessions.get(client_id)
+                    if session is None:
+                        break
+                    last_client_activity_time = session.last_activity_time
 
                 if (
                     last_client_activity_time is not None
@@ -180,7 +204,10 @@ class NetworkServer:
                     continue
 
                 with self._lock:
-                    self._last_client_activity_time = time.time()
+                    session = self._client_sessions.get(client_id)
+                    if session is None:
+                        break
+                    session.last_activity_time = time.time()
 
                 command = line.strip()
                 if not command:
@@ -208,18 +235,22 @@ class NetworkServer:
                 except OSError:
                     break
         finally:
-            self._close_client(client_sock)
+            self._close_client(client_id, client_sock)
 
-    def _close_client(self, client_sock: socket.socket) -> None:
+    def _close_client(
+        self,
+        client_id: int,
+        client_sock: socket.socket,
+    ) -> None:
         try:
             client_sock.close()
         except OSError:
             pass
 
         with self._lock:
-            if self._client_sock is client_sock:
-                self._client_sock = None
-                self._last_client_activity_time = None
+            session = self._client_sessions.get(client_id)
+            if session is not None and session.sock is client_sock:
+                del self._client_sessions[client_id]
 
 
 __all__ = ["NetworkServer"]
