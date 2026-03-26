@@ -95,7 +95,7 @@ class TestValidateWall:
             lambda node, s=size: node // s == s - 1,
             lambda node, s=size: node // s == 0,
         ]
-        wall_edges = [(0, 3)]
+        wall_edges = [(0, 3), (1, 4)]
         ok, msg = validate_wall(
             graph, [0, 8], wall_edges, target_funcs, {1: 5, 2: 5}, 1
         )
