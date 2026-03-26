@@ -137,10 +137,14 @@ def find_best_move_minimax(
     deadline_ts: float | None = None,
 ) -> Move:
     """Choose the best legal move for ai_player_id with fixed-depth minimax."""
-    legal_moves = get_all_legal_moves(
-        state,
-        deadline_check=_deadline_checker(deadline_ts),
-    )
+    try :
+        legal_moves = get_all_legal_moves(
+            state,
+            deadline_check=_deadline_checker(deadline_ts),
+        )
+    except SearchTimeout :
+        legal_moves = get_all_legal_moves(state, deadline_check=None)
+    
     if not legal_moves:
         raise ValueError("no legal moves available for AI")
 

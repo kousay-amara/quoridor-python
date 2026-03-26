@@ -53,12 +53,15 @@ def test_mcts_node_untried_moves(real_mini_state):
     while node.untried_moves:
         move = node.untried_moves.pop()
         child = MCTSNode(real_mini_state, parent=node, move=move)
-        node.children.append(child)
+        child.visits = 1
+        node.childrens.append(child)
+    
+    node.visits = len(node.childrens) + 1
     
     # Now that untried_moves is empty, uct_select_child should be callable
     assert len(node.untried_moves) == 0
-    selected = node.uct_select_child()
-    assert selected in node.children
+    selected = node.uct_select_child(exploration_weight=1.414)
+    assert selected in node.childrens
 
 def test_mcts_time_limit_compliance(real_mini_state):
     """
