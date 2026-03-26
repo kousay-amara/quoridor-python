@@ -1,21 +1,6 @@
-"""Compatibility helpers and lazy exports for the network package."""
-
-from __future__ import annotations
+"""Basic shared helpers for the network package."""
 
 import socket
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from .client import NetworkClient
-    from .discovery import (
-        DiscoveredServer,
-        DiscoveryBroadcaster,
-        discover_servers,
-        format_discovery_message,
-        parse_discovery_message,
-        remember_server,
-    )
-    from .server import NetworkServer
 
 
 DEFAULT_SERVER_HOST = "localhost"
@@ -91,36 +76,5 @@ __all__ = [
     "DISCOVERY_ENTRY_TTL_SEC",
     "DISCOVERY_PORT",
     "DISCOVERY_TIMEOUT_SEC",
-    "DiscoveredServer",
-    "DiscoveryBroadcaster",
-    "NetworkClient",
-    "NetworkServer",
-    "discover_servers",
-    "format_discovery_message",
-    "parse_discovery_message",
     "parse_endpoint",
-    "remember_server",
 ]
-
-
-def __getattr__(name: str):
-    if name == "NetworkClient":
-        from .client import NetworkClient
-
-        return NetworkClient
-    if name == "NetworkServer":
-        from .server import NetworkServer
-
-        return NetworkServer
-    if name in {
-        "DiscoveredServer",
-        "DiscoveryBroadcaster",
-        "discover_servers",
-        "format_discovery_message",
-        "parse_discovery_message",
-        "remember_server",
-    }:
-        from . import discovery
-
-        return getattr(discovery, name)
-    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
