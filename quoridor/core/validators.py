@@ -25,6 +25,13 @@ def validate_pawn_move(
     return False, "This move is not reachable from your position."
 
 
+def _has_crossing_wall(graph, wall_edges):
+    (a, b), (c, d) = wall_edges
+    cross1_missing = c not in graph.adj.get(a, [])
+    cross2_missing = d not in graph.adj.get(b, [])
+    return cross1_missing and cross2_missing
+
+
 def validate_wall(
     graph: Graph,
     player_positions,
@@ -39,6 +46,8 @@ def validate_wall(
     for n1, n2 in wall_edges:
         if n2 not in graph.adj.get(n1, []):
             return False, "A wall already exists there."
+    if _has_crossing_wall(graph, wall_edges):
+        return False, "A wall already crosses this position."    
     if not is_wall_legal(graph, player_positions, wall_edges, target_funcs):
         return False, "This wall would completely block a player's path."
     return True, None
