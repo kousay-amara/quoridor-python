@@ -10,8 +10,15 @@ from ..rules.win_rules import has_player_won
 from .blitz import Blitz
 from .game_session import GameSession, initial_player_positions
 from .mcts_engine import mcts_search
-from .minimax_engine import find_best_move_iterative, find_best_move_minimax
-from .persistence_service import load_blitz_snapshot, load_session, save_session
+from .minimax_engine import (
+    find_best_move_iterative,
+    find_best_move_minimax,
+)
+from .persistence_service import (
+    load_blitz_snapshot,
+    load_session,
+    save_session,
+)
 from ..core.game_state import GameState
 
 
@@ -25,7 +32,9 @@ class GameApplicationService:
     def __post_init__(self) -> None:
         self.session.attach_blitz(self.blitz)
 
-    def set_context(self, *, session: GameSession, blitz: Blitz | None) -> None:
+    def set_context(
+        self, *, session: GameSession, blitz: Blitz | None
+    ) -> None:
         self.session = session
         self.blitz = blitz
         self.session.attach_blitz(self.blitz)
@@ -132,8 +141,12 @@ class GameApplicationService:
             raise ValueError("Invalid format. Use: e2-e3")
 
         from_txt, to_txt = token.split("-", 1)
-        from_node = get_node_from_notation(from_txt, self.session.state.board_size)
-        to_node = get_node_from_notation(to_txt, self.session.state.board_size)
+        from_node = get_node_from_notation(
+            from_txt, self.session.state.board_size
+        )
+        to_node = get_node_from_notation(
+            to_txt, self.session.state.board_size
+        )
 
         current = self.session.state.current_player
         all_positions = list(self.session.state.player_positions.values())
@@ -149,9 +162,16 @@ class GameApplicationService:
 
         self.session.play_pawn_move_from_to(current, from_node, to_node)
         new_pos = self.session.state.player_positions[current]
-        return has_player_won(current, new_pos, self.session.state.board_size), current
+        return (
+            has_player_won(
+                current, new_pos, self.session.state.board_size
+            ),
+            current,
+        )
 
-    def place_wall_token(self, wall_token: str, wall_token_min_length: int) -> None:
+    def place_wall_token(
+        self, wall_token: str, wall_token_min_length: int
+    ) -> None:
         token = wall_token.strip().lower()
         if len(token) < wall_token_min_length:
             raise ValueError("Invalid format. Use: e2h or e2v")
