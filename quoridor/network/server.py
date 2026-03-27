@@ -26,6 +26,7 @@ class _ClientSession:
         last_activity_time: float,
         name: str,
         status: str,
+        game_id: int | None,
         buffer: str,
     ) -> None:
         self.sock = sock
@@ -33,6 +34,7 @@ class _ClientSession:
         self.last_activity_time = last_activity_time
         self.name = name
         self.status = status
+        self.game_id = game_id
         self.buffer = buffer
 
 
@@ -49,6 +51,17 @@ class _ScoreEntry:
         self.wins = wins
         self.losses = losses
         self.played = played
+
+
+class _GameRoom:
+    def __init__(
+        self,
+        *,
+        game_id: int,
+        player_ids: tuple[int, ...],
+    ) -> None:
+        self.game_id = game_id
+        self.player_ids = player_ids
 
 
 class NetworkServer:
@@ -79,7 +92,9 @@ class NetworkServer:
         self._accept_thread = None
         self._client_sessions: dict[int, _ClientSession] = {}
         self._scoreboard: dict[int, _ScoreEntry] = {}
+        self._game_rooms: dict[int, _GameRoom] = {}
         self._next_client_id = 1
+        self._next_game_id = 1
         self._lock = threading.RLock()
 
     def running(self) -> bool:
@@ -91,10 +106,11 @@ class NetworkServer:
     def status_snapshot(self) -> dict[str, int]:
         with self._lock:
             connected_clients = len(self._client_sessions)
+            active_games = len(self._game_rooms)
         return {
             "port": self.port,
             "connected_clients": connected_clients,
-            "active_games": 0,
+            "active_games": active_games,
         }
 
     def start(self) -> None:
@@ -136,6 +152,7 @@ class NetworkServer:
         with self._lock:
             sessions = list(self._client_sessions.items())
             self._client_sessions = {}
+            self._game_rooms = {}
 
         for _client_id, session in sessions:
             try:
@@ -191,6 +208,7 @@ class NetworkServer:
                     last_activity_time=time.time(),
                     name=f"client-{client_id}",
                     status="idle",
+                    game_id=None,
                     buffer="",
                 )
 
@@ -285,6 +303,16 @@ class NetworkServer:
                         break
                     continue
 
+                if command_upper == "NEW" or command_upper.startswith("NEW "):
+                    try:
+                        _send_line(
+                            client_sock,
+                            self._handle_new_command(client_id, command),
+                        )
+                    except OSError:
+                        break
+                    continue
+
                 if command_upper == "QUIT":
                     try:
                         _send_line(client_sock, "BYE")
@@ -312,7 +340,10 @@ class NetworkServer:
         with self._lock:
             session = self._client_sessions.get(client_id)
             if session is not None and session.sock is client_sock:
+                game_id = session.game_id
                 del self._client_sessions[client_id]
+                if game_id is not None:
+                    self._close_game_room_locked(game_id)
 
     def _perform_hello(
         self,
@@ -364,6 +395,7 @@ class NetworkServer:
                     return False
                 session.name = client_name
                 session.status = "idle"
+                session.game_id = None
                 session.buffer = buffer
                 self._ensure_score_entry(client_id, client_name)
 
@@ -428,6 +460,59 @@ class NetworkServer:
             self._scoreboard[client_id] = _ScoreEntry(name=client_name)
             return
         entry.name = client_name
+
+    def _handle_new_command(self, client_id: int, command: str) -> str:
+        parts = command.split()
+        if len(parts) != 2:
+            return "ERROR INVALID_NEW_FORMAT"
+
+        try:
+            target_client_id = int(parts[1])
+        except ValueError:
+            return "ERROR INVALID_NEW_FORMAT"
+
+        if target_client_id <= 0:
+            return "ERROR INVALID_NEW_FORMAT"
+        if target_client_id == client_id:
+            return "ERROR SELF_INVITE"
+
+        with self._lock:
+            requester = self._client_sessions.get(client_id)
+            if requester is None:
+                return "ERROR REQUESTER_NOT_FOUND"
+            if requester.status != "idle":
+                return "ERROR REQUESTER_NOT_IDLE"
+
+            target = self._client_sessions.get(target_client_id)
+            if target is None:
+                return "ERROR PLAYER_NOT_FOUND"
+            if target.status != "idle":
+                return "ERROR PLAYER_NOT_AVAILABLE"
+
+            game_id = self._next_game_id
+            self._next_game_id += 1
+            self._game_rooms[game_id] = _GameRoom(
+                game_id=game_id,
+                player_ids=(client_id, target_client_id),
+            )
+            requester.status = "ingame"
+            requester.game_id = game_id
+            target.status = "ingame"
+            target.game_id = game_id
+
+        return f"NEW_OK {game_id}"
+
+    def _close_game_room_locked(self, game_id: int) -> None:
+        room = self._game_rooms.pop(game_id, None)
+        if room is None:
+            return
+
+        for room_player_id in room.player_ids:
+            session = self._client_sessions.get(room_player_id)
+            if session is None:
+                continue
+            session.status = "idle"
+            session.game_id = None
 
     def record_finished_game(
         self,

@@ -245,6 +245,64 @@ def command_scoreboard(state: NetworkState, line: str) -> bool:
     return False
 
 
+def command_new_player(state: NetworkState, line: str) -> bool:
+    parts = line.split()
+    if len(parts) != 2:
+        raise ValueError("Invalid format. Use: new PLAYER_ID")
+
+    if state.network_client is None:
+        print("Not connected to any server.")
+        return False
+
+    try:
+        target_player_id = int(parts[1])
+    except ValueError as exc:
+        raise ValueError("Invalid format. Use: new PLAYER_ID") from exc
+    if target_player_id <= 0:
+        raise ValueError("Invalid format. Use: new PLAYER_ID")
+
+    try:
+        response = state.network_client.send_command(
+            f"NEW {target_player_id}"
+        )
+    except OSError as exc:
+        state.network_client.close()
+        state.network_client = None
+        print(f"Connection lost: {exc}")
+        return False
+
+    if response.startswith("NEW_OK "):
+        parts = response.split()
+        if len(parts) != 2:
+            print(f"Cannot create game: unexpected response ({response}).")
+            return False
+        try:
+            game_id = int(parts[1])
+        except ValueError:
+            print(f"Cannot create game: unexpected response ({response}).")
+            return False
+        print(f"Game {game_id} started with player {target_player_id}.")
+        return False
+
+    if response == "ERROR PLAYER_NOT_FOUND":
+        print(f"Cannot create game: player {target_player_id} not found.")
+        return False
+    if response == "ERROR PLAYER_NOT_AVAILABLE":
+        print(f"Cannot create game: player {target_player_id} is busy.")
+        return False
+    if response == "ERROR REQUESTER_NOT_IDLE":
+        print("Cannot create game: you are already in game.")
+        return False
+    if response == "ERROR SELF_INVITE":
+        print("Cannot create game: choose another player.")
+        return False
+    if response == "ERROR INVALID_NEW_FORMAT":
+        raise ValueError("Invalid format. Use: new PLAYER_ID")
+
+    print(f"Cannot create game: unexpected response ({response}).")
+    return False
+
+
 def disconnect_client(state: NetworkState) -> bool:
     if state.network_client is None:
         return False

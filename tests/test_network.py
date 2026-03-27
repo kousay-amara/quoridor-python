@@ -294,6 +294,67 @@ def test_network_scoreboard_tracks_runtime_stats():
             server.stop()
 
 
+def test_network_new_creates_room_and_sets_players_ingame():
+    port = _unused_port()
+    server = NetworkServer(port=port)
+    first_client = NetworkClient(host="127.0.0.1", port=port, name="alice")
+    second_client = NetworkClient(host="127.0.0.1", port=port, name="bob")
+
+    try:
+        server.start()
+        first_client.connect()
+        second_client.connect()
+
+        response = first_client.send_command("NEW 2")
+        assert response == "NEW_OK 1"
+
+        status = server.status_snapshot()
+        assert status["active_games"] == 1
+
+        players = first_client.players()
+        assert players == [
+            (1, "alice", "ingame"),
+            (2, "bob", "ingame"),
+        ]
+    finally:
+        first_client.close()
+        second_client.close()
+        if server.running():
+            server.stop()
+
+
+def test_network_new_rejects_absent_or_unavailable_player():
+    port = _unused_port()
+    server = NetworkServer(port=port)
+    first_client = NetworkClient(host="127.0.0.1", port=port, name="alice")
+    second_client = NetworkClient(host="127.0.0.1", port=port, name="bob")
+    third_client = NetworkClient(
+        host="127.0.0.1",
+        port=port,
+        name="charlie",
+    )
+
+    try:
+        server.start()
+        first_client.connect()
+        second_client.connect()
+        third_client.connect()
+
+        assert first_client.send_command("NEW 999") == "ERROR PLAYER_NOT_FOUND"
+
+        assert first_client.send_command("NEW 2") == "NEW_OK 1"
+        assert (
+            third_client.send_command("NEW 2")
+            == "ERROR PLAYER_NOT_AVAILABLE"
+        )
+    finally:
+        first_client.close()
+        second_client.close()
+        third_client.close()
+        if server.running():
+            server.stop()
+
+
 def test_cli_server_join_ping_and_quit_cycle(
     monkeypatch,
     capsys,
@@ -321,6 +382,42 @@ def test_cli_server_join_ping_and_quit_cycle(
     assert "Disconnected from server." in out
     assert "Server stopped." in out
     assert "Bye." in out
+
+
+def test_cli_new_player_creates_game_with_explicit_errors(
+    monkeypatch,
+    capsys,
+):
+    port = _unused_port()
+    server = NetworkServer(port=port)
+    bob = NetworkClient(host="127.0.0.1", port=port, name="bob")
+
+    try:
+        server.start()
+        bob.connect()
+        _run_shell(
+            monkeypatch,
+            [
+                f"join 127.0.0.1:{port} alice",
+                "new 999",
+                "new 1",
+                "new 999",
+                "players",
+                "quit",
+                "quit",
+            ],
+        )
+    finally:
+        bob.close()
+        if server.running():
+            server.stop()
+
+    out = capsys.readouterr().out
+    assert "Cannot create game: player 999 not found." in out
+    assert "Game 1 started with player 1." in out
+    assert "Cannot create game: you are already in game." in out
+    assert "- 1: bob (ingame)" in out
+    assert "- 2: alice (ingame)" in out
 
 
 def test_cli_join_accepts_custom_name(monkeypatch, capsys):

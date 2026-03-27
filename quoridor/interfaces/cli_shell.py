@@ -1231,6 +1231,10 @@ def _command_scoreboard(state: _ShellState, line: str) -> bool:
     return cli_network.command_scoreboard(state, line)
 
 
+def _command_new_player(state: _ShellState, line: str) -> bool:
+    return cli_network.command_new_player(state, line)
+
+
 def _command_undo(state: _ShellState, line: str) -> bool:
     if _pause_blocks_gameplay(state.blitz):
         return False
@@ -1354,6 +1358,22 @@ class _NewCommand(_InvalidAsCommandError):
 
     def run(self, state: _ShellState, line: str) -> bool:
         return _command_new(state, line)
+
+
+class _NetworkNewPlayerCommand(_InvalidAsCommandError):
+    def matches(self, line: str) -> bool:
+        parts = line.split()
+        if len(parts) != 2:
+            return False
+        if parts[0].lower() != "new":
+            return False
+        value = parts[1]
+        if value.startswith(("+", "-")):
+            value = value[1:]
+        return value.isdigit()
+
+    def run(self, state: _ShellState, line: str) -> bool:
+        return _command_new_player(state, line)
 
 
 class _HelpCommand(_BaseCommand):
@@ -1572,6 +1592,7 @@ class _CommandRegistry:
 def _build_command_registry() -> _CommandRegistry:
     return _CommandRegistry(
         [
+            _NetworkNewPlayerCommand(),
             _NewCommand(),
             _HelpCommand(),
             _HistoryCommand(),
