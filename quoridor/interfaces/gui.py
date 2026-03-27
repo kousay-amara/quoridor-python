@@ -400,7 +400,7 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         if total == 0:
             self._set_status("Nothing to undo.")
             return
-
+        self._game_over=False
         self.area.queue_draw()
         self._set_status(f"Undid {total} move(s).")
 
@@ -419,6 +419,10 @@ class QuoridorWindow(Gtk.ApplicationWindow):
             self._set_status("Nothing to redo.")
             return
 
+        winner = self.session.winner_id()
+        if winner is not None:
+            self._game_over = True
+            self._set_status(f"Player {winner} wins!")           
         self.area.queue_draw()
         self._set_status(f"Redid {total} move(s).")
 
