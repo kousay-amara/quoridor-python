@@ -323,6 +323,27 @@ def test_cli_server_join_ping_and_quit_cycle(
     assert "Bye." in out
 
 
+def test_cli_join_accepts_custom_name(monkeypatch, capsys):
+    port = _unused_port()
+
+    _run_shell(
+        monkeypatch,
+        [
+            f"server start {port}",
+            f"join 127.0.0.1:{port} alice",
+            "players",
+            "quit",
+            "server stop",
+            "quit",
+        ],
+    )
+
+    out = capsys.readouterr().out
+    assert f"Connected to server 127.0.0.1:{port}." in out
+    assert "Connected players:" in out
+    assert "- 1: alice (idle)" in out
+
+
 def test_cli_scoreboard_displays_server_stats(monkeypatch, capsys):
     port = _unused_port()
     server = NetworkServer(port=port)
@@ -408,7 +429,10 @@ def test_cli_invalid_network_commands_do_not_crash_shell(monkeypatch, capsys):
         "Invalid command: Invalid format. Use: "
         "server list|start [PORT]|status|stop"
     ) in out
-    assert "Invalid command: Invalid format. Use: join [HOST[:PORT]]" in out
+    assert (
+        "Invalid command: Invalid format. Use: "
+        "join [HOST[:PORT]] [NAME]"
+    ) in out
     assert "Invalid command:" in out
     assert "Not connected to any server." in out
     assert "Bye." in out

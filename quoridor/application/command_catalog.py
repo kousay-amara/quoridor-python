@@ -88,8 +88,11 @@ COMMAND_CATALOG: tuple[CommandHelp, ...] = (
     ),
     CommandHelp(
         "join",
-        "join [IP[:PORT]]",
-        "Connect to a game server (default: localhost:12345).",
+        "join [HOST[:PORT]] [NAME]",
+        (
+            "Connect to a game server (default: localhost:12345). "
+            "Optionally provide a player name."
+        ),
     ),
     CommandHelp(
         "ping",

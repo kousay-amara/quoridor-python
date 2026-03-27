@@ -135,7 +135,7 @@ def command_server(state: NetworkState, line: str) -> bool:
 
 
 def command_join(state: NetworkState, line: str) -> bool:
-    parts = line.split(maxsplit=1)
+    parts = line.split(maxsplit=2)
     if state.network_client is not None:
         print(
             f"Already connected to server "
@@ -143,14 +143,25 @@ def command_join(state: NetworkState, line: str) -> bool:
         )
         return False
 
-    endpoint = parts[1] if len(parts) == 2 else None
+    if len(parts) > 3:
+        raise ValueError("Invalid format. Use: join [HOST[:PORT]] [NAME]")
+
+    endpoint = parts[1] if len(parts) >= 2 else None
+    name = parts[2].strip() if len(parts) == 3 else ""
+    if len(parts) == 3 and not name:
+        raise ValueError("Invalid format. Use: join [HOST[:PORT]] [NAME]")
+
     try:
         host, port = parse_endpoint(endpoint)
     except ValueError as exc:
         raise ValueError(
-            "Invalid format. Use: join [HOST[:PORT]]"
+            "Invalid format. Use: join [HOST[:PORT]] [NAME]"
         ) from exc
-    client = NetworkClient(host=host, port=port)
+
+    if len(parts) == 3:
+        client = NetworkClient(host=host, port=port, name=name)
+    else:
+        client = NetworkClient(host=host, port=port)
     try:
         client.connect()
     except OSError as exc:
