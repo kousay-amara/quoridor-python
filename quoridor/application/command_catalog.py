@@ -120,7 +120,11 @@ COMMAND_CATALOG: tuple[CommandHelp, ...] = (
     CommandHelp(
         "move",
         "move <FROM-TO>",
-        "Move the current pawn (example: move e2-e3). Shorthand: e2-e3.",
+        (
+            "Move the current pawn (example: move e2-e3). "
+            "Shorthand: e2-e3. When connected to a server, this sends "
+            "MOVE to the active room."
+        ),
     ),
     CommandHelp(
         "wall",

@@ -1179,6 +1179,9 @@ def _command_move(state: _ShellState, line: str) -> bool:
     if _pause_blocks_gameplay(state.blitz):
         return False
 
+    if state.network_client is not None:
+        return cli_network.command_move(state, line)
+
     has_unsaved_changes, should_break = _handle_move(
         state.session,
         line[5:],
@@ -1256,6 +1259,9 @@ def _command_redo(state: _ShellState, line: str) -> bool:
 def _command_shorthand_move(state: _ShellState, line: str) -> bool:
     if _pause_blocks_gameplay(state.blitz):
         return False
+
+    if state.network_client is not None:
+        return cli_network.command_shorthand_move(state, line)
 
     has_unsaved_changes, should_break = _handle_move(
         state.session,

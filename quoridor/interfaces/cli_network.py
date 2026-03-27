@@ -303,6 +303,73 @@ def command_new_player(state: NetworkState, line: str) -> bool:
     return False
 
 
+def _print_opponent_moves(client: NetworkClient) -> None:
+    for move_notation in client.drain_opponent_moves():
+        print(f"OPPONENT_MOVE {move_notation}")
+
+
+def _command_move_with_notation(
+    state: NetworkState,
+    move_notation: str,
+) -> bool:
+    if state.network_client is None:
+        print("Not connected to any server.")
+        return False
+
+    try:
+        response = state.network_client.move(move_notation)
+    except ValueError as exc:
+        print(f"Cannot play move: {exc}")
+        return False
+    except OSError as exc:
+        state.network_client.close()
+        state.network_client = None
+        print(f"Connection lost: {exc}")
+        return False
+
+    client = state.network_client
+    if response == "MOVE_OK":
+        print(f"Move sent: {move_notation}")
+        _print_opponent_moves(client)
+        return False
+    if response == "ERROR NOT_IN_GAME":
+        print("Cannot play move: you are not in a network game.")
+        _print_opponent_moves(client)
+        return False
+    if response == "ERROR NOT_YOUR_TURN":
+        print("Cannot play move: not your turn.")
+        _print_opponent_moves(client)
+        return False
+    if response == "ERROR INVALID_MOVE_FORMAT":
+        print("Cannot play move: invalid move format.")
+        _print_opponent_moves(client)
+        return False
+    if response == "ERROR OPPONENT_DISCONNECTED":
+        print("Cannot play move: opponent disconnected.")
+        _print_opponent_moves(client)
+        return False
+
+    print(f"Cannot play move: unexpected response ({response}).")
+    _print_opponent_moves(client)
+    return False
+
+
+def command_move(state: NetworkState, line: str) -> bool:
+    if not line.lower().startswith("move "):
+        raise ValueError("Invalid format. Use: move <FROM-TO>")
+    move_notation = line[5:].strip()
+    if not move_notation:
+        raise ValueError("Invalid format. Use: move <FROM-TO>")
+    return _command_move_with_notation(state, move_notation)
+
+
+def command_shorthand_move(state: NetworkState, line: str) -> bool:
+    move_notation = line.strip()
+    if not move_notation:
+        raise ValueError("Invalid format. Use: move <FROM-TO>")
+    return _command_move_with_notation(state, move_notation)
+
+
 def disconnect_client(state: NetworkState) -> bool:
     if state.network_client is None:
         return False

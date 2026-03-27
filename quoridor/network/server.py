@@ -59,9 +59,11 @@ class _GameRoom:
         *,
         game_id: int,
         player_ids: tuple[int, ...],
+        current_turn_client_id: int,
     ) -> None:
         self.game_id = game_id
         self.player_ids = player_ids
+        self.current_turn_client_id = current_turn_client_id
 
 
 class NetworkServer:
@@ -313,6 +315,19 @@ class NetworkServer:
                         break
                     continue
 
+                if (
+                    command_upper == "MOVE"
+                    or command_upper.startswith("MOVE ")
+                ):
+                    try:
+                        _send_line(
+                            client_sock,
+                            self._handle_move_command(client_id, command),
+                        )
+                    except OSError:
+                        break
+                    continue
+
                 if command_upper == "QUIT":
                     try:
                         _send_line(client_sock, "BYE")
@@ -494,6 +509,7 @@ class NetworkServer:
             self._game_rooms[game_id] = _GameRoom(
                 game_id=game_id,
                 player_ids=(client_id, target_client_id),
+                current_turn_client_id=client_id,
             )
             requester.status = "ingame"
             requester.game_id = game_id
@@ -501,6 +517,61 @@ class NetworkServer:
             target.game_id = game_id
 
         return f"NEW_OK {game_id}"
+
+    def _handle_move_command(self, client_id: int, command: str) -> str:
+        parts = command.split(maxsplit=1)
+        if len(parts) != 2 or not parts[1].strip():
+            return "ERROR INVALID_MOVE_FORMAT"
+        move_notation = parts[1].strip()
+        if " " in move_notation:
+            return "ERROR INVALID_MOVE_FORMAT"
+
+        with self._lock:
+            session = self._client_sessions.get(client_id)
+            if session is None:
+                return "ERROR PLAYER_NOT_FOUND"
+            if session.game_id is None or session.status != "ingame":
+                return "ERROR NOT_IN_GAME"
+
+            room = self._game_rooms.get(session.game_id)
+            if room is None:
+                session.status = "idle"
+                session.game_id = None
+                return "ERROR NOT_IN_GAME"
+
+            if room.current_turn_client_id != client_id:
+                return "ERROR NOT_YOUR_TURN"
+
+            opponent_client_id = None
+            for room_player_id in room.player_ids:
+                if room_player_id != client_id:
+                    opponent_client_id = room_player_id
+                    break
+            if opponent_client_id is None:
+                return "ERROR NO_OPPONENT"
+
+            opponent_session = self._client_sessions.get(opponent_client_id)
+            if opponent_session is None:
+                self._close_game_room_locked(room.game_id)
+                return "ERROR OPPONENT_DISCONNECTED"
+
+            try:
+                _send_line(
+                    opponent_session.sock,
+                    f"OPPONENT_MOVE {move_notation}",
+                )
+            except OSError:
+                self._close_client(
+                    opponent_client_id,
+                    opponent_session.sock,
+                )
+                if room.game_id in self._game_rooms:
+                    self._close_game_room_locked(room.game_id)
+                return "ERROR OPPONENT_DISCONNECTED"
+
+            room.current_turn_client_id = opponent_client_id
+
+        return "MOVE_OK"
 
     def _close_game_room_locked(self, game_id: int) -> None:
         room = self._game_rooms.pop(game_id, None)

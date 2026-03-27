@@ -355,6 +355,51 @@ def test_network_new_rejects_absent_or_unavailable_player():
             server.stop()
 
 
+def test_network_move_routes_to_opponent_and_enforces_turn_order():
+    port = _unused_port()
+    server = NetworkServer(port=port)
+    first_client = NetworkClient(host="127.0.0.1", port=port, name="alice")
+    second_client = NetworkClient(host="127.0.0.1", port=port, name="bob")
+
+    try:
+        server.start()
+        first_client.connect()
+        second_client.connect()
+        assert first_client.send_command("NEW 2") == "NEW_OK 1"
+
+        assert first_client.move("e1-e2") == "MOVE_OK"
+        assert first_client.move("e2-e3") == "ERROR NOT_YOUR_TURN"
+
+        assert second_client.ping() >= 0
+        assert second_client.drain_opponent_moves() == ["e1-e2"]
+
+        assert second_client.move("e9-e8") == "MOVE_OK"
+        assert first_client.ping() >= 0
+        assert first_client.drain_opponent_moves() == ["e9-e8"]
+    finally:
+        first_client.close()
+        second_client.close()
+        if server.running():
+            server.stop()
+
+
+def test_network_move_rejects_invalid_format_and_not_in_game():
+    port = _unused_port()
+    server = NetworkServer(port=port)
+    client = NetworkClient(host="127.0.0.1", port=port, name="alice")
+
+    try:
+        server.start()
+        client.connect()
+        assert client.send_command("MOVE") == "ERROR INVALID_MOVE_FORMAT"
+        assert client.send_command("MOVE ") == "ERROR INVALID_MOVE_FORMAT"
+        assert client.move("e1-e2") == "ERROR NOT_IN_GAME"
+    finally:
+        client.close()
+        if server.running():
+            server.stop()
+
+
 def test_cli_server_join_ping_and_quit_cycle(
     monkeypatch,
     capsys,
@@ -418,6 +463,37 @@ def test_cli_new_player_creates_game_with_explicit_errors(
     assert "Cannot create game: you are already in game." in out
     assert "- 1: bob (ingame)" in out
     assert "- 2: alice (ingame)" in out
+
+
+def test_cli_network_move_routes_and_enforces_turn(monkeypatch, capsys):
+    port = _unused_port()
+    server = NetworkServer(port=port)
+    bob = NetworkClient(host="127.0.0.1", port=port, name="bob")
+
+    try:
+        server.start()
+        bob.connect()
+        _run_shell(
+            monkeypatch,
+            [
+                f"join 127.0.0.1:{port} alice",
+                "new 1",
+                "move e1-e2",
+                "move e2-e3",
+                "quit",
+                "quit",
+            ],
+        )
+        assert bob.ping() >= 0
+        assert bob.drain_opponent_moves() == ["e1-e2"]
+    finally:
+        bob.close()
+        if server.running():
+            server.stop()
+
+    out = capsys.readouterr().out
+    assert "Move sent: e1-e2" in out
+    assert "Cannot play move: not your turn." in out
 
 
 def test_cli_join_accepts_custom_name(monkeypatch, capsys):

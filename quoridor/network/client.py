@@ -27,6 +27,7 @@ class NetworkClient:
         self.client_id = None
         self._sock = None
         self._buffer = ""
+        self._pending_opponent_moves: list[str] = []
 
     def connected(self) -> bool:
         return self._sock is not None
@@ -101,6 +102,11 @@ class NetworkClient:
                 raise OSError("server closed the connection")
             if line is None:
                 continue
+            if line.startswith("OPPONENT_MOVE "):
+                move_notation = line[len("OPPONENT_MOVE "):].strip()
+                if move_notation:
+                    self._pending_opponent_moves.append(move_notation)
+                continue
             return line
 
     def ping(self) -> float:
@@ -132,6 +138,7 @@ class NetworkClient:
         self._sock = None
         self.client_id = None
         self._buffer = ""
+        self._pending_opponent_moves = []
 
     def players(self) -> list[tuple[int, str, str]]:
         response = self.send_command("PLAYERS")
@@ -181,6 +188,19 @@ class NetworkClient:
                 ) from exc
             scores.append((client_id, parts[1], wins, losses, played))
         return scores
+
+    def move(self, notation: str) -> str:
+        move_notation = notation.strip()
+        if not move_notation:
+            raise ValueError("move notation must not be empty")
+        if " " in move_notation:
+            raise ValueError("move notation must not contain spaces")
+        return self.send_command(f"MOVE {move_notation}")
+
+    def drain_opponent_moves(self) -> list[str]:
+        moves = list(self._pending_opponent_moves)
+        self._pending_opponent_moves.clear()
+        return moves
 
 
 __all__ = ["NetworkClient"]
