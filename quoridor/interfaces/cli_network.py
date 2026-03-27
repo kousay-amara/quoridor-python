@@ -205,6 +205,35 @@ def command_players(state: NetworkState, line: str) -> bool:
     return False
 
 
+def command_scoreboard(state: NetworkState, line: str) -> bool:
+    if line.strip().lower() != "scoreboard":
+        raise ValueError("Invalid format. Use: scoreboard")
+
+    if state.network_client is None:
+        print("Not connected to any server.")
+        return False
+
+    try:
+        scores = state.network_client.scoreboard()
+    except OSError as exc:
+        state.network_client.close()
+        state.network_client = None
+        print(f"Connection lost: {exc}")
+        return False
+
+    if not scores:
+        print("Scoreboard is empty.")
+        return False
+
+    print("Scoreboard:")
+    for client_id, name, wins, losses, played in scores:
+        print(
+            f"- {client_id}: {name} "
+            f"(played={played} wins={wins} losses={losses})"
+        )
+    return False
+
+
 def disconnect_client(state: NetworkState) -> bool:
     if state.network_client is None:
         return False

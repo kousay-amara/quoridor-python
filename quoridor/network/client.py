@@ -155,5 +155,32 @@ class NetworkClient:
             players.append((client_id, parts[1], parts[2]))
         return players
 
+    def scoreboard(self) -> list[tuple[int, str, int, int, int]]:
+        response = self.send_command("SCOREBOARD")
+        if response == "SCOREBOARD":
+            return []
+        if not response.startswith("SCOREBOARD "):
+            raise OSError(f"unexpected scoreboard response: {response}")
+
+        payload = response[11:]
+        scores = []
+        for entry in payload.split(";"):
+            parts = entry.split("|")
+            if len(parts) != 5:
+                raise OSError(
+                    f"unexpected scoreboard response: {response}"
+                )
+            try:
+                client_id = int(parts[0])
+                wins = int(parts[2])
+                losses = int(parts[3])
+                played = int(parts[4])
+            except ValueError as exc:
+                raise OSError(
+                    f"unexpected scoreboard response: {response}"
+                ) from exc
+            scores.append((client_id, parts[1], wins, losses, played))
+        return scores
+
 
 __all__ = ["NetworkClient"]

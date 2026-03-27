@@ -1227,6 +1227,10 @@ def _command_players(state: _ShellState, line: str) -> bool:
     return cli_network.command_players(state, line)
 
 
+def _command_scoreboard(state: _ShellState, line: str) -> bool:
+    return cli_network.command_scoreboard(state, line)
+
+
 def _command_undo(state: _ShellState, line: str) -> bool:
     if _pause_blocks_gameplay(state.blitz):
         return False
@@ -1469,6 +1473,14 @@ class _PlayersCommand(_InvalidAsCommandError):
         return _command_players(state, line)
 
 
+class _ScoreboardCommand(_InvalidAsCommandError):
+    def matches(self, line: str) -> bool:
+        return line.lower() == "scoreboard"
+
+    def run(self, state: _ShellState, line: str) -> bool:
+        return _command_scoreboard(state, line)
+
+
 class _MovesCommand(_BaseCommand):
     def matches(self, line: str) -> bool:
         return line.lower() == "moves"
@@ -1574,6 +1586,7 @@ def _build_command_registry() -> _CommandRegistry:
             _JoinCommand(),
             _PingCommand(),
             _PlayersCommand(),
+            _ScoreboardCommand(),
             _PauseCommand(),
             _MovesCommand(),
             _MoveCommand(),

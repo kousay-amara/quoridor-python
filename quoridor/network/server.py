@@ -36,6 +36,21 @@ class _ClientSession:
         self.buffer = buffer
 
 
+class _ScoreEntry:
+    def __init__(
+        self,
+        *,
+        name: str,
+        wins: int = 0,
+        losses: int = 0,
+        played: int = 0,
+    ) -> None:
+        self.name = name
+        self.wins = wins
+        self.losses = losses
+        self.played = played
+
+
 class NetworkServer:
     def __init__(
         self,
@@ -63,6 +78,7 @@ class NetworkServer:
         self._listener_sock = None
         self._accept_thread = None
         self._client_sessions: dict[int, _ClientSession] = {}
+        self._scoreboard: dict[int, _ScoreEntry] = {}
         self._next_client_id = 1
         self._lock = threading.RLock()
 
@@ -259,6 +275,16 @@ class NetworkServer:
                         break
                     continue
 
+                if command_upper == "SCOREBOARD":
+                    try:
+                        _send_line(
+                            client_sock,
+                            self._format_scoreboard_response(),
+                        )
+                    except OSError:
+                        break
+                    continue
+
                 if command_upper == "QUIT":
                     try:
                         _send_line(client_sock, "BYE")
@@ -339,6 +365,7 @@ class NetworkServer:
                 session.name = client_name
                 session.status = "idle"
                 session.buffer = buffer
+                self._ensure_score_entry(client_id, client_name)
 
             try:
                 _send_line(client_sock, f"HELLO_OK {client_id}")
@@ -371,6 +398,67 @@ class NetworkServer:
             for client_id, name, status in players
         )
         return f"PLAYERS {payload}"
+
+    def _format_scoreboard_response(self) -> str:
+        with self._lock:
+            items = [
+                (
+                    client_id,
+                    entry.name,
+                    entry.wins,
+                    entry.losses,
+                    entry.played,
+                )
+                for client_id, entry in self._scoreboard.items()
+            ]
+
+        items.sort(key=lambda item: item[0])
+        if not items:
+            return "SCOREBOARD"
+
+        payload = ";".join(
+            f"{client_id}|{name}|{wins}|{losses}|{played}"
+            for client_id, name, wins, losses, played in items
+        )
+        return f"SCOREBOARD {payload}"
+
+    def _ensure_score_entry(self, client_id: int, client_name: str) -> None:
+        entry = self._scoreboard.get(client_id)
+        if entry is None:
+            self._scoreboard[client_id] = _ScoreEntry(name=client_name)
+            return
+        entry.name = client_name
+
+    def record_finished_game(
+        self,
+        *,
+        player_ids: list[int],
+        winner_client_id: int | None = None,
+    ) -> None:
+        with self._lock:
+            for client_id in player_ids:
+                session = self._client_sessions.get(client_id)
+                if session is not None:
+                    self._ensure_score_entry(client_id, session.name)
+                else:
+                    self._ensure_score_entry(
+                        client_id,
+                        f"client-{client_id}",
+                    )
+
+            for client_id in player_ids:
+                entry = self._scoreboard[client_id]
+                entry.played += 1
+
+            if winner_client_id is None:
+                return
+
+            for client_id in player_ids:
+                entry = self._scoreboard[client_id]
+                if client_id == winner_client_id:
+                    entry.wins += 1
+                else:
+                    entry.losses += 1
 
 
 __all__ = ["NetworkServer"]

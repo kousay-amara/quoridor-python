@@ -261,6 +261,39 @@ def test_network_server_status_snapshot_updates_with_connections():
             server.stop()
 
 
+def test_network_scoreboard_tracks_runtime_stats():
+    port = _unused_port()
+    server = NetworkServer(port=port)
+    first_client = NetworkClient(host="127.0.0.1", port=port, name="alice")
+    second_client = NetworkClient(host="127.0.0.1", port=port, name="bob")
+
+    try:
+        server.start()
+        first_client.connect()
+        second_client.connect()
+
+        scores = first_client.scoreboard()
+        assert scores == [
+            (1, "alice", 0, 0, 0),
+            (2, "bob", 0, 0, 0),
+        ]
+
+        server.record_finished_game(
+            player_ids=[1, 2],
+            winner_client_id=1,
+        )
+        scores = first_client.scoreboard()
+        assert scores == [
+            (1, "alice", 1, 0, 1),
+            (2, "bob", 0, 1, 1),
+        ]
+    finally:
+        first_client.close()
+        second_client.close()
+        if server.running():
+            server.stop()
+
+
 def test_cli_server_join_ping_and_quit_cycle(
     monkeypatch,
     capsys,
@@ -288,6 +321,39 @@ def test_cli_server_join_ping_and_quit_cycle(
     assert "Disconnected from server." in out
     assert "Server stopped." in out
     assert "Bye." in out
+
+
+def test_cli_scoreboard_displays_server_stats(monkeypatch, capsys):
+    port = _unused_port()
+    server = NetworkServer(port=port)
+    bob = NetworkClient(host="127.0.0.1", port=port, name="bob")
+
+    try:
+        server.start()
+        bob.connect()
+        server.record_finished_game(
+            player_ids=[1, 2],
+            winner_client_id=2,
+        )
+
+        _run_shell(
+            monkeypatch,
+            [
+                f"join 127.0.0.1:{port}",
+                "scoreboard",
+                "quit",
+                "quit",
+            ],
+        )
+    finally:
+        bob.close()
+        if server.running():
+            server.stop()
+
+    out = capsys.readouterr().out
+    assert "Scoreboard:" in out
+    assert "- 1: bob (played=1 wins=0 losses=1)" in out
+    assert "- 2: player (played=1 wins=1 losses=0)" in out
 
 
 def test_cli_server_status_reports_counts(monkeypatch, capsys):
