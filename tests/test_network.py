@@ -18,8 +18,10 @@ from quoridor.network import (
     NetworkClient,
     NetworkServer,
     discover_servers,
+    format_game_state_message,
     format_discovery_message,
     get_discovered_servers,
+    parse_game_state_message,
     parse_discovery_message,
     parse_endpoint,
     remember_server,
@@ -82,6 +84,18 @@ def _wait_connected_clients(
     return False
 
 
+def _wait_for_game_state_update(
+    client: NetworkClient,
+):
+    deadline = time.time() + 1.0
+    while time.time() < deadline:
+        updates = client.drain_game_state_updates()
+        if updates:
+            return updates[-1]
+        time.sleep(0.01)
+    return None
+
+
 def test_parse_endpoint_supports_defaults_and_explicit_values():
     assert parse_endpoint(None) == (DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT)
     assert parse_endpoint("   ") == (DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT)
@@ -127,6 +141,36 @@ def test_discovery_message_round_trip_and_invalid_prefix():
 
     assert parse_discovery_message(message) == ("alpha", 23456)
     assert parse_discovery_message("WRONG alpha 23456") is None
+
+
+def test_game_state_message_round_trip():
+    message = format_game_state_message(
+        game_id=7,
+        player_id=2,
+        winner_id=None,
+        snapshot={
+            "board_size": 9,
+            "current_player": 2,
+            "player_positions": {1: 4, 2: 76},
+            "remaining_walls": {1: 19, 2: 20},
+            "vertical_walls": [(10, 11)],
+            "horizontal_walls": [(20, 29)],
+        },
+    )
+
+    assert parse_game_state_message(message) == {
+        "game_id": 7,
+        "player_id": 2,
+        "winner_id": None,
+        "state": {
+            "board_size": 9,
+            "current_player": 2,
+            "player_positions": {1: 4, 2: 76},
+            "remaining_walls": {1: 19, 2: 20},
+            "vertical_walls": [(10, 11)],
+            "horizontal_walls": [(20, 29)],
+        },
+    }
 
 
 def test_discover_servers_finds_udp_broadcast():
@@ -358,6 +402,39 @@ def test_network_new_creates_room_and_sets_players_ingame():
             server.stop()
 
 
+def test_network_new_broadcasts_initial_game_state_to_every_player():
+    port = _unused_port()
+    server = NetworkServer(port=port)
+    first_client = NetworkClient(host="127.0.0.1", port=port, name="alice")
+    second_client = NetworkClient(host="127.0.0.1", port=port, name="bob")
+
+    try:
+        server.start()
+        first_client.connect()
+        second_client.connect()
+
+        assert first_client.send_command("NEW 2") == "NEW_OK 1"
+
+        first_update = _wait_for_game_state_update(first_client)
+        second_update = _wait_for_game_state_update(second_client)
+
+        assert first_update is not None
+        assert second_update is not None
+        assert first_update["game_id"] == 1
+        assert first_update["player_id"] == 1
+        assert second_update["game_id"] == 1
+        assert second_update["player_id"] == 2
+        assert first_update["state"]["current_player"] == 1
+        assert second_update["state"]["current_player"] == 1
+        assert first_update["state"]["player_positions"] == {1: 4, 2: 76}
+        assert second_update["state"]["player_positions"] == {1: 4, 2: 76}
+    finally:
+        first_client.close()
+        second_client.close()
+        if server.running():
+            server.stop()
+
+
 def test_network_new_rejects_absent_or_unavailable_player():
     port = _unused_port()
     server = NetworkServer(port=port)
@@ -471,6 +548,45 @@ def test_network_move_routes_to_opponent_and_enforces_turn_order():
         assert second_client.move("e9-e8") == "MOVE_OK"
         assert first_client.ping() >= 0
         assert first_client.drain_opponent_moves() == ["e9-e8"]
+    finally:
+        first_client.close()
+        second_client.close()
+        if server.running():
+            server.stop()
+
+
+def test_network_move_broadcasts_updated_game_state():
+    port = _unused_port()
+    server = NetworkServer(port=port)
+    first_client = NetworkClient(host="127.0.0.1", port=port, name="alice")
+    second_client = NetworkClient(host="127.0.0.1", port=port, name="bob")
+
+    try:
+        server.start()
+        first_client.connect()
+        second_client.connect()
+        assert first_client.send_command("NEW 2") == "NEW_OK 1"
+
+        assert _wait_for_game_state_update(first_client) is not None
+        assert _wait_for_game_state_update(second_client) is not None
+
+        assert first_client.move("e1-e2") == "MOVE_OK"
+
+        first_update = _wait_for_game_state_update(first_client)
+        second_update = _wait_for_game_state_update(second_client)
+
+        assert first_update is not None
+        assert second_update is not None
+        assert first_update["state"]["current_player"] == 2
+        assert second_update["state"]["current_player"] == 2
+        assert first_update["state"]["player_positions"] == {
+            1: 13,
+            2: 76,
+        }
+        assert second_update["state"]["player_positions"] == {
+            1: 13,
+            2: 76,
+        }
     finally:
         first_client.close()
         second_client.close()
@@ -677,6 +793,38 @@ def test_cli_new_player_creates_game_with_explicit_errors(
     assert "- 2: alice (ingame)" in out
 
 
+def test_cli_network_new_prints_authoritative_game_state(
+    monkeypatch,
+    capsys,
+):
+    port = _unused_port()
+    server = NetworkServer(port=port)
+    bob = NetworkClient(host="127.0.0.1", port=port, name="bob")
+
+    try:
+        server.start()
+        bob.connect()
+        _run_shell(
+            monkeypatch,
+            [
+                f"join 127.0.0.1:{port} alice",
+                "new 1",
+                "ping",
+                "quit",
+                "quit",
+            ],
+        )
+    finally:
+        bob.close()
+        if server.running():
+            server.stop()
+
+    out = capsys.readouterr().out
+    assert "Game 1 started with player(s) 1." in out
+    assert "You are player 1. Position: e1. Goal: reach row 9." in out
+    assert "Player 1: e1, Player 2: e9" in out
+
+
 def test_cli_network_move_routes_and_enforces_turn(monkeypatch, capsys):
     port = _unused_port()
     server = NetworkServer(port=port)
@@ -706,6 +854,70 @@ def test_cli_network_move_routes_and_enforces_turn(monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "Move sent: e1-e2" in out
     assert "Cannot play move: not your turn." in out
+
+
+def test_cli_network_move_prints_updated_game_state(monkeypatch, capsys):
+    port = _unused_port()
+    server = NetworkServer(port=port)
+    bob = NetworkClient(host="127.0.0.1", port=port, name="bob")
+
+    try:
+        server.start()
+        bob.connect()
+        _run_shell(
+            monkeypatch,
+            [
+                f"join 127.0.0.1:{port} alice",
+                "new 1",
+                "move e1-e2",
+                "ping",
+                "quit",
+                "quit",
+            ],
+        )
+    finally:
+        bob.close()
+        if server.running():
+            server.stop()
+
+    out = capsys.readouterr().out
+    assert "Move sent: e1-e2" in out
+    assert "Current player: 2" in out
+    assert "You are player 1. Position: e2. Goal: reach row 9." in out
+    assert "Player 1: e2, Player 2: e9" in out
+
+
+def test_cli_quit_from_network_restores_previous_local_game(
+    monkeypatch,
+    capsys,
+):
+    port = _unused_port()
+    server = NetworkServer(port=port)
+    bob = NetworkClient(host="127.0.0.1", port=port, name="bob")
+
+    try:
+        server.start()
+        bob.connect()
+        _run_shell(
+            monkeypatch,
+            [
+                f"join 127.0.0.1:{port} alice",
+                "new 1",
+                "quit",
+                "e1-e2",
+                "quit",
+                "n",
+            ],
+        )
+    finally:
+        bob.close()
+        if server.running():
+            server.stop()
+
+    out = capsys.readouterr().out
+    assert "Disconnected from server." in out
+    assert "Returned to local game." in out
+    assert "Player 1: e2, Player 2: e9" in out
 
 
 def test_cli_network_shorthand_wall_routes_to_server(monkeypatch, capsys):

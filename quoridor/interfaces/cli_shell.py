@@ -25,7 +25,9 @@ from ..application.command_catalog import (
 from ..application.game_application_service import GameApplicationService
 from ..application.game_session import GameSession, initial_player_positions
 from ..core.game_state import GameState
+from ..core.move_record import GameSnapshot
 from ..core.notation import get_edges_for_wall, get_node_from_notation
+from ..network import GameStateUpdate
 from ..core.validators import validate_pawn_move, validate_wall
 from ..rules.win_rules import has_player_won
 from .cli_constants import (
@@ -200,6 +202,22 @@ class _ShellConfig:
     ai_minimax_depth: int | None
 
 
+@dataclass()
+class _SavedLocalShellState:
+    session: GameSession
+    has_unsaved_changes: bool
+    current_ai_mode: str
+    current_ai_time: int
+    current_ai_minimax_depth: int | None
+    players: int
+    walls_per_player: int
+    board_size: int
+    ai_players: list[int]
+    blitz_enabled: bool
+    time_limit: float
+    blitz: Blitz
+
+
 def _config_from_state(state: "_ShellState") -> _ShellConfig:
     return _ShellConfig(
         verbose=state.verbose,
@@ -249,6 +267,16 @@ def _create_new_session(config: _ShellConfig) -> GameSession:
     return GameSession(
         state=state,
         player_types=_fallback_player_types(config),
+    )
+
+
+def _create_network_session(snapshot: GameSnapshot) -> GameSession:
+    state = GameState.from_snapshot(snapshot)
+    return GameSession(
+        state=state,
+        player_types={
+            player_id: "human" for player_id in state.player_positions
+        },
     )
 
 
@@ -1243,11 +1271,87 @@ def _apply_network_move_to_local_session(
         state.has_unsaved_changes = True
 
 
+def _apply_network_game_state_to_local_session(
+    state: "_ShellState",
+    game_state_update: GameStateUpdate,
+) -> None:
+    snapshot = game_state_update["state"]
+    winner_player_id = game_state_update["winner_id"]
+    local_player_id = game_state_update["player_id"]
+
+    with state.network_sync_lock:
+        state.session = _create_network_session(snapshot)
+        state.players = len(state.session.state.player_positions)
+        state.board_size = state.session.state.board_size
+        if state.session.state.remaining_walls:
+            state.walls_per_player = max(
+                state.session.state.remaining_walls.values()
+            )
+        state.ai_players = []
+        state.network_player_id = local_player_id
+        state.has_unsaved_changes = True
+
+        print()
+        _print_state(
+            state.session,
+            perspective_player_id=state.network_player_id,
+        )
+        if winner_player_id is not None:
+            print(f"Player {winner_player_id} wins!")
+
+
+def _save_local_shell_state_before_network(state: "_ShellState") -> None:
+    if state.saved_local_state is not None:
+        return
+    state.saved_local_state = _SavedLocalShellState(
+        session=state.session,
+        has_unsaved_changes=state.has_unsaved_changes,
+        current_ai_mode=state.current_ai_mode,
+        current_ai_time=state.current_ai_time,
+        current_ai_minimax_depth=state.current_ai_minimax_depth,
+        players=state.players,
+        walls_per_player=state.walls_per_player,
+        board_size=state.board_size,
+        ai_players=list(state.ai_players),
+        blitz_enabled=state.blitz_enabled,
+        time_limit=state.time_limit,
+        blitz=state.blitz,
+    )
+
+
+def _restore_saved_local_shell_state(state: "_ShellState") -> None:
+    saved_state = state.saved_local_state
+    if saved_state is None:
+        return
+
+    with state.network_sync_lock:
+        state.session = saved_state.session
+        state.has_unsaved_changes = saved_state.has_unsaved_changes
+        state.current_ai_mode = saved_state.current_ai_mode
+        state.current_ai_time = saved_state.current_ai_time
+        state.current_ai_minimax_depth = (
+            saved_state.current_ai_minimax_depth
+        )
+        state.players = saved_state.players
+        state.walls_per_player = saved_state.walls_per_player
+        state.board_size = saved_state.board_size
+        state.ai_players = list(saved_state.ai_players)
+        state.blitz_enabled = saved_state.blitz_enabled
+        state.time_limit = saved_state.time_limit
+        state.blitz = saved_state.blitz
+        state.network_player_id = None
+        state.saved_local_state = None
+
+    print("Returned to local game.")
+    _print_state(state.session)
+
+
 def _command_join(state: _ShellState, line: str) -> bool:
     handled = cli_network.command_join(state, line)
     client = state.network_client
     if client is None:
         return handled
+    _save_local_shell_state_before_network(state)
 
     def _on_opponent_move(move_notation: str) -> None:
         print(f"\nOPPONENT_MOVE {move_notation}")
@@ -1255,9 +1359,15 @@ def _command_join(state: _ShellState, line: str) -> bool:
             return
         state.network_move_callback(move_notation, True)
 
+    def _on_game_state(game_state_update: GameStateUpdate) -> None:
+        _apply_network_game_state_to_local_session(state, game_state_update)
+
     client.set_opponent_move_callback(_on_opponent_move)
+    client.set_game_state_callback(_on_game_state)
     for pending_move in client.drain_opponent_moves():
         _on_opponent_move(pending_move)
+    for game_state_update in client.drain_game_state_updates():
+        _on_game_state(game_state_update)
     return handled
 
 
@@ -1368,6 +1478,9 @@ class _ShellState:
     network_server: cli_network.NetworkServer | None = None
     network_client: cli_network.NetworkClient | None = None
     network_move_callback: Callable[[str, bool], None] | None = None
+    network_restore_callback: Callable[[], None] | None = None
+    network_player_id: int | None = None
+    saved_local_state: _SavedLocalShellState | None = None
     network_sync_lock: threading.Lock = field(
         default_factory=threading.Lock
     )
@@ -1797,7 +1910,9 @@ def _run_interactive_shell(
         time_limit=blitz_state.time_limit_minutes,
         blitz=blitz_state,
     )
-    state.network_move_callback = _apply_network_move_to_local_session
+    state.network_restore_callback = (
+        lambda: _restore_saved_local_shell_state(state)
+    )
 
     registry = _build_command_registry()
     discovery_listener = cli_network.start_discovery_listener()

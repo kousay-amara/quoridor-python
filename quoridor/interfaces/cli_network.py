@@ -19,6 +19,7 @@ class NetworkState(Protocol):
     network_server: NetworkServer | None
     network_client: NetworkClient | None
     network_move_callback: object | None
+    network_restore_callback: object | None
 
 
 def parse_server_port(value: str) -> int:
@@ -41,6 +42,29 @@ def stop_discovery_listener(listener: DiscoveryListener | None) -> None:
     if listener is None:
         return
     listener.stop()
+
+
+def _restore_local_mode(state: NetworkState) -> None:
+    callback = getattr(state, "network_restore_callback", None)
+    if callback is None:
+        return
+    try:
+        callback()
+    except Exception:
+        return
+
+
+def _handle_connection_lost(
+    state: NetworkState,
+    exc: OSError,
+) -> None:
+    if state.network_client is not None:
+        state.network_client.close()
+    state.network_client = None
+    if hasattr(state, "network_player_id"):
+        setattr(state, "network_player_id", None)
+    print(f"Connection lost: {exc}")
+    _restore_local_mode(state)
 
 
 def command_server(state: NetworkState, line: str) -> bool:
@@ -182,9 +206,7 @@ def command_ping(state: NetworkState, _line: str) -> bool:
     try:
         round_trip_ms = state.network_client.ping()
     except OSError as exc:
-        state.network_client.close()
-        state.network_client = None
-        print(f"Connection lost: {exc}")
+        _handle_connection_lost(state, exc)
         return False
 
     print(f"PONG TIME={round(round_trip_ms)}ms")
@@ -202,9 +224,7 @@ def command_players(state: NetworkState, line: str) -> bool:
     try:
         players = state.network_client.players()
     except OSError as exc:
-        state.network_client.close()
-        state.network_client = None
-        print(f"Connection lost: {exc}")
+        _handle_connection_lost(state, exc)
         return False
 
     if not players:
@@ -228,9 +248,7 @@ def command_scoreboard(state: NetworkState, line: str) -> bool:
     try:
         scores = state.network_client.scoreboard()
     except OSError as exc:
-        state.network_client.close()
-        state.network_client = None
-        print(f"Connection lost: {exc}")
+        _handle_connection_lost(state, exc)
         return False
 
     if not scores:
@@ -279,9 +297,7 @@ def command_new_player(state: NetworkState, line: str) -> bool:
     try:
         response = state.network_client.send_command(f"NEW {command_payload}")
     except OSError as exc:
-        state.network_client.close()
-        state.network_client = None
-        print(f"Connection lost: {exc}")
+        _handle_connection_lost(state, exc)
         return False
 
     if response.startswith("NEW_OK "):
@@ -365,9 +381,7 @@ def _command_move_with_notation(
         print(f"Cannot play move: {exc}")
         return False
     except OSError as exc:
-        state.network_client.close()
-        state.network_client = None
-        print(f"Connection lost: {exc}")
+        _handle_connection_lost(state, exc)
         return False
 
     client = state.network_client
@@ -446,6 +460,9 @@ def disconnect_client(state: NetworkState) -> bool:
     except OSError as exc:
         client.close()
         print(f"Disconnected from server: {exc}")
+    if hasattr(state, "network_player_id"):
+        setattr(state, "network_player_id", None)
+    _restore_local_mode(state)
     return True
 
 

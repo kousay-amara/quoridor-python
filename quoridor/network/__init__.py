@@ -8,7 +8,10 @@ from .basic_network import (
     DISCOVERY_ENTRY_TTL_SEC,
     DISCOVERY_PORT,
     DISCOVERY_TIMEOUT_SEC,
+    GameStateUpdate,
+    format_game_state_message,
     parse_endpoint,
+    parse_game_state_message,
 )
 from .client import NetworkClient
 from .discovery import (
@@ -35,11 +38,14 @@ __all__ = [
     "DiscoveredServer",
     "DiscoveryBroadcaster",
     "DiscoveryListener",
+    "GameStateUpdate",
     "NetworkClient",
     "discover_servers",
+    "format_game_state_message",
     "format_discovery_message",
     "get_discovered_servers",
     "parse_discovery_message",
     "parse_endpoint",
+    "parse_game_state_message",
     "remember_server",
 ]

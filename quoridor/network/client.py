@@ -9,10 +9,12 @@ from typing import Callable
 from .basic_network import (
     DEFAULT_SERVER_HOST,
     DEFAULT_SERVER_PORT,
+    GameStateUpdate,
     _SOCKET_TIMEOUT_SEC,
     _recv_line,
     _send_line,
     _validate_port,
+    parse_game_state_message,
 )
 
 
@@ -31,6 +33,7 @@ class NetworkClient:
         self._sock = None
         self._buffer = ""
         self._pending_opponent_moves = deque()
+        self._pending_game_state_updates = deque()
         self._response_queue = deque()
         self._response_condition = threading.Condition()
         self._send_lock = threading.Lock()
@@ -38,6 +41,7 @@ class NetworkClient:
         self._reader_stop_requested = threading.Event()
         self._reader_error = None
         self._opponent_move_callback = None
+        self._game_state_callback = None
 
     def connected(self) -> bool:
         return self._sock is not None
@@ -90,6 +94,7 @@ class NetworkClient:
                 self._buffer = hello_buffer
                 self._response_queue.clear()
                 self._pending_opponent_moves.clear()
+                self._pending_game_state_updates.clear()
                 self._reader_error = None
                 self._reader_stop_requested.clear()
                 self._reader_thread = threading.Thread(
@@ -140,6 +145,31 @@ class NetworkClient:
                     self._pending_opponent_moves.append(move_notation)
                 continue
 
+            if line.startswith("GAME_STATE "):
+                game_state_update = parse_game_state_message(line)
+                if game_state_update is None:
+                    self._set_reader_error(
+                        OSError(f"unexpected game state response: {line}")
+                    )
+                    break
+
+                callback = self._game_state_callback
+                if callback is not None:
+                    try:
+                        callback(game_state_update)
+                    except Exception:
+                        with self._response_condition:
+                            self._pending_game_state_updates.append(
+                                game_state_update
+                            )
+                    continue
+
+                with self._response_condition:
+                    self._pending_game_state_updates.append(
+                        game_state_update
+                    )
+                continue
+
             with self._response_condition:
                 self._response_queue.append(line)
                 self._response_condition.notify_all()
@@ -155,6 +185,12 @@ class NetworkClient:
         callback: Callable[[str], None] | None,
     ) -> None:
         self._opponent_move_callback = callback
+
+    def set_game_state_callback(
+        self,
+        callback: Callable[[GameStateUpdate], None] | None,
+    ) -> None:
+        self._game_state_callback = callback
 
     def send_command(self, command: str) -> str:
         if self._sock is None:
@@ -212,10 +248,12 @@ class NetworkClient:
         self._buffer = ""
         with self._response_condition:
             self._pending_opponent_moves.clear()
+            self._pending_game_state_updates.clear()
             self._response_queue.clear()
             self._reader_error = None
             self._response_condition.notify_all()
         self._opponent_move_callback = None
+        self._game_state_callback = None
         self._reader_thread = None
 
     def players(self) -> list[tuple[int, str, str]]:
@@ -280,6 +318,12 @@ class NetworkClient:
             moves = list(self._pending_opponent_moves)
             self._pending_opponent_moves.clear()
             return moves
+
+    def drain_game_state_updates(self) -> list[GameStateUpdate]:
+        with self._response_condition:
+            updates = list(self._pending_game_state_updates)
+            self._pending_game_state_updates.clear()
+            return updates
 
 
 __all__ = ["NetworkClient"]
