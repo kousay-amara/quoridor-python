@@ -22,10 +22,12 @@ _HISTORY_DESCRIPTION = (
 COMMAND_CATALOG: tuple[CommandHelp, ...] = (
     CommandHelp(
         "new",
-        "new [ARGS]",
+        "new [ARGS] | new PLAYER_ID [PLAYER_ID...]",
         (
             "Start a new game. Without ARGS, reuse the current "
-            "configuration. With ARGS, override it for the new game."
+            "configuration. With ARGS, override it for the new game. "
+            "When connected to a server, new PLAYER_ID [PLAYER_ID...] "
+            "creates a room with idle players."
         ),
     ),
     CommandHelp("help", "help [CMD]", "Show shell help, or help for CMD."),
@@ -74,19 +76,40 @@ COMMAND_CATALOG: tuple[CommandHelp, ...] = (
         "Start a local game server and broadcast it on the network.",
     ),
     CommandHelp(
+        "server status",
+        "server status",
+        (
+            "Show local server status: listening port, connected "
+            "clients and active games."
+        ),
+    ),
+    CommandHelp(
         "server stop",
         "server stop",
         "Stop the local game server and disconnect its client.",
     ),
     CommandHelp(
         "join",
-        "join [IP[:PORT]]",
-        "Connect to a game server (default: localhost:12345).",
+        "join [HOST[:PORT]] [NAME]",
+        (
+            "Connect to a game server (default: localhost:12345). "
+            "Optionally provide a player name."
+        ),
     ),
     CommandHelp(
         "ping",
         "ping",
         "Ping the connected game server and display round-trip time.",
+    ),
+    CommandHelp(
+        "players",
+        "players",
+        "List players connected to the current game server.",
+    ),
+    CommandHelp(
+        "scoreboard",
+        "scoreboard",
+        "Display server scoreboard (played, wins, losses).",
     ),
     CommandHelp("pause", "pause", "Toggle blitz timer pause/resume."),
     CommandHelp(
@@ -97,7 +120,11 @@ COMMAND_CATALOG: tuple[CommandHelp, ...] = (
     CommandHelp(
         "move",
         "move <FROM-TO>",
-        "Move the current pawn (example: move e2-e3). Shorthand: e2-e3.",
+        (
+            "Move the current pawn (example: move e2-e3). "
+            "Shorthand: e2-e3. When connected to a server, this sends "
+            "MOVE to the active room."
+        ),
     ),
     CommandHelp(
         "wall",
@@ -121,7 +148,8 @@ COMMAND_CATALOG: tuple[CommandHelp, ...] = (
 OVERVIEW_TEXT = (
     "Commands: new [ARGS], help [CMD], load, save, set, hint, show board, "
     "show history, show configuration, show time, server list, server start, "
-    "server stop, join, ping, pause, moves, move, wall, "
+    "server status, server stop, join, ping, players, scoreboard, pause, "
+    "moves, move, wall, "
     "undo, redo, quit\n"
     "Use: help <command>"
 )
@@ -140,9 +168,12 @@ COMPLETION_COMMANDS = [
     "show time",
     "server list",
     "server start",
+    "server status",
     "server stop",
     "join ",
     "ping",
+    "players",
+    "scoreboard",
     "pause",
     "moves",
     "move ",

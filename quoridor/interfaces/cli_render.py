@@ -11,6 +11,18 @@ def _node(row: int, col: int, size: int) -> int:
     return row * size + col
 
 
+def _goal_for_player(player_id: int, size: int) -> str:
+    if player_id == 1:
+        return f"reach row {size}"
+    if player_id == 2:
+        return "reach row 1"
+    if player_id == 3:
+        return f"reach column {chr(ord('a') + size - 1)}"
+    if player_id == 4:
+        return "reach column a"
+    return "reach your goal edge"
+
+
 def _render_ascii_board(state) -> str:
     """
     Render proche du format contest/spec:
@@ -57,7 +69,11 @@ def _render_ascii_board(state) -> str:
     return "\n".join(lines)
 
 
-def _print_state(session: GameSession) -> None:
+def _print_state(
+    session: GameSession,
+    *,
+    perspective_player_id: int | None = None,
+) -> None:
     state = session.state
     size = state.board_size
 
@@ -81,7 +97,19 @@ def _print_state(session: GameSession) -> None:
     )
     print(_render_ascii_board(state))
     print()
-    print(f"Current player: {state.current_player}")
+    current_line = f"Current player: {state.current_player}"
+    if perspective_player_id == state.current_player:
+        current_line += " (your turn)"
+    print(current_line)
+    if perspective_player_id in player_positions:
+        position = get_notation_from_node(
+            player_positions[perspective_player_id], size
+        )
+        print(
+            f"You are player {perspective_player_id}. "
+            f"Position: {position}. "
+            f"Goal: {_goal_for_player(perspective_player_id, size)}."
+        )
     print(players_line)
     print(f"Walls -> {walls_line}")
 

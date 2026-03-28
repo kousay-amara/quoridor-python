@@ -6,8 +6,10 @@ import argparse
 import gettext
 import shlex
 import signal
+import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Callable
 
 try:  # readline enables in-session history navigation with arrow keys.
     import readline  # type: ignore
@@ -23,7 +25,9 @@ from ..application.command_catalog import (
 from ..application.game_application_service import GameApplicationService
 from ..application.game_session import GameSession, initial_player_positions
 from ..core.game_state import GameState
+from ..core.move_record import GameSnapshot
 from ..core.notation import get_edges_for_wall, get_node_from_notation
+from ..network.basic_network import GameStateUpdate
 from ..core.validators import validate_pawn_move, validate_wall
 from ..rules.win_rules import has_player_won
 from .cli_constants import (
@@ -198,6 +202,37 @@ class _ShellConfig:
     ai_minimax_depth: int | None
 
 
+class _SavedLocalShellState:
+    def __init__(
+        self,
+        *,
+        session: GameSession,
+        has_unsaved_changes: bool,
+        current_ai_mode: str,
+        current_ai_time: int,
+        current_ai_minimax_depth: int | None,
+        players: int,
+        walls_per_player: int,
+        board_size: int,
+        ai_players: list[int],
+        blitz_enabled: bool,
+        time_limit: float,
+        blitz: Blitz,
+    ) -> None:
+        self.session = session
+        self.has_unsaved_changes = has_unsaved_changes
+        self.current_ai_mode = current_ai_mode
+        self.current_ai_time = current_ai_time
+        self.current_ai_minimax_depth = current_ai_minimax_depth
+        self.players = players
+        self.walls_per_player = walls_per_player
+        self.board_size = board_size
+        self.ai_players = list(ai_players)
+        self.blitz_enabled = blitz_enabled
+        self.time_limit = time_limit
+        self.blitz = blitz
+
+
 def _config_from_state(state: "_ShellState") -> _ShellConfig:
     return _ShellConfig(
         verbose=state.verbose,
@@ -247,6 +282,16 @@ def _create_new_session(config: _ShellConfig) -> GameSession:
     return GameSession(
         state=state,
         player_types=_fallback_player_types(config),
+    )
+
+
+def _create_network_session(snapshot: GameSnapshot) -> GameSession:
+    state = GameState.from_snapshot(snapshot)
+    return GameSession(
+        state=state,
+        player_types={
+            player_id: "human" for player_id in state.player_positions
+        },
     )
 
 
@@ -1179,6 +1224,9 @@ def _command_move(state: _ShellState, line: str) -> bool:
     if _pause_blocks_gameplay(state.blitz):
         return False
 
+    if state.network_client is not None:
+        return cli_network.command_move(state, line)
+
     has_unsaved_changes, should_break = _handle_move(
         state.session,
         line[5:],
@@ -1194,6 +1242,9 @@ def _command_move(state: _ShellState, line: str) -> bool:
 def _command_wall(state: _ShellState, line: str) -> bool:
     if _pause_blocks_gameplay(state.blitz):
         return False
+
+    if state.network_client is not None:
+        return cli_network.command_wall(state, line)
 
     has_unsaved_changes, should_break = _handle_wall(
         state.session,
@@ -1215,12 +1266,117 @@ def _command_server(state: _ShellState, line: str) -> bool:
     return cli_network.command_server(state, line)
 
 
+def _apply_network_game_state_to_local_session(
+    state: "_ShellState",
+    game_state_update: GameStateUpdate,
+) -> None:
+    snapshot = game_state_update["state"]
+    winner_player_id = game_state_update["winner_id"]
+    local_player_id = game_state_update["player_id"]
+
+    with state.network_sync_lock:
+        state.session = _create_network_session(snapshot)
+        state.players = len(state.session.state.player_positions)
+        state.board_size = state.session.state.board_size
+        if state.session.state.remaining_walls:
+            state.walls_per_player = max(
+                state.session.state.remaining_walls.values()
+            )
+        state.ai_players = []
+        state.network_player_id = local_player_id
+        state.has_unsaved_changes = True
+
+        print()
+        _print_state(
+            state.session,
+            perspective_player_id=state.network_player_id,
+        )
+        if winner_player_id is not None:
+            print(f"Player {winner_player_id} wins!")
+
+
+def _save_local_shell_state_before_network(state: "_ShellState") -> None:
+    if state.saved_local_state is not None:
+        return
+    state.saved_local_state = _SavedLocalShellState(
+        session=state.session,
+        has_unsaved_changes=state.has_unsaved_changes,
+        current_ai_mode=state.current_ai_mode,
+        current_ai_time=state.current_ai_time,
+        current_ai_minimax_depth=state.current_ai_minimax_depth,
+        players=state.players,
+        walls_per_player=state.walls_per_player,
+        board_size=state.board_size,
+        ai_players=list(state.ai_players),
+        blitz_enabled=state.blitz_enabled,
+        time_limit=state.time_limit,
+        blitz=state.blitz,
+    )
+
+
+def _restore_saved_local_shell_state(state: "_ShellState") -> None:
+    saved_state = state.saved_local_state
+    if saved_state is None:
+        return
+
+    with state.network_sync_lock:
+        state.session = saved_state.session
+        state.has_unsaved_changes = saved_state.has_unsaved_changes
+        state.current_ai_mode = saved_state.current_ai_mode
+        state.current_ai_time = saved_state.current_ai_time
+        state.current_ai_minimax_depth = (
+            saved_state.current_ai_minimax_depth
+        )
+        state.players = saved_state.players
+        state.walls_per_player = saved_state.walls_per_player
+        state.board_size = saved_state.board_size
+        state.ai_players = list(saved_state.ai_players)
+        state.blitz_enabled = saved_state.blitz_enabled
+        state.time_limit = saved_state.time_limit
+        state.blitz = saved_state.blitz
+        state.network_player_id = None
+        state.saved_local_state = None
+
+    print("Returned to local game.")
+    _print_state(state.session)
+
+
 def _command_join(state: _ShellState, line: str) -> bool:
-    return cli_network.command_join(state, line)
+    handled = cli_network.command_join(state, line)
+    client = state.network_client
+    if client is None:
+        return handled
+    _save_local_shell_state_before_network(state)
+
+    def _on_opponent_move(move_notation: str) -> None:
+        print(f"\nOPPONENT_MOVE {move_notation}")
+
+    def _on_game_state(game_state_update: GameStateUpdate) -> None:
+        _apply_network_game_state_to_local_session(state, game_state_update)
+
+    client.set_opponent_move_callback(_on_opponent_move)
+    client.set_game_state_callback(_on_game_state)
+    for pending_move in client.drain_opponent_moves():
+        _on_opponent_move(pending_move)
+    for game_state_update in client.drain_game_state_updates():
+        _on_game_state(game_state_update)
+    return handled
 
 
 def _command_ping(state: _ShellState, _line: str) -> bool:
     return cli_network.command_ping(state, _line)
+
+
+def _command_players(state: _ShellState, line: str) -> bool:
+    return cli_network.command_players(state, line)
+
+
+def _command_scoreboard(state: _ShellState, line: str) -> bool:
+    return cli_network.command_scoreboard(state, line)
+
+
+def _command_new_player(state: _ShellState, line: str) -> bool:
+    return cli_network.command_new_player(state, line)
 
 
 def _command_undo(state: _ShellState, line: str) -> bool:
@@ -1245,6 +1401,9 @@ def _command_shorthand_move(state: _ShellState, line: str) -> bool:
     if _pause_blocks_gameplay(state.blitz):
         return False
 
+    if state.network_client is not None:
+        return cli_network.command_shorthand_move(state, line)
+
     has_unsaved_changes, should_break = _handle_move(
         state.session,
         line,
@@ -1260,6 +1419,9 @@ def _command_shorthand_move(state: _ShellState, line: str) -> bool:
 def _command_shorthand_wall(state: _ShellState, line: str) -> bool:
     if _pause_blocks_gameplay(state.blitz):
         return False
+
+    if state.network_client is not None:
+        return cli_network.command_shorthand_wall(state, line)
 
     has_unsaved_changes, should_break = _handle_wall(
         state.session,
@@ -1307,6 +1469,12 @@ class _ShellState:
     blitz: Blitz
     network_server: cli_network.NetworkServer | None = None
     network_client: cli_network.NetworkClient | None = None
+    network_restore_callback: Callable[[], None] | None = None
+    network_player_id: int | None = None
+    saved_local_state: _SavedLocalShellState | None = None
+    network_sync_lock: threading.Lock = field(
+        default_factory=threading.Lock
+    )
 
 
 class _BaseCommand:
@@ -1346,6 +1514,24 @@ class _NewCommand(_InvalidAsCommandError):
 
     def run(self, state: _ShellState, line: str) -> bool:
         return _command_new(state, line)
+
+
+class _NetworkNewPlayerCommand(_InvalidAsCommandError):
+    def matches(self, line: str) -> bool:
+        parts = line.split()
+        if len(parts) < 2:
+            return False
+        if parts[0].lower() != "new":
+            return False
+        for value in parts[1:]:
+            if value.startswith(("+", "-")):
+                value = value[1:]
+            if not value.isdigit():
+                return False
+        return True
+
+    def run(self, state: _ShellState, line: str) -> bool:
+        return _command_new_player(state, line)
 
 
 class _HelpCommand(_BaseCommand):
@@ -1457,6 +1643,22 @@ class _PingCommand(_InvalidAsCommandError):
         return _command_ping(state, line)
 
 
+class _PlayersCommand(_InvalidAsCommandError):
+    def matches(self, line: str) -> bool:
+        return line.lower() == "players"
+
+    def run(self, state: _ShellState, line: str) -> bool:
+        return _command_players(state, line)
+
+
+class _ScoreboardCommand(_InvalidAsCommandError):
+    def matches(self, line: str) -> bool:
+        return line.lower() == "scoreboard"
+
+    def run(self, state: _ShellState, line: str) -> bool:
+        return _command_scoreboard(state, line)
+
+
 class _MovesCommand(_BaseCommand):
     def matches(self, line: str) -> bool:
         return line.lower() == "moves"
@@ -1548,6 +1750,7 @@ class _CommandRegistry:
 def _build_command_registry() -> _CommandRegistry:
     return _CommandRegistry(
         [
+            _NetworkNewPlayerCommand(),
             _NewCommand(),
             _HelpCommand(),
             _HistoryCommand(),
@@ -1561,6 +1764,8 @@ def _build_command_registry() -> _CommandRegistry:
             _ServerCommand(),
             _JoinCommand(),
             _PingCommand(),
+            _PlayersCommand(),
+            _ScoreboardCommand(),
             _PauseCommand(),
             _MovesCommand(),
             _MoveCommand(),
@@ -1590,6 +1795,7 @@ def _run_interactive_shell(
     ai_mode: str,
     ai_time: int,
     ai_minimax_depth: int | None,
+    startup_server_port: int | None = None,
     verbose: bool = False,
     debug: bool = False,
 ) -> None:
@@ -1695,9 +1901,18 @@ def _run_interactive_shell(
         time_limit=blitz_state.time_limit_minutes,
         blitz=blitz_state,
     )
+    state.network_restore_callback = (
+        lambda: _restore_saved_local_shell_state(state)
+    )
 
     registry = _build_command_registry()
     discovery_listener = cli_network.start_discovery_listener()
+
+    if startup_server_port is not None:
+        cli_network.command_server(
+            state,
+            f"server start {startup_server_port}",
+        )
 
     if readline is not None:
         readline.set_history_length(MAX_HISTORY_SIZE)
