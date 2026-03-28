@@ -4,6 +4,9 @@ import socket
 import threading
 import time
 
+from ..application.game_session import GameSession, initial_player_positions
+from ..core.game_state import GameState
+from ..core.notation import get_edges_for_wall, get_node_from_notation
 from .discovery import DiscoveryBroadcaster, remember_server
 from .basic_network import (
     CLIENT_TIMEOUT_SEC,
@@ -15,6 +18,10 @@ from .basic_network import (
     _send_line,
     _validate_port,
 )
+
+
+_ROOM_BOARD_SIZE = 9
+_ROOM_WALLS_PER_PLAYER = 20
 
 
 class _ClientSession:
@@ -59,11 +66,17 @@ class _GameRoom:
         *,
         game_id: int,
         player_ids: tuple[int, ...],
-        current_turn_client_id: int,
+        client_to_player_id: dict[int, int],
+        session: GameSession,
     ) -> None:
         self.game_id = game_id
         self.player_ids = player_ids
-        self.current_turn_client_id = current_turn_client_id
+        self.client_to_player_id = dict(client_to_player_id)
+        self.player_to_client_id = {
+            player_id: client_id
+            for client_id, player_id in client_to_player_id.items()
+        }
+        self.session = session
 
 
 class NetworkServer:
@@ -478,18 +491,24 @@ class NetworkServer:
 
     def _handle_new_command(self, client_id: int, command: str) -> str:
         parts = command.split()
-        if len(parts) != 2:
+        if len(parts) < 2:
             return "ERROR INVALID_NEW_FORMAT"
 
-        try:
-            target_client_id = int(parts[1])
-        except ValueError:
-            return "ERROR INVALID_NEW_FORMAT"
-
-        if target_client_id <= 0:
-            return "ERROR INVALID_NEW_FORMAT"
-        if target_client_id == client_id:
-            return "ERROR SELF_INVITE"
+        target_client_ids = []
+        seen_targets = set()
+        for raw_target_id in parts[1:]:
+            try:
+                target_client_id = int(raw_target_id)
+            except ValueError:
+                return "ERROR INVALID_NEW_FORMAT"
+            if target_client_id <= 0:
+                return "ERROR INVALID_NEW_FORMAT"
+            if target_client_id == client_id:
+                return "ERROR SELF_INVITE"
+            if target_client_id in seen_targets:
+                return "ERROR INVALID_NEW_FORMAT"
+            seen_targets.add(target_client_id)
+            target_client_ids.append(target_client_id)
 
         with self._lock:
             requester = self._client_sessions.get(client_id)
@@ -498,23 +517,61 @@ class NetworkServer:
             if requester.status != "idle":
                 return "ERROR REQUESTER_NOT_IDLE"
 
-            target = self._client_sessions.get(target_client_id)
-            if target is None:
-                return "ERROR PLAYER_NOT_FOUND"
-            if target.status != "idle":
-                return "ERROR PLAYER_NOT_AVAILABLE"
+            participants_client_ids = [client_id]
+            for target_client_id in target_client_ids:
+                target = self._client_sessions.get(target_client_id)
+                if target is None:
+                    return "ERROR PLAYER_NOT_FOUND"
+                if target.status != "idle":
+                    return "ERROR PLAYER_NOT_AVAILABLE"
+                participants_client_ids.append(target_client_id)
 
+            participant_count = len(participants_client_ids)
+            if participant_count < 2 or participant_count > 4:
+                return "ERROR UNSUPPORTED_PLAYER_COUNT"
+
+            room_state = GameState(
+                board_size=_ROOM_BOARD_SIZE,
+                current_player=1,
+                player_positions=initial_player_positions(
+                    _ROOM_BOARD_SIZE, participant_count
+                ),
+                remaining_walls={
+                    player_id: _ROOM_WALLS_PER_PLAYER
+                    for player_id in range(1, participant_count + 1)
+                },
+                vertical_walls=[],
+                horizontal_walls=[],
+            )
+            room_session = GameSession(
+                state=room_state,
+                player_types={
+                    player_id: "human"
+                    for player_id in range(1, participant_count + 1)
+                },
+            )
             game_id = self._next_game_id
             self._next_game_id += 1
+            client_to_player_id = {
+                participant_client_id: player_id
+                for player_id, participant_client_id in enumerate(
+                    participants_client_ids,
+                    start=1,
+                )
+            }
             self._game_rooms[game_id] = _GameRoom(
                 game_id=game_id,
-                player_ids=(client_id, target_client_id),
-                current_turn_client_id=client_id,
+                player_ids=tuple(participants_client_ids),
+                client_to_player_id=client_to_player_id,
+                session=room_session,
             )
-            requester.status = "ingame"
-            requester.game_id = game_id
-            target.status = "ingame"
-            target.game_id = game_id
+            for participant_client_id in participants_client_ids:
+                participant_session = self._client_sessions.get(
+                    participant_client_id
+                )
+                if participant_session is not None:
+                    participant_session.status = "ingame"
+                    participant_session.game_id = game_id
 
         return f"NEW_OK {game_id}"
 
@@ -539,39 +596,101 @@ class NetworkServer:
                 session.game_id = None
                 return "ERROR NOT_IN_GAME"
 
-            if room.current_turn_client_id != client_id:
+            player_id = room.client_to_player_id.get(client_id)
+            if player_id is None:
+                return "ERROR NOT_IN_GAME"
+
+            game_session = room.session
+            if game_session.state.current_player != player_id:
                 return "ERROR NOT_YOUR_TURN"
 
-            opponent_client_id = None
-            for room_player_id in room.player_ids:
-                if room_player_id != client_id:
-                    opponent_client_id = room_player_id
-                    break
-            if opponent_client_id is None:
-                return "ERROR NO_OPPONENT"
-
-            opponent_session = self._client_sessions.get(opponent_client_id)
-            if opponent_session is None:
-                self._close_game_room_locked(room.game_id)
-                return "ERROR OPPONENT_DISCONNECTED"
-
             try:
-                _send_line(
-                    opponent_session.sock,
-                    f"OPPONENT_MOVE {move_notation}",
+                self._apply_room_move(
+                    game_session,
+                    player_id,
+                    move_notation,
                 )
-            except OSError:
-                self._close_client(
-                    opponent_client_id,
-                    opponent_session.sock,
-                )
-                if room.game_id in self._game_rooms:
-                    self._close_game_room_locked(room.game_id)
-                return "ERROR OPPONENT_DISCONNECTED"
+            except ValueError:
+                return "ERROR ILLEGAL_MOVE"
 
-            room.current_turn_client_id = opponent_client_id
+            for participant_client_id in room.player_ids:
+                if participant_client_id == client_id:
+                    continue
+
+                opponent_session = self._client_sessions.get(
+                    participant_client_id
+                )
+                if opponent_session is None:
+                    self._close_game_room_locked(room.game_id)
+                    return "ERROR OPPONENT_DISCONNECTED"
+
+                try:
+                    _send_line(
+                        opponent_session.sock,
+                        f"OPPONENT_MOVE {move_notation}",
+                    )
+                except OSError:
+                    self._close_client(
+                        participant_client_id,
+                        opponent_session.sock,
+                    )
+                    if room.game_id in self._game_rooms:
+                        self._close_game_room_locked(room.game_id)
+                    return "ERROR OPPONENT_DISCONNECTED"
+
+            winner_player_id = game_session.winner_id()
+            if winner_player_id is not None:
+                winner_client_id = room.player_to_client_id.get(
+                    winner_player_id
+                )
+                if winner_client_id is not None:
+                    self.record_finished_game(
+                        player_ids=list(room.player_ids),
+                        winner_client_id=winner_client_id,
+                    )
+                self._close_game_room_locked(room.game_id)
 
         return "MOVE_OK"
+
+    def _apply_room_move(
+        self,
+        game_session: GameSession,
+        player_id: int,
+        move_notation: str,
+    ) -> None:
+        if "-" in move_notation:
+            from_notation, to_notation = move_notation.split("-", 1)
+            from_node = get_node_from_notation(
+                from_notation,
+                game_session.state.board_size,
+            )
+            to_node = get_node_from_notation(
+                to_notation,
+                game_session.state.board_size,
+            )
+            game_session.play_pawn_move_from_to(
+                player_id,
+                from_node,
+                to_node,
+            )
+            return
+
+        if len(move_notation) < 3:
+            raise ValueError("invalid notation")
+        orientation_char = move_notation[-1].lower()
+        if orientation_char not in {"h", "v"}:
+            raise ValueError("invalid notation")
+
+        wall_edges = get_edges_for_wall(
+            move_notation,
+            game_session.state.board_size,
+        )
+        orientation = "horizontal" if orientation_char == "h" else "vertical"
+        game_session.place_wall(
+            player_id,
+            wall_edges,
+            orientation,
+        )
 
     def _close_game_room_locked(self, game_id: int) -> None:
         room = self._game_rooms.pop(game_id, None)

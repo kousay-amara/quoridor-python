@@ -355,6 +355,66 @@ def test_network_new_rejects_absent_or_unavailable_player():
             server.stop()
 
 
+def test_network_new_supports_multiple_target_players():
+    port = _unused_port()
+    server = NetworkServer(port=port)
+    first_client = NetworkClient(host="127.0.0.1", port=port, name="alice")
+    second_client = NetworkClient(host="127.0.0.1", port=port, name="bob")
+    third_client = NetworkClient(host="127.0.0.1", port=port, name="charlie")
+
+    try:
+        server.start()
+        first_client.connect()
+        second_client.connect()
+        third_client.connect()
+
+        response = first_client.send_command("NEW 2 3")
+        assert response == "NEW_OK 1"
+
+        status = server.status_snapshot()
+        assert status["active_games"] == 1
+
+        players = first_client.players()
+        assert players == [
+            (1, "alice", "ingame"),
+            (2, "bob", "ingame"),
+            (3, "charlie", "ingame"),
+        ]
+    finally:
+        first_client.close()
+        second_client.close()
+        third_client.close()
+        if server.running():
+            server.stop()
+
+
+def test_network_new_rejects_unsupported_player_count():
+    port = _unused_port()
+    server = NetworkServer(port=port)
+    clients = [
+        NetworkClient(host="127.0.0.1", port=port, name="alice"),
+        NetworkClient(host="127.0.0.1", port=port, name="bob"),
+        NetworkClient(host="127.0.0.1", port=port, name="charlie"),
+        NetworkClient(host="127.0.0.1", port=port, name="dave"),
+        NetworkClient(host="127.0.0.1", port=port, name="eve"),
+    ]
+
+    try:
+        server.start()
+        for client in clients:
+            client.connect()
+
+        assert (
+            clients[0].send_command("NEW 2 3 4 5")
+            == "ERROR UNSUPPORTED_PLAYER_COUNT"
+        )
+    finally:
+        for client in clients:
+            client.close()
+        if server.running():
+            server.stop()
+
+
 def test_network_move_routes_to_opponent_and_enforces_turn_order():
     port = _unused_port()
     server = NetworkServer(port=port)
@@ -396,6 +456,79 @@ def test_network_move_rejects_invalid_format_and_not_in_game():
         assert client.move("e1-e2") == "ERROR NOT_IN_GAME"
     finally:
         client.close()
+        if server.running():
+            server.stop()
+
+
+def test_network_move_rejects_illegal_move():
+    port = _unused_port()
+    server = NetworkServer(port=port)
+    first_client = NetworkClient(host="127.0.0.1", port=port, name="alice")
+    second_client = NetworkClient(host="127.0.0.1", port=port, name="bob")
+
+    try:
+        server.start()
+        first_client.connect()
+        second_client.connect()
+        assert first_client.send_command("NEW 2") == "NEW_OK 1"
+
+        assert first_client.move("e1-e3") == "ERROR ILLEGAL_MOVE"
+        assert second_client.ping() >= 0
+        assert second_client.drain_opponent_moves() == []
+    finally:
+        first_client.close()
+        second_client.close()
+        if server.running():
+            server.stop()
+
+
+def test_network_game_end_closes_room_and_updates_scoreboard():
+    port = _unused_port()
+    server = NetworkServer(port=port)
+    first_client = NetworkClient(host="127.0.0.1", port=port, name="alice")
+    second_client = NetworkClient(host="127.0.0.1", port=port, name="bob")
+
+    try:
+        server.start()
+        first_client.connect()
+        second_client.connect()
+        assert first_client.send_command("NEW 2") == "NEW_OK 1"
+
+        assert first_client.move("e1-e2") == "MOVE_OK"
+        assert second_client.move("e9-d9") == "MOVE_OK"
+        assert first_client.move("e2-e3") == "MOVE_OK"
+        assert second_client.move("d9-d8") == "MOVE_OK"
+        assert first_client.move("e3-e4") == "MOVE_OK"
+        assert second_client.move("d8-d7") == "MOVE_OK"
+        assert first_client.move("e4-e5") == "MOVE_OK"
+        assert second_client.move("d7-d6") == "MOVE_OK"
+        assert first_client.move("e5-e6") == "MOVE_OK"
+        assert second_client.move("d6-d5") == "MOVE_OK"
+        assert first_client.move("e6-e7") == "MOVE_OK"
+        assert second_client.move("d5-d4") == "MOVE_OK"
+        assert first_client.move("e7-e8") == "MOVE_OK"
+        assert second_client.move("d4-d3") == "MOVE_OK"
+        assert first_client.move("e8-e9") == "MOVE_OK"
+
+        status = server.status_snapshot()
+        assert status["active_games"] == 0
+
+        players = first_client.players()
+        assert players == [
+            (1, "alice", "idle"),
+            (2, "bob", "idle"),
+        ]
+
+        scores = first_client.scoreboard()
+        assert scores == [
+            (1, "alice", 1, 0, 1),
+            (2, "bob", 0, 1, 1),
+        ]
+
+        assert first_client.move("e9-e8") == "ERROR NOT_IN_GAME"
+    finally:
+        first_client.close()
+        second_client.close()
         if server.running():
             server.stop()
 
@@ -458,8 +591,8 @@ def test_cli_new_player_creates_game_with_explicit_errors(
             server.stop()
 
     out = capsys.readouterr().out
-    assert "Cannot create game: player 999 not found." in out
-    assert "Game 1 started with player 1." in out
+    assert "Cannot create game: one or more players were not found." in out
+    assert "Game 1 started with player(s) 1." in out
     assert "Cannot create game: you are already in game." in out
     assert "- 1: bob (ingame)" in out
     assert "- 2: alice (ingame)" in out
@@ -494,6 +627,39 @@ def test_cli_network_move_routes_and_enforces_turn(monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "Move sent: e1-e2" in out
     assert "Cannot play move: not your turn." in out
+
+
+def test_cli_new_player_accepts_multiple_ids(monkeypatch, capsys):
+    port = _unused_port()
+    server = NetworkServer(port=port)
+    bob = NetworkClient(host="127.0.0.1", port=port, name="bob")
+    charlie = NetworkClient(host="127.0.0.1", port=port, name="charlie")
+
+    try:
+        server.start()
+        bob.connect()
+        charlie.connect()
+        _run_shell(
+            monkeypatch,
+            [
+                f"join 127.0.0.1:{port} alice",
+                "new 1 2",
+                "players",
+                "quit",
+                "quit",
+            ],
+        )
+    finally:
+        bob.close()
+        charlie.close()
+        if server.running():
+            server.stop()
+
+    out = capsys.readouterr().out
+    assert "Game 1 started with player(s) 1, 2." in out
+    assert "- 1: bob (ingame)" in out
+    assert "- 2: charlie (ingame)" in out
+    assert "- 3: alice (ingame)" in out
 
 
 def test_cli_join_accepts_custom_name(monkeypatch, capsys):

@@ -247,24 +247,36 @@ def command_scoreboard(state: NetworkState, line: str) -> bool:
 
 def command_new_player(state: NetworkState, line: str) -> bool:
     parts = line.split()
-    if len(parts) != 2:
-        raise ValueError("Invalid format. Use: new PLAYER_ID")
+    if len(parts) < 2:
+        raise ValueError("Invalid format. Use: new PLAYER_ID [PLAYER_ID...]")
 
     if state.network_client is None:
         print("Not connected to any server.")
         return False
 
-    try:
-        target_player_id = int(parts[1])
-    except ValueError as exc:
-        raise ValueError("Invalid format. Use: new PLAYER_ID") from exc
-    if target_player_id <= 0:
-        raise ValueError("Invalid format. Use: new PLAYER_ID")
+    target_player_ids = []
+    seen_targets = set()
+    for raw_target_id in parts[1:]:
+        try:
+            target_player_id = int(raw_target_id)
+        except ValueError as exc:
+            raise ValueError(
+                "Invalid format. Use: new PLAYER_ID [PLAYER_ID...]"
+            ) from exc
+        if target_player_id <= 0:
+            raise ValueError(
+                "Invalid format. Use: new PLAYER_ID [PLAYER_ID...]"
+            )
+        if target_player_id in seen_targets:
+            raise ValueError(
+                "Invalid format. Use: new PLAYER_ID [PLAYER_ID...]"
+            )
+        seen_targets.add(target_player_id)
+        target_player_ids.append(target_player_id)
 
+    command_payload = " ".join(str(pid) for pid in target_player_ids)
     try:
-        response = state.network_client.send_command(
-            f"NEW {target_player_id}"
-        )
+        response = state.network_client.send_command(f"NEW {command_payload}")
     except OSError as exc:
         state.network_client.close()
         state.network_client = None
@@ -272,32 +284,38 @@ def command_new_player(state: NetworkState, line: str) -> bool:
         return False
 
     if response.startswith("NEW_OK "):
-        parts = response.split()
-        if len(parts) != 2:
+        response_parts = response.split()
+        if len(response_parts) != 2:
             print(f"Cannot create game: unexpected response ({response}).")
             return False
         try:
-            game_id = int(parts[1])
+            game_id = int(response_parts[1])
         except ValueError:
             print(f"Cannot create game: unexpected response ({response}).")
             return False
-        print(f"Game {game_id} started with player {target_player_id}.")
+        targets_text = ", ".join(str(pid) for pid in target_player_ids)
+        print(f"Game {game_id} started with player(s) {targets_text}.")
         return False
 
     if response == "ERROR PLAYER_NOT_FOUND":
-        print(f"Cannot create game: player {target_player_id} not found.")
+        print("Cannot create game: one or more players were not found.")
         return False
     if response == "ERROR PLAYER_NOT_AVAILABLE":
-        print(f"Cannot create game: player {target_player_id} is busy.")
+        print("Cannot create game: one or more players are busy.")
         return False
     if response == "ERROR REQUESTER_NOT_IDLE":
         print("Cannot create game: you are already in game.")
         return False
     if response == "ERROR SELF_INVITE":
-        print("Cannot create game: choose another player.")
+        print("Cannot create game: choose player IDs different from yours.")
+        return False
+    if response == "ERROR UNSUPPORTED_PLAYER_COUNT":
+        print("Cannot create game: player count must be between 2 and 4.")
         return False
     if response == "ERROR INVALID_NEW_FORMAT":
-        raise ValueError("Invalid format. Use: new PLAYER_ID")
+        raise ValueError(
+            "Invalid format. Use: new PLAYER_ID [PLAYER_ID...]"
+        )
 
     print(f"Cannot create game: unexpected response ({response}).")
     return False
@@ -342,6 +360,10 @@ def _command_move_with_notation(
         return False
     if response == "ERROR INVALID_MOVE_FORMAT":
         print("Cannot play move: invalid move format.")
+        _print_opponent_moves(client)
+        return False
+    if response == "ERROR ILLEGAL_MOVE":
+        print("Cannot play move: illegal move.")
         _print_opponent_moves(client)
         return False
     if response == "ERROR OPPONENT_DISCONNECTED":

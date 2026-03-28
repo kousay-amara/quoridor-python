@@ -1369,14 +1369,16 @@ class _NewCommand(_InvalidAsCommandError):
 class _NetworkNewPlayerCommand(_InvalidAsCommandError):
     def matches(self, line: str) -> bool:
         parts = line.split()
-        if len(parts) != 2:
+        if len(parts) < 2:
             return False
         if parts[0].lower() != "new":
             return False
-        value = parts[1]
-        if value.startswith(("+", "-")):
-            value = value[1:]
-        return value.isdigit()
+        for value in parts[1:]:
+            if value.startswith(("+", "-")):
+                value = value[1:]
+            if not value.isdigit():
+                return False
+        return True
 
     def run(self, state: _ShellState, line: str) -> bool:
         return _command_new_player(state, line)
