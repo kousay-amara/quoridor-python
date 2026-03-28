@@ -443,6 +443,50 @@ def test_network_move_routes_to_opponent_and_enforces_turn_order():
             server.stop()
 
 
+def test_network_moves_are_isolated_between_parallel_games():
+    port = _unused_port()
+    server = NetworkServer(port=port)
+    first_client = NetworkClient(host="127.0.0.1", port=port, name="alice")
+    second_client = NetworkClient(host="127.0.0.1", port=port, name="bob")
+    third_client = NetworkClient(host="127.0.0.1", port=port, name="charlie")
+    fourth_client = NetworkClient(host="127.0.0.1", port=port, name="dave")
+
+    try:
+        server.start()
+        first_client.connect()
+        second_client.connect()
+        third_client.connect()
+        fourth_client.connect()
+
+        assert first_client.send_command("NEW 2") == "NEW_OK 1"
+        assert third_client.send_command("NEW 4") == "NEW_OK 2"
+
+        assert first_client.move("e1-e2") == "MOVE_OK"
+        assert second_client.ping() >= 0
+        assert second_client.drain_opponent_moves() == ["e1-e2"]
+
+        assert third_client.ping() >= 0
+        assert third_client.drain_opponent_moves() == []
+        assert fourth_client.ping() >= 0
+        assert fourth_client.drain_opponent_moves() == []
+
+        assert third_client.move("e1-e2") == "MOVE_OK"
+        assert fourth_client.ping() >= 0
+        assert fourth_client.drain_opponent_moves() == ["e1-e2"]
+
+        assert first_client.ping() >= 0
+        assert first_client.drain_opponent_moves() == []
+        assert second_client.ping() >= 0
+        assert second_client.drain_opponent_moves() == []
+    finally:
+        first_client.close()
+        second_client.close()
+        third_client.close()
+        fourth_client.close()
+        if server.running():
+            server.stop()
+
+
 def test_network_move_rejects_invalid_format_and_not_in_game():
     port = _unused_port()
     server = NetworkServer(port=port)
