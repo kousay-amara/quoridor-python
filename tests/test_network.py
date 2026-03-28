@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import socket
 import time
+from types import SimpleNamespace
 
 import pytest
 
 import quoridor.network.discovery as discovery_mod
 from quoridor.interfaces import cli as cli_mod
+from quoridor.interfaces import cli_network as cli_network_mod
 from quoridor.interfaces import cli_shell as cli_shell_mod
 from quoridor.network import (
     DEFAULT_SERVER_HOST,
@@ -85,6 +87,39 @@ def test_parse_endpoint_supports_defaults_and_explicit_values():
     assert parse_endpoint("   ") == (DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT)
     assert parse_endpoint("127.0.0.1") == ("127.0.0.1", DEFAULT_SERVER_PORT)
     assert parse_endpoint("127.0.0.1:23456") == ("127.0.0.1", 23456)
+
+
+def test_cli_network_move_notifies_local_callback_on_success():
+    observed_moves = []
+
+    class FakeClient:
+        def __init__(self):
+            self.sent_notations = []
+
+        def move(self, notation: str) -> str:
+            self.sent_notations.append(notation)
+            return "MOVE_OK"
+
+        def drain_opponent_moves(self) -> list[str]:
+            return []
+
+        def close(self) -> None:
+            return
+
+    fake_client = FakeClient()
+    state = SimpleNamespace(
+        network_client=fake_client,
+        network_server=None,
+        network_move_callback=(
+            lambda move_notation, is_opponent: observed_moves.append(
+                (move_notation, is_opponent)
+            )
+        ),
+    )
+
+    assert cli_network_mod.command_move(state, "move e1-e2") is False
+    assert fake_client.sent_notations == ["e1-e2"]
+    assert observed_moves == [("e1-e2", False)]
 
 
 def test_discovery_message_round_trip_and_invalid_prefix():

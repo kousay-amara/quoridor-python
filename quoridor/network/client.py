@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import socket
+import threading
 import time
+from collections import deque
+from typing import Callable
 
 from .basic_network import (
     DEFAULT_SERVER_HOST,
@@ -27,7 +30,14 @@ class NetworkClient:
         self.client_id = None
         self._sock = None
         self._buffer = ""
-        self._pending_opponent_moves: list[str] = []
+        self._pending_opponent_moves = deque()
+        self._response_queue = deque()
+        self._response_condition = threading.Condition()
+        self._send_lock = threading.Lock()
+        self._reader_thread = None
+        self._reader_stop_requested = threading.Event()
+        self._reader_error = None
+        self._opponent_move_callback = None
 
     def connected(self) -> bool:
         return self._sock is not None
@@ -78,6 +88,16 @@ class NetworkClient:
                     ) from exc
                 self._sock = sock
                 self._buffer = hello_buffer
+                self._response_queue.clear()
+                self._pending_opponent_moves.clear()
+                self._reader_error = None
+                self._reader_stop_requested.clear()
+                self._reader_thread = threading.Thread(
+                    target=self._reader_loop,
+                    name="quoridor-network-client-reader",
+                    daemon=True,
+                )
+                self._reader_thread.start()
                 return
         except OSError:
             try:
@@ -87,27 +107,70 @@ class NetworkClient:
             self.client_id = None
             raise
 
-    def send_command(self, command: str) -> str:
+    def _reader_loop(self) -> None:
         if self._sock is None:
-            raise OSError("client is not connected")
+            return
 
-        _send_line(self._sock, command)
-        while True:
-            line, self._buffer, closed = _recv_line(
-                self._sock,
-                self._buffer,
-            )
+        sock = self._sock
+        buffer = self._buffer
+        while not self._reader_stop_requested.is_set():
+            try:
+                line, buffer, closed = _recv_line(sock, buffer)
+            except OSError as exc:
+                self._set_reader_error(exc)
+                break
             if closed:
-                self.close()
-                raise OSError("server closed the connection")
+                self._set_reader_error(OSError("server closed the connection"))
+                break
             if line is None:
                 continue
             if line.startswith("OPPONENT_MOVE "):
                 move_notation = line[len("OPPONENT_MOVE "):].strip()
-                if move_notation:
+                if not move_notation:
+                    continue
+                callback = self._opponent_move_callback
+                if callback is not None:
+                    try:
+                        callback(move_notation)
+                    except Exception:
+                        with self._response_condition:
+                            self._pending_opponent_moves.append(move_notation)
+                    continue
+                with self._response_condition:
                     self._pending_opponent_moves.append(move_notation)
                 continue
-            return line
+
+            with self._response_condition:
+                self._response_queue.append(line)
+                self._response_condition.notify_all()
+
+    def _set_reader_error(self, exc: OSError) -> None:
+        with self._response_condition:
+            if self._reader_error is None:
+                self._reader_error = OSError(str(exc))
+            self._response_condition.notify_all()
+
+    def set_opponent_move_callback(
+        self,
+        callback: Callable[[str], None] | None,
+    ) -> None:
+        self._opponent_move_callback = callback
+
+    def send_command(self, command: str) -> str:
+        if self._sock is None:
+            raise OSError("client is not connected")
+
+        with self._send_lock:
+            _send_line(self._sock, command)
+            with self._response_condition:
+                while True:
+                    if self._response_queue:
+                        return self._response_queue.popleft()
+                    if self._reader_error is not None:
+                        error = self._reader_error
+                        self.close()
+                        raise OSError(str(error))
+                    self._response_condition.wait(timeout=_SOCKET_TIMEOUT_SEC)
 
     def ping(self) -> float:
         started_at = time.time()
@@ -130,15 +193,30 @@ class NetworkClient:
             raise OSError(f"unexpected quit response: {response}")
 
     def close(self) -> None:
+        self._reader_stop_requested.set()
         if self._sock is not None:
             try:
                 self._sock.close()
             except OSError:
                 pass
+        current_thread = threading.current_thread()
+        reader_thread = self._reader_thread
+        if (
+            reader_thread is not None
+            and reader_thread is not current_thread
+            and reader_thread.is_alive()
+        ):
+            reader_thread.join(timeout=0.5)
         self._sock = None
         self.client_id = None
         self._buffer = ""
-        self._pending_opponent_moves = []
+        with self._response_condition:
+            self._pending_opponent_moves.clear()
+            self._response_queue.clear()
+            self._reader_error = None
+            self._response_condition.notify_all()
+        self._opponent_move_callback = None
+        self._reader_thread = None
 
     def players(self) -> list[tuple[int, str, str]]:
         response = self.send_command("PLAYERS")
@@ -198,9 +276,10 @@ class NetworkClient:
         return self.send_command(f"MOVE {move_notation}")
 
     def drain_opponent_moves(self) -> list[str]:
-        moves = list(self._pending_opponent_moves)
-        self._pending_opponent_moves.clear()
-        return moves
+        with self._response_condition:
+            moves = list(self._pending_opponent_moves)
+            self._pending_opponent_moves.clear()
+            return moves
 
 
 __all__ = ["NetworkClient"]

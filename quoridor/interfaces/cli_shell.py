@@ -6,8 +6,10 @@ import argparse
 import gettext
 import shlex
 import signal
+import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Callable
 
 try:  # readline enables in-session history navigation with arrow keys.
     import readline  # type: ignore
@@ -1221,8 +1223,42 @@ def _command_server(state: _ShellState, line: str) -> bool:
     return cli_network.command_server(state, line)
 
 
+def _apply_network_move_to_local_session(
+    state: _ShellState,
+    move_notation: str,
+    _is_opponent: bool,
+) -> None:
+    token = move_notation.strip()
+    if not token:
+        return
+
+    with state.network_sync_lock:
+        try:
+            if "-" in token:
+                _play_pawn_move_from_token(state.session, token)
+            else:
+                _place_wall_from_token(state.session, token)
+        except Exception:
+            return
+        state.has_unsaved_changes = True
+
+
 def _command_join(state: _ShellState, line: str) -> bool:
-    return cli_network.command_join(state, line)
+    handled = cli_network.command_join(state, line)
+    client = state.network_client
+    if client is None:
+        return handled
+
+    def _on_opponent_move(move_notation: str) -> None:
+        print(f"\nOPPONENT_MOVE {move_notation}")
+        if state.network_move_callback is None:
+            return
+        state.network_move_callback(move_notation, True)
+
+    client.set_opponent_move_callback(_on_opponent_move)
+    for pending_move in client.drain_opponent_moves():
+        _on_opponent_move(pending_move)
+    return handled
 
 
 def _command_ping(state: _ShellState, _line: str) -> bool:
@@ -1331,6 +1367,10 @@ class _ShellState:
     blitz: Blitz
     network_server: cli_network.NetworkServer | None = None
     network_client: cli_network.NetworkClient | None = None
+    network_move_callback: Callable[[str, bool], None] | None = None
+    network_sync_lock: threading.Lock = field(
+        default_factory=threading.Lock
+    )
 
 
 class _BaseCommand:
@@ -1757,6 +1797,7 @@ def _run_interactive_shell(
         time_limit=blitz_state.time_limit_minutes,
         blitz=blitz_state,
     )
+    state.network_move_callback = _apply_network_move_to_local_session
 
     registry = _build_command_registry()
     discovery_listener = cli_network.start_discovery_listener()
