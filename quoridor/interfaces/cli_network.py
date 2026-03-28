@@ -392,6 +392,22 @@ def command_shorthand_move(state: NetworkState, line: str) -> bool:
     return _command_move_with_notation(state, move_notation)
 
 
+def command_wall(state: NetworkState, line: str) -> bool:
+    if not line.lower().startswith("wall "):
+        raise ValueError("Invalid format. Use: wall <POSh|POSv>")
+    move_notation = line[5:].strip()
+    if not move_notation:
+        raise ValueError("Invalid format. Use: wall <POSh|POSv>")
+    return _command_move_with_notation(state, move_notation)
+
+
+def command_shorthand_wall(state: NetworkState, line: str) -> bool:
+    move_notation = line.strip()
+    if not move_notation:
+        raise ValueError("Invalid format. Use: wall <POSh|POSv>")
+    return _command_move_with_notation(state, move_notation)
+
+
 def disconnect_client(state: NetworkState) -> bool:
     if state.network_client is None:
         return False

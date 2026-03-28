@@ -629,6 +629,35 @@ def test_cli_network_move_routes_and_enforces_turn(monkeypatch, capsys):
     assert "Cannot play move: not your turn." in out
 
 
+def test_cli_network_shorthand_wall_routes_to_server(monkeypatch, capsys):
+    port = _unused_port()
+    server = NetworkServer(port=port)
+    bob = NetworkClient(host="127.0.0.1", port=port, name="bob")
+
+    try:
+        server.start()
+        bob.connect()
+        _run_shell(
+            monkeypatch,
+            [
+                f"join 127.0.0.1:{port} alice",
+                "new 1",
+                "e2h",
+                "quit",
+                "quit",
+            ],
+        )
+        assert bob.ping() >= 0
+        assert bob.drain_opponent_moves() == ["e2h"]
+    finally:
+        bob.close()
+        if server.running():
+            server.stop()
+
+    out = capsys.readouterr().out
+    assert "Move sent: e2h" in out
+
+
 def test_cli_new_player_accepts_multiple_ids(monkeypatch, capsys):
     port = _unused_port()
     server = NetworkServer(port=port)
