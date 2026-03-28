@@ -719,6 +719,50 @@ def test_main_interactive_routes_gui_requests_to_main_gui(monkeypatch):
     assert captured[0].gui is True
 
 
+def test_main_interactive_passes_server_port_to_shell(monkeypatch):
+    captured = []
+
+    patch_main_defaults(monkeypatch)
+    monkeypatch.setattr(cli_mod, "_configure_logging", lambda *_args: None)
+    monkeypatch.setattr(
+        cli_mod,
+        "_run_interactive_shell",
+        lambda **kwargs: captured.append(kwargs),
+    )
+
+    assert cli_mod._main_interactive(["-S", "23456"]) == 0
+    assert captured[-1]["startup_server_port"] == 23456
+
+    assert cli_mod._main_interactive(["-S"]) == 0
+    assert captured[-1]["startup_server_port"] == cli_mod.DEFAULT_SERVER_PORT
+
+
+def test_main_interactive_daemon_requires_server(monkeypatch):
+    patch_main_defaults(monkeypatch)
+
+    with pytest.raises(SystemExit):
+        cli_mod._main_interactive(["-D"])
+
+
+def test_main_interactive_routes_daemon_mode(monkeypatch):
+    calls = []
+
+    patch_main_defaults(monkeypatch)
+    monkeypatch.setattr(
+        cli_mod,
+        "_run_server_daemon",
+        lambda port: calls.append(port) or 0,
+    )
+    monkeypatch.setattr(
+        cli_mod,
+        "_run_interactive_shell",
+        lambda **_kwargs: pytest.fail("interactive shell should not start"),
+    )
+
+    assert cli_mod._main_interactive(["-D", "-S", "23456"]) == 0
+    assert calls == [23456]
+
+
 def test_main_gui_calls_gui_main_with_cli_values(monkeypatch):
     calls = []
     fake_gui = SimpleNamespace(

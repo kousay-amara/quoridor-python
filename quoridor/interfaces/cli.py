@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import subprocess
 import sys
+import time
 from importlib import metadata
 from pathlib import Path
 
@@ -16,6 +17,7 @@ from ..application.minimax_engine import (
     find_best_move_iterative,
 )
 from ..config import DEFAULTS, load_or_init_config
+from ..network import DEFAULT_SERVER_PORT, NetworkServer
 from .cli_constants import AI_MODE_MINIMAX
 from .contest_parser import ContestError, parse_contest_file
 from .cli_parser import (
@@ -83,6 +85,7 @@ __all__ = [
     "_serialize_game_section",
     "_serialize_history_section",
     "_size_type",
+    "_run_server_daemon",
     "find_best_move_iterative",
     "find_best_move_minimax",
     "main",
@@ -162,6 +165,27 @@ def _main_gui(args) -> int:
     )
 
 
+def _run_server_daemon(port: int = DEFAULT_SERVER_PORT) -> int:
+    server = NetworkServer(port=port)
+    try:
+        server.start()
+    except OSError as exc:
+        sys.stderr.write(f"Cannot start server on port {port}: {exc}\n")
+        return 1
+
+    print(f"Server started on port {server.port}. Press Ctrl+C to stop.")
+    try:
+        while True:
+            time.sleep(0.5)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        if server.running():
+            server.stop()
+    print("Server stopped.")
+    return 0
+
+
 def _main_interactive(argv: list[str]) -> int:
     setup_i18n()
     defaults = load_or_init_config()
@@ -174,6 +198,13 @@ def _main_interactive(argv: list[str]) -> int:
 
     if args.gui:
         return _main_gui(args)
+
+    if args.daemon and args.server is None:
+        parser.error("--daemon requires --server [PORT]")
+    if args.daemon and args.save_file is not None:
+        parser.error("--daemon cannot be used with a save file")
+    if args.daemon:
+        return _run_server_daemon(args.server)
 
     if any(pid > args.players for pid in args.ai_player):
         parser.error("--ai-player id must be <= --players")
@@ -209,6 +240,7 @@ def _main_interactive(argv: list[str]) -> int:
         ai_mode=args.ai_mode,
         ai_time=args.ai_time,
         ai_minimax_depth=args.ai_minimax_depth,
+        startup_server_port=args.server,
         verbose=args.verbose,
         debug=args.debug,
     )

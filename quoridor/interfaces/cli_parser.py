@@ -21,6 +21,7 @@ from .cli_constants import (
     PLAYER_ID_MIN,
     WALLS_DEFAULT,
 )
+from ..network import DEFAULT_SERVER_PORT
 
 _ = gettext.gettext
 
@@ -84,6 +85,16 @@ def _positive_time_type(raw: str) -> float:
     return value
 
 
+def _port_type(raw: str) -> int:
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("port must be an integer") from exc
+    if value < 1 or value > 65535:
+        raise argparse.ArgumentTypeError("port must be between 1 and 65535")
+    return value
+
+
 def _build_parser(
     defaults: dict[str, object],
 ) -> argparse.ArgumentParser:
@@ -134,6 +145,12 @@ def _build_parser(
         "-d", "--debug", action="store_true", help=_("show debug messages")
     )
     parser.add_argument(
+        "-D",
+        "--daemon",
+        action="store_true",
+        help=_("run in headless mode (requires --server)"),
+    )
+    parser.add_argument(
         "-g", "--gui", action="store_true", help=_("launch the GTK GUI")
     )
     parser.add_argument(
@@ -176,6 +193,16 @@ def _build_parser(
         help=_("board size (odd number between {min} and {max})").format(
             min=BOARD_SIZE_MIN, max=BOARD_SIZE_MAX
         ),
+    )
+    parser.add_argument(
+        "-S",
+        "--server",
+        nargs="?",
+        const=DEFAULT_SERVER_PORT,
+        type=_port_type,
+        default=None,
+        metavar="PORT",
+        help=_("start local server immediately (optional port)"),
     )
     parser.add_argument(
         "--ai-player",

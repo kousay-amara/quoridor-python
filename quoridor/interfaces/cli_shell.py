@@ -1651,6 +1651,7 @@ def _run_interactive_shell(
     ai_mode: str,
     ai_time: int,
     ai_minimax_depth: int | None,
+    startup_server_port: int | None = None,
     verbose: bool = False,
     debug: bool = False,
 ) -> None:
@@ -1759,6 +1760,12 @@ def _run_interactive_shell(
 
     registry = _build_command_registry()
     discovery_listener = cli_network.start_discovery_listener()
+
+    if startup_server_port is not None:
+        cli_network.command_server(
+            state,
+            f"server start {startup_server_port}",
+        )
 
     if readline is not None:
         readline.set_history_length(MAX_HISTORY_SIZE)
