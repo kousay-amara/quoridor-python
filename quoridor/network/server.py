@@ -4,9 +4,8 @@ import socket
 import threading
 import time
 
-from ..application.game_session import GameSession, initial_player_positions
-from ..core.game_state import GameState
-from ..core.notation import get_edges_for_wall, get_node_from_notation
+from ..application.game_application_service import GameApplicationService
+from ..application.game_session import GameSession
 from .discovery import DiscoveryBroadcaster, remember_server
 from .basic_network import (
     CLIENT_TIMEOUT_SEC,
@@ -75,7 +74,7 @@ class _GameRoom:
         self.client_to_player_id = dict(client_to_player_id)
         self.player_to_client_id = {
             player_id: client_id
-            for client_id, player_id in client_to_player_id.items()
+            for client_id, player_id in self.client_to_player_id.items()
         }
         self.session = session
 
@@ -344,6 +343,20 @@ class NetworkServer:
                             room,
                             winner_player_id,
                         ) = self._handle_move_command(client_id, command)
+                    except OSError:
+                        break
+                    if room is not None and winner_player_id is not None:
+                        winner_client_id = room.player_to_client_id.get(
+                            winner_player_id
+                        )
+                        if winner_client_id is not None:
+                            self.record_finished_game(
+                                player_ids=list(room.player_ids),
+                                winner_client_id=winner_client_id,
+                            )
+                        with self._lock:
+                            self._close_game_room_locked(room.game_id)
+                    try:
                         _send_line(
                             client_sock,
                             response,
@@ -355,17 +368,6 @@ class NetworkServer:
                             room,
                             winner_player_id=winner_player_id,
                         )
-                        if winner_player_id is not None:
-                            winner_client_id = room.player_to_client_id.get(
-                                winner_player_id
-                            )
-                            if winner_client_id is not None:
-                                self.record_finished_game(
-                                    player_ids=list(room.player_ids),
-                                    winner_client_id=winner_client_id,
-                                )
-                            with self._lock:
-                                self._close_game_room_locked(room.game_id)
                     continue
 
                 if command_upper == "QUIT":
@@ -561,21 +563,10 @@ class NetworkServer:
             if participant_count < 2 or participant_count > 4:
                 return "ERROR UNSUPPORTED_PLAYER_COUNT", None
 
-            room_state = GameState(
+            room_session = GameApplicationService.new_session(
                 board_size=_ROOM_BOARD_SIZE,
-                current_player=1,
-                player_positions=initial_player_positions(
-                    _ROOM_BOARD_SIZE, participant_count
-                ),
-                remaining_walls={
-                    player_id: _ROOM_WALLS_PER_PLAYER
-                    for player_id in range(1, participant_count + 1)
-                },
-                vertical_walls=[],
-                horizontal_walls=[],
-            )
-            room_session = GameSession(
-                state=room_state,
+                players=participant_count,
+                walls_per_player=_ROOM_WALLS_PER_PLAYER,
                 player_types={
                     player_id: "human"
                     for player_id in range(1, participant_count + 1)
@@ -722,41 +713,17 @@ class NetworkServer:
     def _apply_room_move(
         self,
         game_session: GameSession,
-        player_id: int,
+        _player_id: int,
         move_notation: str,
     ) -> None:
+        service = GameApplicationService(session=game_session)
         if "-" in move_notation:
-            from_notation, to_notation = move_notation.split("-", 1)
-            from_node = get_node_from_notation(
-                from_notation,
-                game_session.state.board_size,
-            )
-            to_node = get_node_from_notation(
-                to_notation,
-                game_session.state.board_size,
-            )
-            game_session.play_pawn_move_from_to(
-                player_id,
-                from_node,
-                to_node,
-            )
+            service.play_pawn_move_token(move_notation)
             return
 
-        if len(move_notation) < 3:
-            raise ValueError("invalid notation")
-        orientation_char = move_notation[-1].lower()
-        if orientation_char not in {"h", "v"}:
-            raise ValueError("invalid notation")
-
-        wall_edges = get_edges_for_wall(
+        service.place_wall_token(
             move_notation,
-            game_session.state.board_size,
-        )
-        orientation = "horizontal" if orientation_char == "h" else "vertical"
-        game_session.place_wall(
-            player_id,
-            wall_edges,
-            orientation,
+            3,
         )
 
     def _close_game_room_locked(self, game_id: int) -> None:

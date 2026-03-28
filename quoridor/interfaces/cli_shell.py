@@ -27,7 +27,7 @@ from ..application.game_session import GameSession, initial_player_positions
 from ..core.game_state import GameState
 from ..core.move_record import GameSnapshot
 from ..core.notation import get_edges_for_wall, get_node_from_notation
-from ..network import GameStateUpdate
+from ..network.basic_network import GameStateUpdate
 from ..core.validators import validate_pawn_move, validate_wall
 from ..rules.win_rules import has_player_won
 from .cli_constants import (
@@ -202,20 +202,35 @@ class _ShellConfig:
     ai_minimax_depth: int | None
 
 
-@dataclass()
 class _SavedLocalShellState:
-    session: GameSession
-    has_unsaved_changes: bool
-    current_ai_mode: str
-    current_ai_time: int
-    current_ai_minimax_depth: int | None
-    players: int
-    walls_per_player: int
-    board_size: int
-    ai_players: list[int]
-    blitz_enabled: bool
-    time_limit: float
-    blitz: Blitz
+    def __init__(
+        self,
+        *,
+        session: GameSession,
+        has_unsaved_changes: bool,
+        current_ai_mode: str,
+        current_ai_time: int,
+        current_ai_minimax_depth: int | None,
+        players: int,
+        walls_per_player: int,
+        board_size: int,
+        ai_players: list[int],
+        blitz_enabled: bool,
+        time_limit: float,
+        blitz: Blitz,
+    ) -> None:
+        self.session = session
+        self.has_unsaved_changes = has_unsaved_changes
+        self.current_ai_mode = current_ai_mode
+        self.current_ai_time = current_ai_time
+        self.current_ai_minimax_depth = current_ai_minimax_depth
+        self.players = players
+        self.walls_per_player = walls_per_player
+        self.board_size = board_size
+        self.ai_players = list(ai_players)
+        self.blitz_enabled = blitz_enabled
+        self.time_limit = time_limit
+        self.blitz = blitz
 
 
 def _config_from_state(state: "_ShellState") -> _ShellConfig:
@@ -1251,26 +1266,6 @@ def _command_server(state: _ShellState, line: str) -> bool:
     return cli_network.command_server(state, line)
 
 
-def _apply_network_move_to_local_session(
-    state: _ShellState,
-    move_notation: str,
-    _is_opponent: bool,
-) -> None:
-    token = move_notation.strip()
-    if not token:
-        return
-
-    with state.network_sync_lock:
-        try:
-            if "-" in token:
-                _play_pawn_move_from_token(state.session, token)
-            else:
-                _place_wall_from_token(state.session, token)
-        except Exception:
-            return
-        state.has_unsaved_changes = True
-
-
 def _apply_network_game_state_to_local_session(
     state: "_ShellState",
     game_state_update: GameStateUpdate,
@@ -1355,9 +1350,6 @@ def _command_join(state: _ShellState, line: str) -> bool:
 
     def _on_opponent_move(move_notation: str) -> None:
         print(f"\nOPPONENT_MOVE {move_notation}")
-        if state.network_move_callback is None:
-            return
-        state.network_move_callback(move_notation, True)
 
     def _on_game_state(game_state_update: GameStateUpdate) -> None:
         _apply_network_game_state_to_local_session(state, game_state_update)
@@ -1477,7 +1469,6 @@ class _ShellState:
     blitz: Blitz
     network_server: cli_network.NetworkServer | None = None
     network_client: cli_network.NetworkClient | None = None
-    network_move_callback: Callable[[str, bool], None] | None = None
     network_restore_callback: Callable[[], None] | None = None
     network_player_id: int | None = None
     saved_local_state: _SavedLocalShellState | None = None

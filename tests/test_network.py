@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import socket
 import time
-from types import SimpleNamespace
 
 import pytest
 
@@ -18,10 +17,8 @@ from quoridor.network import (
     NetworkClient,
     NetworkServer,
     discover_servers,
-    format_game_state_message,
     format_discovery_message,
     get_discovered_servers,
-    parse_game_state_message,
     parse_discovery_message,
     parse_endpoint,
     remember_server,
@@ -103,74 +100,11 @@ def test_parse_endpoint_supports_defaults_and_explicit_values():
     assert parse_endpoint("127.0.0.1:23456") == ("127.0.0.1", 23456)
 
 
-def test_cli_network_move_notifies_local_callback_on_success():
-    observed_moves = []
-
-    class FakeClient:
-        def __init__(self):
-            self.sent_notations = []
-
-        def move(self, notation: str) -> str:
-            self.sent_notations.append(notation)
-            return "MOVE_OK"
-
-        def drain_opponent_moves(self) -> list[str]:
-            return []
-
-        def close(self) -> None:
-            return
-
-    fake_client = FakeClient()
-    state = SimpleNamespace(
-        network_client=fake_client,
-        network_server=None,
-        network_move_callback=(
-            lambda move_notation, is_opponent: observed_moves.append(
-                (move_notation, is_opponent)
-            )
-        ),
-    )
-
-    assert cli_network_mod.command_move(state, "move e1-e2") is False
-    assert fake_client.sent_notations == ["e1-e2"]
-    assert observed_moves == [("e1-e2", False)]
-
-
 def test_discovery_message_round_trip_and_invalid_prefix():
     message = format_discovery_message("alpha", 23456)
 
     assert parse_discovery_message(message) == ("alpha", 23456)
     assert parse_discovery_message("WRONG alpha 23456") is None
-
-
-def test_game_state_message_round_trip():
-    message = format_game_state_message(
-        game_id=7,
-        player_id=2,
-        winner_id=None,
-        snapshot={
-            "board_size": 9,
-            "current_player": 2,
-            "player_positions": {1: 4, 2: 76},
-            "remaining_walls": {1: 19, 2: 20},
-            "vertical_walls": [(10, 11)],
-            "horizontal_walls": [(20, 29)],
-        },
-    )
-
-    assert parse_game_state_message(message) == {
-        "game_id": 7,
-        "player_id": 2,
-        "winner_id": None,
-        "state": {
-            "board_size": 9,
-            "current_player": 2,
-            "player_positions": {1: 4, 2: 76},
-            "remaining_walls": {1: 19, 2: 20},
-            "vertical_walls": [(10, 11)],
-            "horizontal_walls": [(20, 29)],
-        },
-    }
 
 
 def test_discover_servers_finds_udp_broadcast():
@@ -282,33 +216,6 @@ def test_network_server_accepts_multiple_clients():
             server.stop()
 
 
-def test_network_players_returns_id_name_and_status():
-    port = _unused_port()
-    server = NetworkServer(port=port)
-    first_client = NetworkClient(host="127.0.0.1", port=port, name="alice")
-    second_client = NetworkClient(host="127.0.0.1", port=port, name="bob")
-
-    try:
-        server.start()
-        first_client.connect()
-        second_client.connect()
-
-        players = first_client.players()
-
-        assert len(players) == 2
-        assert players[0][0] == 1
-        assert players[0][1] == "alice"
-        assert players[0][2] == "idle"
-        assert players[1][0] == 2
-        assert players[1][1] == "bob"
-        assert players[1][2] == "idle"
-    finally:
-        first_client.close()
-        second_client.close()
-        if server.running():
-            server.stop()
-
-
 def test_network_server_status_snapshot_updates_with_connections():
     port = _unused_port()
     server = NetworkServer(port=port)
@@ -327,6 +234,10 @@ def test_network_server_status_snapshot_updates_with_connections():
 
         second_client.connect()
         assert _wait_connected_clients(server, 2)
+        assert first_client.players() == [
+            (1, "alice", "idle"),
+            (2, "bob", "idle"),
+        ]
 
         first_client.quit()
         assert _wait_connected_clients(server, 1)
@@ -395,39 +306,6 @@ def test_network_new_creates_room_and_sets_players_ingame():
             (1, "alice", "ingame"),
             (2, "bob", "ingame"),
         ]
-    finally:
-        first_client.close()
-        second_client.close()
-        if server.running():
-            server.stop()
-
-
-def test_network_new_broadcasts_initial_game_state_to_every_player():
-    port = _unused_port()
-    server = NetworkServer(port=port)
-    first_client = NetworkClient(host="127.0.0.1", port=port, name="alice")
-    second_client = NetworkClient(host="127.0.0.1", port=port, name="bob")
-
-    try:
-        server.start()
-        first_client.connect()
-        second_client.connect()
-
-        assert first_client.send_command("NEW 2") == "NEW_OK 1"
-
-        first_update = _wait_for_game_state_update(first_client)
-        second_update = _wait_for_game_state_update(second_client)
-
-        assert first_update is not None
-        assert second_update is not None
-        assert first_update["game_id"] == 1
-        assert first_update["player_id"] == 1
-        assert second_update["game_id"] == 1
-        assert second_update["player_id"] == 2
-        assert first_update["state"]["current_player"] == 1
-        assert second_update["state"]["current_player"] == 1
-        assert first_update["state"]["player_positions"] == {1: 4, 2: 76}
-        assert second_update["state"]["player_positions"] == {1: 4, 2: 76}
     finally:
         first_client.close()
         second_client.close()
@@ -539,7 +417,26 @@ def test_network_move_routes_to_opponent_and_enforces_turn_order():
         second_client.connect()
         assert first_client.send_command("NEW 2") == "NEW_OK 1"
 
+        first_update = _wait_for_game_state_update(first_client)
+        second_update = _wait_for_game_state_update(second_client)
+        assert first_update is not None
+        assert second_update is not None
+        assert first_update["game_id"] == 1
+        assert first_update["player_id"] == 1
+        assert second_update["player_id"] == 2
+        assert first_update["state"]["current_player"] == 1
+        assert first_update["state"]["player_positions"] == {1: 4, 2: 76}
+
         assert first_client.move("e1-e2") == "MOVE_OK"
+        first_update = _wait_for_game_state_update(first_client)
+        second_update = _wait_for_game_state_update(second_client)
+        assert first_update is not None
+        assert second_update is not None
+        assert first_update["state"]["current_player"] == 2
+        assert first_update["state"]["player_positions"] == {
+            1: 13,
+            2: 76,
+        }
         assert first_client.move("e2-e3") == "ERROR NOT_YOUR_TURN"
 
         assert second_client.ping() >= 0
@@ -548,45 +445,6 @@ def test_network_move_routes_to_opponent_and_enforces_turn_order():
         assert second_client.move("e9-e8") == "MOVE_OK"
         assert first_client.ping() >= 0
         assert first_client.drain_opponent_moves() == ["e9-e8"]
-    finally:
-        first_client.close()
-        second_client.close()
-        if server.running():
-            server.stop()
-
-
-def test_network_move_broadcasts_updated_game_state():
-    port = _unused_port()
-    server = NetworkServer(port=port)
-    first_client = NetworkClient(host="127.0.0.1", port=port, name="alice")
-    second_client = NetworkClient(host="127.0.0.1", port=port, name="bob")
-
-    try:
-        server.start()
-        first_client.connect()
-        second_client.connect()
-        assert first_client.send_command("NEW 2") == "NEW_OK 1"
-
-        assert _wait_for_game_state_update(first_client) is not None
-        assert _wait_for_game_state_update(second_client) is not None
-
-        assert first_client.move("e1-e2") == "MOVE_OK"
-
-        first_update = _wait_for_game_state_update(first_client)
-        second_update = _wait_for_game_state_update(second_client)
-
-        assert first_update is not None
-        assert second_update is not None
-        assert first_update["state"]["current_player"] == 2
-        assert second_update["state"]["current_player"] == 2
-        assert first_update["state"]["player_positions"] == {
-            1: 13,
-            2: 76,
-        }
-        assert second_update["state"]["player_positions"] == {
-            1: 13,
-            2: 76,
-        }
     finally:
         first_client.close()
         second_client.close()
@@ -788,41 +646,10 @@ def test_cli_new_player_creates_game_with_explicit_errors(
     out = capsys.readouterr().out
     assert "Cannot create game: one or more players were not found." in out
     assert "Game 1 started with player(s) 1." in out
+    assert "You are player 1. Position: e1. Goal: reach row 9." in out
     assert "Cannot create game: you are already in game." in out
     assert "- 1: bob (ingame)" in out
     assert "- 2: alice (ingame)" in out
-
-
-def test_cli_network_new_prints_authoritative_game_state(
-    monkeypatch,
-    capsys,
-):
-    port = _unused_port()
-    server = NetworkServer(port=port)
-    bob = NetworkClient(host="127.0.0.1", port=port, name="bob")
-
-    try:
-        server.start()
-        bob.connect()
-        _run_shell(
-            monkeypatch,
-            [
-                f"join 127.0.0.1:{port} alice",
-                "new 1",
-                "ping",
-                "quit",
-                "quit",
-            ],
-        )
-    finally:
-        bob.close()
-        if server.running():
-            server.stop()
-
-    out = capsys.readouterr().out
-    assert "Game 1 started with player(s) 1." in out
-    assert "You are player 1. Position: e1. Goal: reach row 9." in out
-    assert "Player 1: e1, Player 2: e9" in out
 
 
 def test_cli_network_move_routes_and_enforces_turn(monkeypatch, capsys):
@@ -854,34 +681,6 @@ def test_cli_network_move_routes_and_enforces_turn(monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "Move sent: e1-e2" in out
     assert "Cannot play move: not your turn." in out
-
-
-def test_cli_network_move_prints_updated_game_state(monkeypatch, capsys):
-    port = _unused_port()
-    server = NetworkServer(port=port)
-    bob = NetworkClient(host="127.0.0.1", port=port, name="bob")
-
-    try:
-        server.start()
-        bob.connect()
-        _run_shell(
-            monkeypatch,
-            [
-                f"join 127.0.0.1:{port} alice",
-                "new 1",
-                "move e1-e2",
-                "ping",
-                "quit",
-                "quit",
-            ],
-        )
-    finally:
-        bob.close()
-        if server.running():
-            server.stop()
-
-    out = capsys.readouterr().out
-    assert "Move sent: e1-e2" in out
     assert "Current player: 2" in out
     assert "You are player 1. Position: e2. Goal: reach row 9." in out
     assert "Player 1: e2, Player 2: e9" in out

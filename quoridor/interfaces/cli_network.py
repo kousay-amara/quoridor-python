@@ -18,8 +18,36 @@ from ..network import (
 class NetworkState(Protocol):
     network_server: NetworkServer | None
     network_client: NetworkClient | None
-    network_move_callback: object | None
     network_restore_callback: object | None
+
+
+_NEW_GAME_ERRORS = {
+    "ERROR PLAYER_NOT_FOUND": (
+        "Cannot create game: one or more players were not found."
+    ),
+    "ERROR PLAYER_NOT_AVAILABLE": (
+        "Cannot create game: one or more players are busy."
+    ),
+    "ERROR REQUESTER_NOT_IDLE": (
+        "Cannot create game: you are already in game."
+    ),
+    "ERROR SELF_INVITE": (
+        "Cannot create game: choose player IDs different from yours."
+    ),
+    "ERROR UNSUPPORTED_PLAYER_COUNT": (
+        "Cannot create game: player count must be between 2 and 4."
+    ),
+}
+
+_MOVE_ERRORS = {
+    "ERROR NOT_IN_GAME": "Cannot play move: you are not in a network game.",
+    "ERROR NOT_YOUR_TURN": "Cannot play move: not your turn.",
+    "ERROR INVALID_MOVE_FORMAT": "Cannot play move: invalid move format.",
+    "ERROR ILLEGAL_MOVE": "Cannot play move: illegal move.",
+    "ERROR OPPONENT_DISCONNECTED": (
+        "Cannot play move: opponent disconnected."
+    ),
+}
 
 
 def parse_server_port(value: str) -> int:
@@ -183,10 +211,7 @@ def command_join(state: NetworkState, line: str) -> bool:
             "Invalid format. Use: join [HOST[:PORT]] [NAME]"
         ) from exc
 
-    if len(parts) == 3:
-        client = NetworkClient(host=host, port=port, name=name)
-    else:
-        client = NetworkClient(host=host, port=port)
+    client = NetworkClient(host=host, port=port, name=name or "player")
     try:
         client.connect()
     except OSError as exc:
@@ -314,57 +339,21 @@ def command_new_player(state: NetworkState, line: str) -> bool:
         print(f"Game {game_id} started with player(s) {targets_text}.")
         return False
 
-    if response == "ERROR PLAYER_NOT_FOUND":
-        print("Cannot create game: one or more players were not found.")
-        return False
-    if response == "ERROR PLAYER_NOT_AVAILABLE":
-        print("Cannot create game: one or more players are busy.")
-        return False
-    if response == "ERROR REQUESTER_NOT_IDLE":
-        print("Cannot create game: you are already in game.")
-        return False
-    if response == "ERROR SELF_INVITE":
-        print("Cannot create game: choose player IDs different from yours.")
-        return False
-    if response == "ERROR UNSUPPORTED_PLAYER_COUNT":
-        print("Cannot create game: player count must be between 2 and 4.")
-        return False
     if response == "ERROR INVALID_NEW_FORMAT":
         raise ValueError(
             "Invalid format. Use: new PLAYER_ID [PLAYER_ID...]"
         )
+    if response in _NEW_GAME_ERRORS:
+        print(_NEW_GAME_ERRORS[response])
+        return False
 
     print(f"Cannot create game: unexpected response ({response}).")
     return False
 
 
-def _notify_network_move(
-    state: NetworkState,
-    move_notation: str,
-    is_opponent: bool,
-) -> None:
-    callback = getattr(state, "network_move_callback", None)
-    if callback is None:
-        return
-    callback_fn = callback
-    try:
-        callback_fn(move_notation, is_opponent)
-    except Exception:
-        return
-
-
-def _print_opponent_moves(
-    state: NetworkState,
-    client: NetworkClient,
-) -> None:
-    if getattr(state, "network_move_callback", None) is not None:
-        for move_notation in client.drain_opponent_moves():
-            _notify_network_move(state, move_notation, True)
-        return
-
+def _print_opponent_moves(client: NetworkClient) -> None:
     for move_notation in client.drain_opponent_moves():
         print(f"OPPONENT_MOVE {move_notation}")
-        _notify_network_move(state, move_notation, True)
 
 
 def _command_move_with_notation(
@@ -387,32 +376,14 @@ def _command_move_with_notation(
     client = state.network_client
     if response == "MOVE_OK":
         print(f"Move sent: {move_notation}")
-        _notify_network_move(state, move_notation, False)
-        _print_opponent_moves(state, client)
-        return False
-    if response == "ERROR NOT_IN_GAME":
-        print("Cannot play move: you are not in a network game.")
-        _print_opponent_moves(state, client)
-        return False
-    if response == "ERROR NOT_YOUR_TURN":
-        print("Cannot play move: not your turn.")
-        _print_opponent_moves(state, client)
-        return False
-    if response == "ERROR INVALID_MOVE_FORMAT":
-        print("Cannot play move: invalid move format.")
-        _print_opponent_moves(state, client)
-        return False
-    if response == "ERROR ILLEGAL_MOVE":
-        print("Cannot play move: illegal move.")
-        _print_opponent_moves(state, client)
-        return False
-    if response == "ERROR OPPONENT_DISCONNECTED":
-        print("Cannot play move: opponent disconnected.")
-        _print_opponent_moves(state, client)
-        return False
-
-    print(f"Cannot play move: unexpected response ({response}).")
-    _print_opponent_moves(state, client)
+    else:
+        print(
+            _MOVE_ERRORS.get(
+                response,
+                f"Cannot play move: unexpected response ({response}).",
+            )
+        )
+    _print_opponent_moves(client)
     return False
 
 
