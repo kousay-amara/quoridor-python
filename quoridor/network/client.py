@@ -276,6 +276,42 @@ class NetworkClient:
             players.append((client_id, parts[1], parts[2]))
         return players
 
+    def player_details(
+        self,
+        client_id: int,
+    ) -> tuple[int, str, str, int, int, int]:
+        if client_id <= 0:
+            raise ValueError("player id must be positive")
+
+        response = self.send_command(f"PLAYERS {client_id}")
+        if response == "ERROR PLAYER_NOT_FOUND":
+            raise ValueError("Player not found.")
+        if response == "ERROR INVALID_PLAYERS_FORMAT":
+            raise OSError(f"unexpected players response: {response}")
+        if not response.startswith("PLAYER "):
+            raise OSError(f"unexpected players response: {response}")
+
+        parts = response[7:].split("|")
+        if len(parts) != 6:
+            raise OSError(f"unexpected players response: {response}")
+
+        try:
+            detail_client_id = int(parts[0])
+            wins = int(parts[3])
+            losses = int(parts[4])
+            played = int(parts[5])
+        except ValueError:
+            raise OSError(f"unexpected players response: {response}")
+
+        return (
+            detail_client_id,
+            parts[1],
+            parts[2],
+            wins,
+            losses,
+            played,
+        )
+
     def scoreboard(self) -> list[tuple[int, str, int, int, int]]:
         response = self.send_command("SCOREBOARD")
         if response == "SCOREBOARD":

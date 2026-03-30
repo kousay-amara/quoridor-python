@@ -286,6 +286,44 @@ def test_network_server_status_snapshot_updates_with_connections():
             server.stop()
 
 
+def test_network_players_supports_detailed_lookup_by_id():
+    port = _unused_port()
+    server = NetworkServer(port=port)
+    first_client = NetworkClient(host="127.0.0.1", port=port, name="alice")
+    second_client = NetworkClient(host="127.0.0.1", port=port, name="bob")
+
+    try:
+        server.start()
+        first_client.connect()
+        second_client.connect()
+
+        assert first_client.player_details(2) == (
+            2,
+            "bob",
+            "idle",
+            0,
+            0,
+            0,
+        )
+
+        response = first_client.send_command("NEW 2")
+        assert response == "NEW_OK 1"
+
+        assert first_client.player_details(2) == (
+            2,
+            "bob",
+            "ingame",
+            0,
+            0,
+            0,
+        )
+    finally:
+        first_client.close()
+        second_client.close()
+        if server.running():
+            server.stop()
+
+
 def test_network_scoreboard_tracks_runtime_stats():
     port = _unused_port()
     server = NetworkServer(port=port)
@@ -835,6 +873,32 @@ def test_cli_join_accepts_custom_name(monkeypatch, capsys):
     assert f"Connected to server 127.0.0.1:{port}." in out
     assert "Connected players:" in out
     assert "- 1: alice (idle)" in out
+
+
+def test_cli_players_with_id_displays_detailed_player_info(
+    monkeypatch,
+    capsys,
+):
+    port = _unused_port()
+
+    _run_shell(
+        monkeypatch,
+        [
+            f"server start {port}",
+            f"join 127.0.0.1:{port} alice",
+            "players 1",
+            "quit",
+            "server stop",
+            "quit",
+        ],
+    )
+
+    out = capsys.readouterr().out
+    assert "Player 1: alice" in out
+    assert "- status: idle" in out
+    assert "- played: 0" in out
+    assert "- wins: 0" in out
+    assert "- losses: 0" in out
 
 
 def test_cli_scoreboard_displays_server_stats(monkeypatch, capsys):

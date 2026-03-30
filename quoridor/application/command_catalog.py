@@ -103,8 +103,11 @@ COMMAND_CATALOG: tuple[CommandHelp, ...] = (
     ),
     CommandHelp(
         "players",
-        "players",
-        "List players connected to the current game server.",
+        "players [PLAYER_ID]",
+        (
+            "List players connected to the current game server, "
+            "or show detailed information for PLAYER_ID."
+        ),
     ),
     CommandHelp(
         "scoreboard",

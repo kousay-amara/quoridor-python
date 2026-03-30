@@ -22,6 +22,10 @@ from .basic_network import (
 
 _ROOM_BOARD_SIZE = 9
 _ROOM_WALLS_PER_PLAYER = 20
+_PLAYER_STATUS_IDLE = "idle"
+_PLAYER_STATUS_AWAY = "away"
+_PLAYER_STATUS_WAITGAME = "waitgame"
+_PLAYER_STATUS_INGAME = "ingame"
 
 
 class _ClientSession:
@@ -222,7 +226,7 @@ class NetworkServer:
                     thread=client_thread,
                     last_activity_time=time.time(),
                     name=f"client-{client_id}",
-                    status="idle",
+                    status=_PLAYER_STATUS_IDLE,
                     game_id=None,
                     buffer="",
                 )
@@ -298,11 +302,14 @@ class NetworkServer:
                         break
                     continue
 
-                if command_upper == "PLAYERS":
+                if (
+                    command_upper == "PLAYERS"
+                    or command_upper.startswith("PLAYERS ")
+                ):
                     try:
                         _send_line(
                             client_sock,
-                            self._format_players_response(),
+                            self._handle_players_command(command),
                         )
                     except OSError:
                         break
@@ -458,7 +465,7 @@ class NetworkServer:
                 if session is None:
                     return False
                 session.name = client_name
-                session.status = "idle"
+                session.status = _PLAYER_STATUS_IDLE
                 session.game_id = None
                 session.buffer = buffer
                 self._ensure_score_entry(client_id, client_name)
@@ -494,6 +501,43 @@ class NetworkServer:
             for client_id, name, status in players
         )
         return f"PLAYERS {payload}"
+
+    def _player_response(self, requested_client_id: int) -> str:
+        with self._lock:
+            session = self._client_sessions.get(requested_client_id)
+            if session is None:
+                return "ERROR PLAYER_NOT_FOUND"
+
+            self._ensure_score_entry(requested_client_id, session.name)
+            entry = self._scoreboard[requested_client_id]
+            player_name = session.name
+            player_status = session.status
+            wins = entry.wins
+            losses = entry.losses
+            played = entry.played
+
+        return (
+            "PLAYER "
+            f"{requested_client_id}|{player_name}|{player_status}|"
+            f"{wins}|{losses}|{played}"
+        )
+
+    def _handle_players_command(self, command: str) -> str:
+        parts = command.split()
+        if len(parts) == 1:
+            return self._format_players_response()
+        if len(parts) != 2:
+            return "ERROR INVALID_PLAYERS_FORMAT"
+
+        try:
+            requested_client_id = int(parts[1])
+        except ValueError:
+            return "ERROR INVALID_PLAYERS_FORMAT"
+
+        if requested_client_id <= 0:
+            return "ERROR INVALID_PLAYERS_FORMAT"
+
+        return self._player_response(requested_client_id)
 
     def _scoreboard_response(self) -> str:
         with self._lock:
@@ -554,7 +598,7 @@ class NetworkServer:
             requester = self._client_sessions.get(client_id)
             if requester is None:
                 return "ERROR REQUESTER_NOT_FOUND", None
-            if requester.status != "idle":
+            if requester.status != _PLAYER_STATUS_IDLE:
                 return "ERROR REQUESTER_NOT_IDLE", None
 
             participants_client_ids = [client_id]
@@ -562,7 +606,7 @@ class NetworkServer:
                 target = self._client_sessions.get(target_client_id)
                 if target is None:
                     return "ERROR PLAYER_NOT_FOUND", None
-                if target.status != "idle":
+                if target.status != _PLAYER_STATUS_IDLE:
                     return "ERROR PLAYER_NOT_AVAILABLE", None
                 participants_client_ids.append(target_client_id)
 
@@ -596,7 +640,7 @@ class NetworkServer:
                     participant_client_id
                 )
                 if participant_session is not None:
-                    participant_session.status = "ingame"
+                    participant_session.status = _PLAYER_STATUS_INGAME
                     participant_session.game_id = game_id
 
             room = self._game_rooms[game_id]
@@ -619,12 +663,15 @@ class NetworkServer:
             session = self._client_sessions.get(client_id)
             if session is None:
                 return "ERROR PLAYER_NOT_FOUND", None, None
-            if session.game_id is None or session.status != "ingame":
+            if (
+                session.game_id is None
+                or session.status != _PLAYER_STATUS_INGAME
+            ):
                 return "ERROR NOT_IN_GAME", None, None
 
             room = self._game_rooms.get(session.game_id)
             if room is None:
-                session.status = "idle"
+                session.status = _PLAYER_STATUS_IDLE
                 session.game_id = None
                 return "ERROR NOT_IN_GAME", None, None
 
@@ -743,7 +790,7 @@ class NetworkServer:
             session = self._client_sessions.get(room_player_id)
             if session is None:
                 continue
-            session.status = "idle"
+            session.status = _PLAYER_STATUS_IDLE
             session.game_id = None
 
     def record_finished_game(

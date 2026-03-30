@@ -1645,7 +1645,8 @@ class _PingCommand(_InvalidAsCommandError):
 
 class _PlayersCommand(_InvalidAsCommandError):
     def matches(self, line: str) -> bool:
-        return line.lower() == "players"
+        line_lower = line.lower()
+        return line_lower == "players" or line_lower.startswith("players ")
 
     def run(self, state: _ShellState, line: str) -> bool:
         return _command_players(state, line)

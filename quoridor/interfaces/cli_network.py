@@ -265,11 +265,43 @@ def command_ping(state: NetworkState, _line: str) -> bool:
 
 
 def command_players(state: NetworkState, line: str) -> bool:
-    if line.strip().lower() != "players":
-        raise ValueError("Invalid format. Use: players")
+    parts = line.split()
+    if len(parts) > 2 or not parts or parts[0].lower() != "players":
+        raise ValueError("Invalid format. Use: players [PLAYER_ID]")
 
     if state.network_client is None:
         print("Not connected to any server.")
+        return False
+
+    if len(parts) == 2:
+        try:
+            requested_player_id = int(parts[1])
+        except ValueError:
+            raise ValueError("Invalid format. Use: players [PLAYER_ID]")
+        if requested_player_id <= 0:
+            raise ValueError("Invalid format. Use: players [PLAYER_ID]")
+
+        try:
+            (
+                client_id,
+                name,
+                status,
+                wins,
+                losses,
+                played,
+            ) = state.network_client.player_details(requested_player_id)
+        except ValueError as exc:
+            print(str(exc))
+            return False
+        except OSError as exc:
+            _handle_connection_lost(state, exc)
+            return False
+
+        print(f"Player {client_id}: {name}")
+        print(f"- status: {status}")
+        print(f"- played: {played}")
+        print(f"- wins: {wins}")
+        print(f"- losses: {losses}")
         return False
 
     try:
