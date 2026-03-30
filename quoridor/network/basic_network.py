@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import socket
-from typing import TypedDict
 
 from ..core.move_record import GameSnapshot
 
@@ -13,7 +12,6 @@ DEFAULT_SERVER_HOST = "localhost"
 DEFAULT_SERVER_PORT = 12345
 DISCOVERY_PORT = 12346
 DISCOVERY_BROADCAST_INTERVAL_SEC = 10.0
-DISCOVERY_TIMEOUT_SEC = DISCOVERY_BROADCAST_INTERVAL_SEC + 0.5
 DISCOVERY_ENTRY_TTL_SEC = 30.0
 CLIENT_TIMEOUT_SEC = 60.0
 _SOCKET_TIMEOUT_SEC = 0.5
@@ -22,11 +20,7 @@ _DISCOVERY_PREFIX = "QUORIDOR_SERVER"
 _GAME_STATE_PREFIX = "GAME_STATE"
 
 
-class GameStateUpdate(TypedDict):
-    game_id: int
-    player_id: int
-    winner_id: int | None
-    state: GameSnapshot
+GameStateUpdate = dict
 
 
 def _validate_port(port: int) -> int:
@@ -178,7 +172,6 @@ __all__ = [
     "DISCOVERY_BROADCAST_INTERVAL_SEC",
     "DISCOVERY_ENTRY_TTL_SEC",
     "DISCOVERY_PORT",
-    "DISCOVERY_TIMEOUT_SEC",
     "GameStateUpdate",
     "format_game_state_message",
     "parse_endpoint",

@@ -7,7 +7,6 @@ from .basic_network import (
     DISCOVERY_BROADCAST_INTERVAL_SEC,
     DISCOVERY_ENTRY_TTL_SEC,
     DISCOVERY_PORT,
-    DISCOVERY_TIMEOUT_SEC,
     parse_endpoint,
 )
 from .client import NetworkClient
@@ -15,7 +14,6 @@ from .discovery import (
     DiscoveredServer,
     DiscoveryBroadcaster,
     DiscoveryListener,
-    discover_servers,
     format_discovery_message,
     get_discovered_servers,
     parse_discovery_message,
@@ -31,12 +29,10 @@ __all__ = [
     "DISCOVERY_BROADCAST_INTERVAL_SEC",
     "DISCOVERY_ENTRY_TTL_SEC",
     "DISCOVERY_PORT",
-    "DISCOVERY_TIMEOUT_SEC",
     "DiscoveredServer",
     "DiscoveryBroadcaster",
     "DiscoveryListener",
     "NetworkClient",
-    "discover_servers",
     "format_discovery_message",
     "get_discovered_servers",
     "parse_discovery_message",

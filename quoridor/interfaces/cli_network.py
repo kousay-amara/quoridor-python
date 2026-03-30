@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import time
 from typing import Protocol
 
 from ..network import (
     DEFAULT_SERVER_PORT,
+    DISCOVERY_BROADCAST_INTERVAL_SEC,
     DiscoveredServer,
     DiscoveryListener,
     NetworkClient,
@@ -49,12 +51,14 @@ _MOVE_ERRORS = {
     ),
 }
 
+_DISCOVERY_WARMUP_POLL_SEC = 0.05
+
 
 def parse_server_port(value: str) -> int:
     try:
         port = int(value)
-    except ValueError as exc:
-        raise ValueError(f"invalid port: {value}") from exc
+    except ValueError:
+        raise ValueError(f"invalid port: {value}")
     if not 1 <= port <= 65535:
         raise ValueError(f"invalid port: {value}")
     return port
@@ -95,6 +99,28 @@ def _handle_connection_lost(
     _restore_local_mode(state)
 
 
+def _load_discovered_servers_for_listing(
+    state: NetworkState,
+) -> list[DiscoveredServer]:
+    if state.network_server is not None:
+        return get_discovered_servers()
+
+    if getattr(state, "network_discovery_initial_wait_done", False):
+        return get_discovered_servers()
+
+    setattr(state, "network_discovery_initial_wait_done", True)
+    deadline = time.monotonic() + DISCOVERY_BROADCAST_INTERVAL_SEC
+    while time.monotonic() < deadline:
+        servers = get_discovered_servers()
+        if servers:
+            return servers
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        time.sleep(min(_DISCOVERY_WARMUP_POLL_SEC, remaining))
+    return get_discovered_servers()
+
+
 def command_server(state: NetworkState, line: str) -> bool:
     parts = line.split()
     if len(parts) < 2:
@@ -106,7 +132,7 @@ def command_server(state: NetworkState, line: str) -> bool:
     if action == "list":
         if len(parts) != 2:
             raise ValueError("Invalid format. Use: server list")
-        servers = get_discovered_servers()
+        servers = _load_discovered_servers_for_listing(state)
         unique_servers = []
         seen_server_keys = set()
         for server in servers:
@@ -164,7 +190,7 @@ def command_server(state: NetworkState, line: str) -> bool:
         if state.network_server is None:
             print("Server is not running.")
             return False
-        status = state.network_server.status_snapshot()
+        status = state.network_server.server_status_snapshot()
         print("Server status:")
         print(f"- port: {status['port']}")
         print(f"- connected clients: {status['connected_clients']}")
@@ -206,10 +232,10 @@ def command_join(state: NetworkState, line: str) -> bool:
 
     try:
         host, port = parse_endpoint(endpoint)
-    except ValueError as exc:
+    except ValueError:
         raise ValueError(
             "Invalid format. Use: join [HOST[:PORT]] [NAME]"
-        ) from exc
+        )
 
     client = NetworkClient(host=host, port=port, name=name or "player")
     try:
@@ -303,10 +329,10 @@ def command_new_player(state: NetworkState, line: str) -> bool:
     for raw_target_id in parts[1:]:
         try:
             target_player_id = int(raw_target_id)
-        except ValueError as exc:
+        except ValueError:
             raise ValueError(
                 "Invalid format. Use: new PLAYER_ID [PLAYER_ID...]"
-            ) from exc
+            )
         if target_player_id <= 0:
             raise ValueError(
                 "Invalid format. Use: new PLAYER_ID [PLAYER_ID...]"

@@ -110,7 +110,7 @@ class NetworkServer:
         self._game_rooms: dict[int, _GameRoom] = {}
         self._next_client_id = 1
         self._next_game_id = 1
-        self._lock = threading.RLock()
+        self._lock = threading.Lock()
 
     def running(self) -> bool:
         return (
@@ -118,7 +118,7 @@ class NetworkServer:
             and self._accept_thread.is_alive()
         )
 
-    def status_snapshot(self) -> dict[str, int]:
+    def server_status_snapshot(self) -> dict[str, int]:
         with self._lock:
             connected_clients = len(self._client_sessions)
             active_games = len(self._game_rooms)
@@ -137,7 +137,7 @@ class NetworkServer:
         listener_sock.settimeout(_SOCKET_TIMEOUT_SEC)
         try:
             listener_sock.bind((self.host, self.port))
-            listener_sock.listen(16)
+            listener_sock.listen(15)
         except OSError:
             listener_sock.close()
             raise
@@ -169,7 +169,7 @@ class NetworkServer:
             self._client_sessions = {}
             self._game_rooms = {}
 
-        for _client_id, session in sessions:
+        for _, session in sessions:
             try:
                 _send_line(session.sock, "SERVER_STOPPING")
                 _send_line(session.sock, "BYE")
@@ -199,7 +199,7 @@ class NetworkServer:
         assert self._listener_sock is not None
         while not self._stop_requested.is_set():
             try:
-                client_sock, _address = self._listener_sock.accept()
+                client_sock, _ = self._listener_sock.accept()
             except socket.timeout:
                 continue
             except OSError:
@@ -233,7 +233,7 @@ class NetworkServer:
                 self._close_client(client_id, client_sock)
                 continue
 
-            if not self._perform_hello(client_id, client_sock):
+            if not self._perform_handshake(client_id, client_sock):
                 self._close_client(client_id, client_sock)
                 continue
 
@@ -312,7 +312,7 @@ class NetworkServer:
                     try:
                         _send_line(
                             client_sock,
-                            self._format_scoreboard_response(),
+                            self._scoreboard_response(),
                         )
                     except OSError:
                         break
@@ -384,6 +384,18 @@ class NetworkServer:
         finally:
             self._close_client(client_id, client_sock)
 
+    def _close_client_locked(
+        self,
+        client_id: int,
+        client_sock: socket.socket,
+    ) -> None:
+        session = self._client_sessions.get(client_id)
+        if session is not None and session.sock is client_sock:
+            game_id = session.game_id
+            del self._client_sessions[client_id]
+            if game_id is not None:
+                self._close_game_room_locked(game_id)
+
     def _close_client(
         self,
         client_id: int,
@@ -395,14 +407,9 @@ class NetworkServer:
             pass
 
         with self._lock:
-            session = self._client_sessions.get(client_id)
-            if session is not None and session.sock is client_sock:
-                game_id = session.game_id
-                del self._client_sessions[client_id]
-                if game_id is not None:
-                    self._close_game_room_locked(game_id)
+            self._close_client_locked(client_id, client_sock)
 
-    def _perform_hello(
+    def _perform_handshake(
         self,
         client_id: int,
         client_sock: socket.socket,
@@ -488,7 +495,7 @@ class NetworkServer:
         )
         return f"PLAYERS {payload}"
 
-    def _format_scoreboard_response(self) -> str:
+    def _scoreboard_response(self) -> str:
         with self._lock:
             items = [
                 (
@@ -575,11 +582,8 @@ class NetworkServer:
             game_id = self._next_game_id
             self._next_game_id += 1
             client_to_player_id = {
-                participant_client_id: player_id
-                for player_id, participant_client_id in enumerate(
-                    participants_client_ids,
-                    start=1,
-                )
+                participants_client_ids[index]: index + 1
+                for index in range(len(participants_client_ids))
             }
             self._game_rooms[game_id] = _GameRoom(
                 game_id=game_id,
@@ -658,7 +662,11 @@ class NetworkServer:
                         f"OPPONENT_MOVE {move_notation}",
                     )
                 except OSError:
-                    self._close_client(
+                    try:
+                        opponent_session.sock.close()
+                    except OSError:
+                        pass
+                    self._close_client_locked(
                         participant_client_id,
                         opponent_session.sock,
                     )
