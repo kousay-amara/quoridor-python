@@ -164,6 +164,10 @@ def _main_gui(args) -> int:
         walls=args.walls,
         blitz=args.blitz,
         time_limit=args.time,
+        ai_players=args.ai_player,
+        ai_mode=args.ai_mode,
+        ai_time=args.ai_time,
+        ai_minimax_depth=args.ai_minimax_depth
     )
 
 
