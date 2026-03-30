@@ -162,6 +162,8 @@ def _main_gui(args) -> int:
         num_players=args.players,
         board_size=args.size,
         walls=args.walls,
+        blitz=args.blitz,
+        time_limit=args.time,
     )
 
 

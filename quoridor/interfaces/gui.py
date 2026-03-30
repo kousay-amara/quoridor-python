@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 import math
 import sys
 from pathlib import Path
@@ -7,7 +8,7 @@ from pathlib import Path
 import gi
 
 gi.require_version("Gtk", "4.0")
-from gi.repository import Gio, Gtk  # noqa: E402
+from gi.repository import Gio,GLib,Gtk  # noqa: E402
 
 if __package__ in {None, ""}:
     project_root = Path(__file__).resolve().parents[2]
@@ -41,8 +42,10 @@ if __package__ in {None, ""}:
         PLAYER_COLORS,
         SIZE,
     )
+    from quoridor.application.blitz import Blitz
 else:
     from ..application.game_application_service import GameApplicationService
+    from ..application.blitz import Blitz
     from ..application.game_session import (
         GameSession,
         initial_player_positions,
@@ -76,6 +79,8 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         num_players=2,
         board_size=9,
         walls=DEFAULT_WALLS,
+        blitz=False,
+        time_limit=0,
     ):
         super().__init__(application=app, title="Quoridor")
         self.set_default_size(680, 760)
@@ -83,9 +88,14 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         self._app = app
         self._paused = False
         self._game_over = False
+        self._turn_start_time: float | None = None
+        self._blitz_timer_id: int | None = None
         self._num_players = num_players
         self._init_board_size = board_size
         self._init_walls = walls
+        self._init_blitz=blitz
+        self._init_time_limit=time_limit
+        self._pause_elapsed: float = 0.0
         self._shortcut_window: Gtk.Window | None = None
         self._shortcut_entries: dict[ActionType, Gtk.Entry] = {}
 
@@ -97,8 +107,18 @@ class QuoridorWindow(Gtk.ApplicationWindow):
             size=board_size,
             players=num_players,
             walls=walls,
+
         )
-        self.service = GameApplicationService(session=self.session, blitz=None)
+
+        if self._init_blitz:
+            self.blitz = Blitz(
+                time_limit_minutes=self._init_time_limit,
+                player_ids=self.session.state.player_positions,
+        )
+        else:
+            self.blitz = Blitz(time_limit_minutes=0)
+        
+        self.service = GameApplicationService(session=self.session, blitz=self.blitz)
         self.status = Gtk.Label(label="Ready.")
         self.status.set_xalign(0.0)
 
@@ -109,6 +129,8 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         self.area.set_draw_func(self._draw)
 
         menubar = self._build_menubar()
+        if self._init_blitz:
+            self.blitz_label.set_visible(True)
 
         root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         root.set_margin_top(10)
@@ -133,6 +155,49 @@ class QuoridorWindow(Gtk.ApplicationWindow):
 
         self._install_actions()
         self._bind_shortcuts()
+        self._start_blitz_turn()
+
+    def _start_blitz_turn(self) -> None:
+        if not self.blitz.is_enabled():
+            return
+        self._turn_start_time = time.time()
+        self._blitz_timer_id = GLib.timeout_add(100, self._on_blitz_tick)
+
+
+    def _stop_blitz_turn(self, player_id: int) -> bool:
+        if not self.blitz.is_enabled():
+            return False
+        if self._turn_start_time is None: 
+            return False
+        if self._blitz_timer_id is not None:
+            GLib.source_remove(self._blitz_timer_id)
+            self._blitz_timer_id = None
+        elapsed = time.time() - self._turn_start_time
+        self._turn_start_time = None
+        return self.blitz.consume_time(player_id, elapsed)
+
+    def _on_blitz_tick(self) -> bool:
+        if self._turn_start_time is None:
+            return False
+        if self._paused:   
+            return True 
+        player_id = self.session.state.current_player
+        elapsed = time.time() - self._turn_start_time
+        remaining = self.blitz.remaining_time(player_id) - elapsed
+        if remaining <= 0:
+            self._stop_blitz_turn(player_id)
+            record, winner = self.session.timeout_player(player_id)
+            if winner is not None:
+                self._game_over = True
+                self._set_status(f"Player {winner} wins!")
+            else:
+                self._set_status(f"Player {player_id} ran out of time!")
+                self._start_blitz_turn()
+            return False
+        mins = int(remaining) // 60
+        secs = int(remaining) % 60
+        self.blitz_label.set_text(f"Player{player_id}: {mins}:{secs:02d}")
+        return True
 
     def _build_menubar(self) -> Gtk.PopoverMenuBar:
         file_menu = Gio.Menu()
@@ -152,8 +217,20 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         menu_model = Gio.Menu()
         menu_model.append_submenu("File", file_menu)
         menu_model.append_submenu("Game", game_menu)
+        
+        menubar = Gtk.PopoverMenuBar(menu_model=menu_model)
+       
+        menubar.set_hexpand(True)
 
-        return Gtk.PopoverMenuBar(menu_model=menu_model)
+        self.blitz_label = Gtk.Label(label="")
+        self.blitz_label.set_xalign(1.0)
+        self.blitz_label.set_visible(False)
+
+        bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        bar.append(menubar)
+        bar.append(self.blitz_label)
+
+        return bar
 
     def _build_new_session(
         self, *, size: int, players: int, walls: int = 20
@@ -268,11 +345,13 @@ class QuoridorWindow(Gtk.ApplicationWindow):
             target_funcs, self.session.state.remaining_walls, current
         )
         if valid:
+            self._stop_blitz_turn(current) 
             self.session.place_wall(current, edges, orient)
             self._set_status(
                 f"Player {current} placed {orient} wall "
                 f"at ({row}, {col})."
             )
+            self._start_blitz_turn()
         else:
             self._set_status(error)
         self.area.queue_draw()
@@ -298,6 +377,7 @@ class QuoridorWindow(Gtk.ApplicationWindow):
                 self.session.state.graph, from_node, to_node, all_pos, size
             )
             if valid:
+                self._stop_blitz_turn(self._drag_pid)
                 self.session.play_pawn_move(self._drag_pid, to_node)
                 winner = self.session.winner_id()
                 if winner is not None:
@@ -308,6 +388,7 @@ class QuoridorWindow(Gtk.ApplicationWindow):
                         f"Player {self._drag_pid} moved "
                         f"to ({row}, {col})."
                     )
+                    self._start_blitz_turn() 
             else:
                 self._set_status(error)
         self._drag_pid = None
@@ -353,15 +434,26 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         return None, None
 
     def _action_new_game(self) -> None:
+        if self._blitz_timer_id is not None:
+            GLib.source_remove(self._blitz_timer_id)
+            self._blitz_timer_id = None
         self.session = self._build_new_session(
             size=self._init_board_size,
             players=self._num_players,
             walls=self._init_walls,
         )
-        self.service.set_context(session=self.session, blitz=None)
+        if self._init_blitz:
+            self.blitz = Blitz(
+                time_limit_minutes=self._init_time_limit,
+                player_ids=self.session.state.player_positions,
+            )
+        else:
+            self.blitz = Blitz(time_limit_minutes=0)
+        self.service.set_context(session=self.session, blitz=self.blitz)
         self._paused = False
         self._game_over = False
         self.area.queue_draw()
+        self._start_blitz_turn()
         self._set_status("New game started.")
 
     def _action_load_game(self) -> None:
@@ -423,11 +515,21 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         if winner is not None:
             self._game_over = True
             self._set_status(f"Player {winner} wins!")           
+        else:
+            self._set_status(f"Redid {total} move(s).")
         self.area.queue_draw()
-        self._set_status(f"Redid {total} move(s).")
+
 
     def _action_pause(self) -> None:
         self._paused = not self._paused
+        if self.blitz.is_enabled():
+            self.blitz.toggle_pause()
+            if self._paused:
+                if self._turn_start_time is not None:
+                    self._pause_elapsed = time.time() - self._turn_start_time
+            else:
+                self._turn_start_time = time.time() - self._pause_elapsed
+                self._pause_elapsed = 0.0
         self._set_status("Game paused." if self._paused else "Game resumed.")
 
     def _action_hint(self) -> None:
@@ -605,14 +707,20 @@ class QuoridorWindow(Gtk.ApplicationWindow):
             return
 
         try:
-            self.session, _blitz = self.service.load(
+            self.session, loaded_blitz = self.service.load(
                 path,
                 fallback_player_types=self.session.player_types,
                 fallback_walls_per_player=self.session.state.remaining_walls,
             )
+            if self._blitz_timer_id is not None:
+                GLib.source_remove(self._blitz_timer_id)
+                self._blitz_timer_id = None
+            self.blitz = loaded_blitz
+            self.blitz_label.set_visible(self.blitz.is_enabled())
             self._paused = False
             self._game_over = False
             self.area.queue_draw()
+            self._start_blitz_turn()
             self._set_status(f"Loaded from: {path}")
         except Exception as exc:
             self._set_status(f"Load failed: {exc}")
@@ -688,7 +796,7 @@ class QuoridorWindow(Gtk.ApplicationWindow):
             cr.fill()
 
 
-def main(num_players=2, board_size=9, walls=20):
+def main(num_players=2, board_size=9, walls=20, blitz=False, time_limit=0):
     app = Gtk.Application(application_id="fr.ubordeaux.quoridor.demo")
     app.connect(
         "activate",
@@ -697,6 +805,8 @@ def main(num_players=2, board_size=9, walls=20):
             num_players=num_players,
             board_size=board_size,
             walls=walls,
+            blitz=blitz,
+            time_limit=time_limit,
         ).present(),
     )
     return app.run([sys.argv[0]])
