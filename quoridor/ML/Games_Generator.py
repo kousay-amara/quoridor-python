@@ -13,14 +13,14 @@ from ..application.ai_logic import (
     evaluate_state_hybrid,
     evaluate_state_material,
 )
-from ..application.game_session import GameSession, initial_player_positions
+from ..application.game_session import GameSession
 from ..application.mcts_engine import mcts_search
 from ..application.minimax_engine import (
     find_best_move_iterative,
     find_best_move_minimax,
 )
 from ..core.game_state import GameState
-from ..core.game_state_builder import GameStateBuilder
+from .session_helpers import build_initial_ai_session
 
 
 class BotConfig:
@@ -71,47 +71,6 @@ class GameGenerator:
         self.walls_per_player = walls_per_player
         self.max_turns = max_turns
 
-        self.index_path = self.output_dir / "games_index.csv"
-
-    def generate_games(
-        self,
-        matchups: list[tuple[BotConfig, BotConfig]],
-        games_per_matchup: int,
-        seed: int | None = None,
-    ) -> list[dict]:
-        """Generate several games and save them to disk."""
-        if games_per_matchup <= 0:
-            raise ValueError("games_per_matchup must be > 0")
-
-        rng = random.Random(seed)
-        generated_games: list[dict] = []
-        game_counter = 1
-
-        for matchup in matchups:
-            bot_a = matchup[0]
-            bot_b = matchup[1]
-
-            for offset in range(games_per_matchup):
-                if offset % 2 == 0:
-                    player_bots = {1: bot_a, 2: bot_b}
-                else:
-                    player_bots = {1: bot_b, 2: bot_a}
-
-                game_seed = rng.randint(0, 10**9)
-                game_id = f"game_{game_counter:04d}"
-
-                game_data = self.play_game(
-                    player_bots=player_bots,
-                    seed=game_seed,
-                    game_id=game_id,
-                )
-
-                generated_games.append(game_data)
-                game_counter += 1
-
-        self._write_index(generated_games)
-        return generated_games
-
     def play_game(
         self,
         player_bots: dict[int, BotConfig],
@@ -142,6 +101,8 @@ class GameGenerator:
             winner_id = session.winner_id()
 
             move_data = self._serialize_move(move)
+            
+            
             turn_log = {
                 "turn": turn_index,
                 "player_id": player_id,
@@ -173,24 +134,11 @@ class GameGenerator:
         return game_data
 
     def _build_session(self) -> GameSession:
-        positions = initial_player_positions(self.board_size, self.players)
-
-        remaining_walls = {}
-        for player_id in positions:
-            remaining_walls[player_id] = self.walls_per_player
-
-        builder = GameStateBuilder(board_size=self.board_size)
-        builder = builder.with_current_player(1)
-        builder = builder.with_players(positions)
-        builder = builder.with_remaining_walls(remaining_walls)
-        state = builder.build()
-
-        player_types = {}
-        for player_id in positions:
-            player_types[player_id] = "ai"
-
-        session = GameSession(state=state, player_types=player_types)
-        return session
+        return build_initial_ai_session(
+            board_size=self.board_size,
+            players=self.players,
+            walls_per_player=self.walls_per_player,
+        )
 
     def _choose_move(self, state: GameState, bot: BotConfig) -> tuple:
         if bot.mode == "minimax":
@@ -302,6 +250,7 @@ class GameGenerator:
                 writer.writerow(row)
 
     def _serialize_move(self, move: tuple) -> dict:
+        """Transform a game move into a json move """
         move_type = move[0]
 
         if move_type == "pawn":
