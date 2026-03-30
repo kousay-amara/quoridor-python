@@ -16,7 +16,6 @@ from quoridor.network import (
     DiscoveryListener,
     NetworkClient,
     NetworkServer,
-    discover_servers,
     format_discovery_message,
     get_discovered_servers,
     parse_discovery_message,
@@ -74,7 +73,7 @@ def _wait_connected_clients(
 ) -> bool:
     deadline = time.time() + 1.0
     while time.time() < deadline:
-        status = server.status_snapshot()
+        status = server.server_status_snapshot()
         if status["connected_clients"] == expected_count:
             return True
         time.sleep(0.01)
@@ -93,6 +92,13 @@ def _wait_for_game_state_update(
     return None
 
 
+class _FakeNetworkState:
+    def __init__(self) -> None:
+        self.network_server = None
+        self.network_client = None
+        self.network_restore_callback = None
+
+
 def test_parse_endpoint_supports_defaults_and_explicit_values():
     assert parse_endpoint(None) == (DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT)
     assert parse_endpoint("   ") == (DEFAULT_SERVER_HOST, DEFAULT_SERVER_PORT)
@@ -105,31 +111,6 @@ def test_discovery_message_round_trip_and_invalid_prefix():
 
     assert parse_discovery_message(message) == ("alpha", 23456)
     assert parse_discovery_message("WRONG alpha 23456") is None
-
-
-def test_discover_servers_finds_udp_broadcast():
-    server_port = _unused_port()
-    discovery_port = _unused_port()
-    broadcaster = DiscoveryBroadcaster(
-        port=server_port,
-        discovery_port=discovery_port,
-        interval_sec=0.05,
-    )
-
-    try:
-        broadcaster.start()
-        servers = discover_servers(
-            timeout_sec=0.2,
-            listen_port=discovery_port,
-        )
-    finally:
-        broadcaster.stop()
-
-    assert any(
-        server.name == "quoridor-server" and server.port == server_port
-        for server in servers
-    )
-
 
 def test_discovery_listener_updates_cache_in_background():
     server_port = _unused_port()
@@ -166,6 +147,60 @@ def test_get_discovered_servers_prunes_expired_entries(monkeypatch):
     monkeypatch.setattr(discovery_mod, "DISCOVERY_ENTRY_TTL_SEC", 0.0)
 
     assert get_discovered_servers() == []
+
+
+def test_cli_server_list_waits_only_on_first_lookup(
+    monkeypatch,
+    capsys,
+):
+    state = _FakeNetworkState()
+    clock = {"value": 0.0}
+    sleep_calls = []
+    discovered_server = cli_network_mod.DiscoveredServer(
+        "alpha",
+        "127.0.0.1",
+        23456,
+    )
+    responses = [
+        [],
+        [],
+        [discovered_server],
+        [],
+    ]
+    response_index = {"value": 0}
+
+    def fake_get_discovered_servers():
+        index = min(response_index["value"], len(responses) - 1)
+        response_index["value"] += 1
+        return responses[index]
+
+    def fake_monotonic():
+        return clock["value"]
+
+    def fake_sleep(duration: float):
+        sleep_calls.append(duration)
+        clock["value"] += duration
+
+    monkeypatch.setattr(
+        cli_network_mod,
+        "get_discovered_servers",
+        fake_get_discovered_servers,
+    )
+    monkeypatch.setattr(cli_network_mod.time, "monotonic", fake_monotonic)
+    monkeypatch.setattr(cli_network_mod.time, "sleep", fake_sleep)
+
+    assert cli_network_mod.command_server(state, "server list") is False
+    first_output = capsys.readouterr().out
+    assert "Discovered servers:" in first_output
+    assert "- alpha (127.0.0.1:23456)" in first_output
+    assert sleep_calls
+
+    sleep_calls.clear()
+
+    assert cli_network_mod.command_server(state, "server list") is False
+    second_output = capsys.readouterr().out
+    assert "No network servers found." in second_output
+    assert sleep_calls == []
 
 
 def test_network_server_and_client_support_ping_and_quit():
@@ -224,7 +259,7 @@ def test_network_server_status_snapshot_updates_with_connections():
 
     try:
         server.start()
-        status = server.status_snapshot()
+        status = server.server_status_snapshot()
         assert status["port"] == port
         assert status["connected_clients"] == 0
         assert status["active_games"] == 0
@@ -298,7 +333,7 @@ def test_network_new_creates_room_and_sets_players_ingame():
         response = first_client.send_command("NEW 2")
         assert response == "NEW_OK 1"
 
-        status = server.status_snapshot()
+        status = server.server_status_snapshot()
         assert status["active_games"] == 1
 
         players = first_client.players()
@@ -361,7 +396,7 @@ def test_network_new_supports_multiple_target_players():
         response = first_client.send_command("NEW 2 3")
         assert response == "NEW_OK 1"
 
-        status = server.status_snapshot()
+        status = server.server_status_snapshot()
         assert status["active_games"] == 1
 
         players = first_client.players()
@@ -563,7 +598,7 @@ def test_network_game_end_closes_room_and_updates_scoreboard():
         assert second_client.move("d4-d3") == "MOVE_OK"
         assert first_client.move("e8-e9") == "MOVE_OK"
 
-        status = server.status_snapshot()
+        status = server.server_status_snapshot()
         assert status["active_games"] == 0
 
         players = first_client.players()

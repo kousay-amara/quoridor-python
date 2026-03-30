@@ -3,8 +3,6 @@ from __future__ import annotations
 import socket
 import threading
 import time
-from collections import deque
-from typing import Callable
 
 from .basic_network import (
     DEFAULT_SERVER_HOST,
@@ -32,9 +30,9 @@ class NetworkClient:
         self.client_id = None
         self._sock = None
         self._buffer = ""
-        self._pending_opponent_moves = deque()
-        self._pending_game_state_updates = deque()
-        self._response_queue = deque()
+        self._pending_opponent_moves = []
+        self._pending_game_state_updates = []
+        self._response_queue = []
         self._response_condition = threading.Condition()
         self._send_lock = threading.Lock()
         self._reader_thread = None
@@ -86,10 +84,10 @@ class NetworkClient:
                     self.client_id = int(
                         hello_response.split(maxsplit=1)[1]
                     )
-                except (IndexError, ValueError) as exc:
+                except (IndexError, ValueError):
                     raise OSError(
                         f"unexpected server response: {hello_response}"
-                    ) from exc
+                    )
                 self._sock = sock
                 self._buffer = hello_buffer
                 self._response_queue.clear()
@@ -182,13 +180,13 @@ class NetworkClient:
 
     def set_opponent_move_callback(
         self,
-        callback: Callable[[str], None] | None,
+        callback,
     ) -> None:
         self._opponent_move_callback = callback
 
     def set_game_state_callback(
         self,
-        callback: Callable[[GameStateUpdate], None] | None,
+        callback,
     ) -> None:
         self._game_state_callback = callback
 
@@ -201,7 +199,7 @@ class NetworkClient:
             with self._response_condition:
                 while True:
                     if self._response_queue:
-                        return self._response_queue.popleft()
+                        return self._response_queue.pop(0)
                     if self._reader_error is not None:
                         error = self._reader_error
                         self.close()
@@ -271,10 +269,10 @@ class NetworkClient:
                 raise OSError(f"unexpected players response: {response}")
             try:
                 client_id = int(parts[0])
-            except ValueError as exc:
+            except ValueError:
                 raise OSError(
                     f"unexpected players response: {response}"
-                ) from exc
+                )
             players.append((client_id, parts[1], parts[2]))
         return players
 
@@ -298,10 +296,10 @@ class NetworkClient:
                 wins = int(parts[2])
                 losses = int(parts[3])
                 played = int(parts[4])
-            except ValueError as exc:
+            except ValueError:
                 raise OSError(
                     f"unexpected scoreboard response: {response}"
-                ) from exc
+                )
             scores.append((client_id, parts[1], wins, losses, played))
         return scores
 
