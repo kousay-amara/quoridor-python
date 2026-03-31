@@ -61,10 +61,18 @@ def get_player_target_funcs(
     return targets
 
 
+def _has_crossing_wall(graph, wall_edges):
+    (a, b), (c, d) = wall_edges
+    cross1_missing = c not in graph.adj.get(a, [])
+    cross2_missing = d not in graph.adj.get(b, [])
+    return cross1_missing and cross2_missing
+
+
 def get_all_legal_wall_placements(
     state: GameState,
     deadline_check: Callable[[], None] | None = None,
 ):
+
     legal_walls = []
     size = state.board_size
     player_ids = state.active_player_ids()
@@ -77,7 +85,11 @@ def get_all_legal_wall_placements(
             for orientation in ["h", "v"]:
                 if deadline_check is not None:
                     deadline_check()
+                
                 edges = get_edges_for_wall_at(r, c, orientation, size)
+
+                if _has_crossing_wall(state.graph, edges):
+                    continue
 
                 if is_wall_legal(
                     state.graph,
@@ -87,4 +99,5 @@ def get_all_legal_wall_placements(
                     deadline_check=deadline_check,
                 ):
                     legal_walls.append(("wall", edges, orientation))
+                    
     return legal_walls

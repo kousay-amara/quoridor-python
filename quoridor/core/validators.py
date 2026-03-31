@@ -1,6 +1,6 @@
 from ..utils.graph import Graph
 from ..rules.pawn_rules import get_all_legal_pawn_moves
-from ..rules.wall_rules import is_wall_legal
+from ..rules.wall_rules import is_wall_legal, _has_crossing_wall
 
 
 def validate_pawn_move(
@@ -23,13 +23,6 @@ def validate_pawn_move(
     if naturally_adjacent:
         return False, "A wall is blocking that move."
     return False, "This move is not reachable from your position."
-
-
-def _has_crossing_wall(graph, wall_edges):
-    (a, b), (c, d) = wall_edges
-    cross1_missing = c not in graph.adj.get(a, [])
-    cross2_missing = d not in graph.adj.get(b, [])
-    return cross1_missing and cross2_missing
 
 
 def validate_wall(
