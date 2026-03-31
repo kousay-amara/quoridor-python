@@ -260,6 +260,13 @@ def _build_parser(
         default=depth_default,
         help=_("minimax depth (fixed for minimax, max for iterative)"),
     )
+    parser.add_argument(
+        "--ai-minimax-scoring",
+        type=int,
+        choices=[1, 2, 3],
+        default=1,
+        help=_("Type de scoring pour l'IA (1: Default, 2: Material, 3: Hybrid)"),
+    )
     parser.set_defaults(
         verbose=bool(defaults["verbose"]), blitz=bool(defaults["blitz"])
     )

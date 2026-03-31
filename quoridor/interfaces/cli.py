@@ -254,6 +254,9 @@ def _main_interactive(argv: list[str]) -> int:
         sys.stderr.write(
             "warning: --ai-time is ignored in minimax mode\n"
         )
+    if args.ai_mode == "mcts" and "--ai-minimax-scoring" in sys.argv:
+        sys.stderr.write("warning: --ai-minimax-scoring is ignored in MCTS mode\n")
+        
     _run_interactive_shell(
         blitz=args.blitz,
         time_limit=time_limit,
@@ -265,6 +268,7 @@ def _main_interactive(argv: list[str]) -> int:
         ai_mode=args.ai_mode,
         ai_time=args.ai_time,
         ai_minimax_depth=args.ai_minimax_depth,
+        ai_minimax_scoring=args.ai_minimax_scoring,
         startup_server_port=args.server,
         verbose=args.verbose,
         debug=args.debug,
