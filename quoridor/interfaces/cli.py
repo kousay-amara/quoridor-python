@@ -192,6 +192,22 @@ def _run_server_daemon(port: int = DEFAULT_SERVER_PORT) -> int:
     return 0
 
 
+def _resolve_ai_ids(ai_args: list, total_players: int) -> list[int]:
+    if not ai_args:
+        return []
+    
+    resolved = set()
+    for val in ai_args:
+        if val == "ALL":
+            for i in range(1, total_players + 1):
+                resolved.add(i)
+        elif val == "DEFAULT":
+            resolved.add(2 if total_players >= 2 else 1)
+        else:
+            resolved.add(val)
+    return sorted(list(resolved))
+
+
 def _main_interactive(argv: list[str]) -> int:
     setup_i18n()
     defaults = load_or_init_config()
@@ -201,6 +217,9 @@ def _main_interactive(argv: list[str]) -> int:
     if args.version:
         print(_get_version())
         return 0
+    
+    ai_ids = _resolve_ai_ids(args.ai_players, args.players)
+    args.ai_player = ai_ids
 
     if args.gui:
         return _main_gui(args)
@@ -212,7 +231,7 @@ def _main_interactive(argv: list[str]) -> int:
     if args.daemon:
         return _run_server_daemon(args.server)
 
-    if any(pid > args.players for pid in args.ai_player):
+    if any(pid > args.players for pid in ai_ids):
         parser.error("--ai-player id must be <= --players")
     if args.ai_time <= 0:
         parser.error("--ai-time must be > 0")
@@ -242,7 +261,7 @@ def _main_interactive(argv: list[str]) -> int:
         players=args.players,
         walls_per_player=args.walls,
         board_size=args.size,
-        ai_players=args.ai_player,
+        ai_players=ai_ids,
         ai_mode=args.ai_mode,
         ai_time=args.ai_time,
         ai_minimax_depth=args.ai_minimax_depth,

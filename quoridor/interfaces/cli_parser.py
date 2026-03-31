@@ -94,6 +94,32 @@ def _port_type(raw: str) -> int:
         raise argparse.ArgumentTypeError("port must be between 1 and 65535")
     return value
 
+def _ai_selection_type(raw : str) -> str | int:
+    if not raw or raw.upper() == 'DEFAULT':
+        return 'DEFAULT'
+    
+    val_upper = raw.upper()
+    if val_upper == 'A' or val_upper == 'ALL':
+        return 'ALL'
+    
+    colors = {
+        "RED": 1, "ROUGE": 1,
+        "BLUE": 2, "BLEU": 2,
+        "GREEN": 3, "VERT": 3,
+        "YELLOW": 4, "JAUNE": 4
+    }
+    
+    if val_upper in colors:
+        return colors[val_upper]
+    
+    try:
+        return _player_id_type(raw)
+    except Exception:
+        raise argparse.ArgumentTypeError(
+            f"False AI value : '{raw}'. "
+            "Use a color (ex: red), an ID (1-4), or 'A' for all."
+        )
+
 
 def _build_parser(
     defaults: dict[str, object],
@@ -205,12 +231,15 @@ def _build_parser(
         help=_("start local server immediately (optional port)"),
     )
     parser.add_argument(
-        "--ai-player",
+        "-a",
+        "--ai",
+        dest="ai_players",
         action="append",
-        default=ai_players,
-        type=_player_id_type,
+        nargs="?",
+        const="DEFAULT",
+        type=_ai_selection_type,
         help=_(
-            "player id controlled by AI (repeat option for multiple players)"
+            "Replace a player by an AI (Color, ID or 'A' for all)"
         ),
     )
     parser.add_argument(
