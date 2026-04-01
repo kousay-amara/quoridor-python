@@ -42,7 +42,8 @@ def test_shortcut_manager_replace_all_normalizes_and_validates():
 
 
 def test_config_manager_roundtrip(tmp_path: Path):
-    path = tmp_path / "shortcuts.json"
+    path = tmp_path / ".qoridorrc"
+    path.write_text("[defaults]\nplayers = 2\n", encoding="utf-8")
     config = ConfigManager(path=path)
 
     manager = ShortcutManager.with_defaults()
@@ -51,11 +52,15 @@ def test_config_manager_roundtrip(tmp_path: Path):
 
     loaded = config.load_shortcuts()
     assert loaded.get(ActionType.UNDO) == "<Primary>z"
+    saved = path.read_text(encoding="utf-8")
+    assert "[defaults]" in saved
+    assert "players = 2" in saved
+    assert "[shortcuts]" in saved
 
 
 def test_config_manager_invalid_file_falls_back_to_defaults(tmp_path: Path):
-    path = tmp_path / "shortcuts.json"
-    path.write_text("not-json", encoding="utf-8")
+    path = tmp_path / ".qoridorrc"
+    path.write_text("[shortcuts\nbroken", encoding="utf-8")
 
     config = ConfigManager(path=path)
     loaded = config.load_shortcuts()

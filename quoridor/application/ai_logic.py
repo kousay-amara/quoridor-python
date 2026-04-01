@@ -63,7 +63,7 @@ def apply_move(state: GameState, move: tuple) -> None:
 
     state._rebuild_graph()
 
-    # Passer au joueur suivant
+    # Advance to the next active player.
     active_players = state.active_player_ids()
     if not active_players:
         return

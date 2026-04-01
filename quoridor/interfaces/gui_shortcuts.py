@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import json
+import configparser
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
@@ -118,32 +118,30 @@ class ShortcutManager:
 
 @dataclass
 class ConfigManager:
-    """Read/write GUI shortcut settings to a JSON file."""
+    """Read/write GUI shortcut settings in the main INI config file."""
 
     path: Path
 
     @classmethod
     def default(cls) -> "ConfigManager":
-        return cls(path=Path.home() / ".quoridor_gui_shortcuts.json")
+        return cls(path=Path.home() / ".qoridorrc")
 
     def load_shortcuts(self) -> ShortcutManager:
         manager = ShortcutManager.with_defaults()
         if not self.path.exists():
             return manager
 
+        parser = configparser.ConfigParser()
         try:
-            raw = json.loads(self.path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
+            with self.path.open("r", encoding="utf-8") as stream:
+                parser.read_file(stream)
+        except (OSError, configparser.Error):
             return manager
 
-        if not isinstance(raw, dict):
+        if "shortcuts" not in parser:
             return manager
 
-        shortcuts_raw = raw.get("shortcuts", {})
-        if not isinstance(shortcuts_raw, dict):
-            return manager
-
-        parsed = ShortcutManager.parse_serializable(shortcuts_raw)
+        parsed = ShortcutManager.parse_serializable(dict(parser["shortcuts"]))
         try:
             manager.replace_all(parsed)
         except ShortcutError:
@@ -151,12 +149,18 @@ class ConfigManager:
         return manager
 
     def save_shortcuts(self, manager: ShortcutManager) -> None:
-        payload = {"shortcuts": manager.as_serializable()}
+        parser = configparser.ConfigParser()
+        if self.path.exists():
+            try:
+                with self.path.open("r", encoding="utf-8") as stream:
+                    parser.read_file(stream)
+            except (OSError, configparser.Error):
+                parser = configparser.ConfigParser()
+
+        parser["shortcuts"] = manager.as_serializable()
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        self.path.write_text(
-            json.dumps(payload, indent=2, sort_keys=True),
-            encoding="utf-8",
-        )
+        with self.path.open("w", encoding="utf-8") as stream:
+            parser.write(stream)
 
 
 @dataclass
