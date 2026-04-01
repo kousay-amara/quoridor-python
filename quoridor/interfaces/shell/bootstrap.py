@@ -69,14 +69,10 @@ def initialize_shell_state(
     active_ai_players = session_ai_players(session)
     if active_ai_players:
         depth_label = (
-            "auto"
-            if config.ai_minimax_depth is None
-            else config.ai_minimax_depth
+            "auto" if config.ai_minimax_depth is None else config.ai_minimax_depth
         )
         time_label = (
-            ""
-            if config.ai_mode == ai_mode_minimax
-            else f", time={config.ai_time}s"
+            "" if config.ai_mode == ai_mode_minimax else f", time={config.ai_time}s"
         )
         print(
             f"AI players: {active_ai_players} "
@@ -115,4 +111,3 @@ def initialize_shell_state(
         blitz=blitz_state,
     )
     return state, False
-

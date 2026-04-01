@@ -201,6 +201,8 @@ class DiscoveryListener:
                     _prune_expired_servers_locked()
         finally:
             sock.close()
+
+
 __all__ = [
     "DiscoveredServer",
     "DiscoveryBroadcaster",

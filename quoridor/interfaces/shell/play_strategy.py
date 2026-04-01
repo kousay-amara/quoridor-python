@@ -9,8 +9,7 @@ from typing import Any, Callable, Protocol
 class PlayCommandStrategy(Protocol):
     """Execute one play command and return (has_unsaved_changes, should_break)."""
 
-    def execute(self, state: Any, text: str) -> tuple[bool, bool]:
-        ...
+    def execute(self, state: Any, text: str) -> tuple[bool, bool]: ...
 
 
 @dataclass(frozen=True)
@@ -43,4 +42,3 @@ def resolve_play_command_strategy(
     if getattr(state, "network_client", None) is not None:
         return network_strategy
     return local_strategy
-

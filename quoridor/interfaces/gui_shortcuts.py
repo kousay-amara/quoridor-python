@@ -91,9 +91,7 @@ class ShortcutManager:
         self.shortcuts = merged
 
     def as_serializable(self) -> dict[str, str]:
-        return {
-            action.value: self.shortcuts[action] for action in ActionType
-        }
+        return {action.value: self.shortcuts[action] for action in ActionType}
 
     @staticmethod
     def parse_serializable(raw: dict[str, str]) -> dict[ActionType, str]:
@@ -113,8 +111,7 @@ class ShortcutManager:
             token = shortcut.lower()
             if token in seen and seen[token] != action:
                 raise ShortcutError(
-                    f"shortcut '{shortcut}' is already used by "
-                    f"{seen[token].value}"
+                    f"shortcut '{shortcut}' is already used by " f"{seen[token].value}"
                 )
             seen[token] = action
 

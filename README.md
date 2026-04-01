@@ -1,50 +1,53 @@
 # Quoridor
 
-Implémentation du jeu de plateau **Quoridor** en Python : interface en ligne de commande (CLI), mode contest (lecture d’une position et sortie d’un coup), et option d’interface graphique.
+Python implementation of the **Quoridor** board game with:
+- an interactive command-line interface (CLI),
+- a contest mode (read a position file and output one move),
+- an optional GTK graphical interface.
 
 ## Installation
 
-À la racine du projet, dans un environnement virtuel recommandé :
+From the project root (a virtual environment is recommended):
 
 ```bash
 pip install -e .
 ```
 
-Pour le développement (tests, couverture, formatage, doc) :
+For development (tests, coverage, formatting, docs):
 
 ```bash
 pip install -e ".[dev]"
 ```
 
-Pour l’interface graphique (optionnel) :
+For the GUI (optional):
 
 ```bash
 pip install -e ".[gui]"
 ```
 
-## Lancer le jeu
+## Run The Game
 
-- **Mode interactif (CLI)**  
+- **Interactive CLI mode**
   ```bash
   quoridor
   ```
 
-- **Mode contest** (lire un fichier de position et afficher un coup sur la sortie standard)  
+- **Contest mode** (read a position file and print one move to stdout)
   ```bash
-  quoridor -c chemin/vers/fichier.txt
+  quoridor -c path/to/file.txt
   ```
 
-- **Version**  
+- **Version**
   ```bash
   quoridor -V
   ```
 
-- **Interface graphique (GTK)**  
-  Depuis la racine du dépôt :
+- **GTK GUI**
+  From the repository root:
   ```bash
   python -m quoridor.interfaces.gui
   ```
-  Depuis `quoridor/interfaces` :
+  From `quoridor/interfaces`:
   ```bash
   python -m gui
   ```
@@ -55,13 +58,13 @@ pip install -e ".[gui]"
 pytest
 ```
 
-Sans couverture :
+Without coverage:
 
 ```bash
 pytest -q -p no:cov -o addopts= tests
 ```
 
-Tester uniquement le mode contest :
+Run only contest-mode tests:
 
 ```bash
 PYTHONPATH=. pytest -q -p no:cov -o addopts= tests/test_contest.py
@@ -69,7 +72,7 @@ PYTHONPATH=. pytest -q -p no:cov -o addopts= tests/test_contest.py
 
 ## Documentation
 
-La documentation API est générée avec Sphinx. Après installation des dépendances de dev :
+API documentation is generated with Sphinx. After installing dev dependencies:
 
 ```bash
 pip install -r docs/requirements.txt
@@ -77,16 +80,16 @@ cd docs
 make html
 ```
 
-Si le thème RTD manque (`ThemeError: no theme named 'sphinx_rtd_theme'`) :
+If the RTD theme is missing (`ThemeError: no theme named 'sphinx_rtd_theme'`):
 
 ```bash
 pip install sphinx-rtd-theme
 ```
 
-Ouvrir ensuite : **`docs/_build/html/index.html`** (ou [index.html](docs/_build/html/index.html) en relatif depuis la racine du dépôt).
+Then open: **`docs/_build/html/index.html`** (or [index.html](docs/_build/html/index.html) from the repository root).
 
-## Développement
+## Development
 
-- Tester le mode contest à la main (exemple) :  
+- Manually test contest mode (example):  
   `PYTHONPATH=. python3 -m quoridor.interfaces.cli -c contest_example.txt`  
-  (adapter le chemin du module si ton point d’entrée CLI est différent.)
+  (adjust the module path if your CLI entry point is different).

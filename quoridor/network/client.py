@@ -80,17 +80,11 @@ class NetworkClient:
                 if hello_response is None:
                     raise OSError("server did not answer HELLO")
                 if not hello_response.startswith("HELLO_OK "):
-                    raise OSError(
-                        f"unexpected server response: {hello_response}"
-                    )
+                    raise OSError(f"unexpected server response: {hello_response}")
                 try:
-                    self.client_id = int(
-                        hello_response.split(maxsplit=1)[1]
-                    )
+                    self.client_id = int(hello_response.split(maxsplit=1)[1])
                 except (IndexError, ValueError):
-                    raise OSError(
-                        f"unexpected server response: {hello_response}"
-                    )
+                    raise OSError(f"unexpected server response: {hello_response}")
                 self._sock = sock
                 self._buffer = hello_buffer
                 self._response_queue.clear()
@@ -136,7 +130,7 @@ class NetworkClient:
             if line is None:
                 continue
             if line.startswith("OPPONENT_MOVE "):
-                move_notation = line[len("OPPONENT_MOVE "):].strip()
+                move_notation = line[len("OPPONENT_MOVE ") :].strip()
                 if not move_notation:
                     continue
                 callback = self._opponent_move_callback
@@ -165,15 +159,11 @@ class NetworkClient:
                         callback(game_state_update)
                     except Exception:
                         with self._response_condition:
-                            self._pending_game_state_updates.append(
-                                game_state_update
-                            )
+                            self._pending_game_state_updates.append(game_state_update)
                     continue
 
                 with self._response_condition:
-                    self._pending_game_state_updates.append(
-                        game_state_update
-                    )
+                    self._pending_game_state_updates.append(game_state_update)
                 continue
 
             if line.startswith(
@@ -199,9 +189,7 @@ class NetworkClient:
                 continue
 
             if line == "ERROR TIMEOUT":
-                self._set_reader_error(
-                    OSError("server timed out the connection")
-                )
+                self._set_reader_error(OSError("server timed out the connection"))
                 break
 
             with self._response_condition:
@@ -336,9 +324,7 @@ class NetworkClient:
             try:
                 client_id = int(parts[0])
             except ValueError:
-                raise OSError(
-                    f"unexpected players response: {response}"
-                )
+                raise OSError(f"unexpected players response: {response}")
             players.append((client_id, parts[1], parts[2]))
         return players
 
@@ -390,18 +376,14 @@ class NetworkClient:
         for entry in payload.split(";"):
             parts = entry.split("|")
             if len(parts) != 5:
-                raise OSError(
-                    f"unexpected scoreboard response: {response}"
-                )
+                raise OSError(f"unexpected scoreboard response: {response}")
             try:
                 client_id = int(parts[0])
                 wins = int(parts[2])
                 losses = int(parts[3])
                 played = int(parts[4])
             except ValueError:
-                raise OSError(
-                    f"unexpected scoreboard response: {response}"
-                )
+                raise OSError(f"unexpected scoreboard response: {response}")
             scores.append((client_id, parts[1], wins, losses, played))
         return scores
 

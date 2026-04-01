@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import inspect
 import logging
 import subprocess
 import sys
@@ -110,9 +111,7 @@ def _configure_logging(verbose: bool, debug: bool) -> None:
         format="%(levelname)s: %(message)s",
         force=True,
     )
-    LOGGER.debug(
-        "Logging configured with level=%s", logging.getLevelName(level)
-    )
+    LOGGER.debug("Logging configured with level=%s", logging.getLevelName(level))
 
 
 def _get_version() -> str:
@@ -158,17 +157,28 @@ def _main_gui(args) -> int:
         )
         return result.returncode
 
-    return gui_mod.main(
-        num_players=args.players,
-        board_size=args.size,
-        walls=args.walls,
-        blitz=args.blitz,
-        time_limit=args.time,
-        ai_players=args.ai_player,
-        ai_mode=args.ai_mode,
-        ai_time=args.ai_time,
-        ai_minimax_depth=args.ai_minimax_depth
-    )
+    kwargs = {
+        "num_players": args.players,
+        "board_size": args.size,
+        "walls": args.walls,
+        "blitz": args.blitz,
+        "time_limit": args.time,
+    }
+    optional_args = {
+        "ai_players": getattr(args, "ai_player", None),
+        "ai_mode": getattr(args, "ai_mode", None),
+        "ai_time": getattr(args, "ai_time", None),
+        "ai_minimax_depth": getattr(args, "ai_minimax_depth", None),
+    }
+    try:
+        accepted = set(inspect.signature(gui_mod.main).parameters)
+    except (TypeError, ValueError):
+        accepted = set(kwargs).union(optional_args)
+    for name, value in optional_args.items():
+        if name in accepted and value is not None:
+            kwargs[name] = value
+
+    return gui_mod.main(**kwargs)
 
 
 def _run_server_daemon(port: int = DEFAULT_SERVER_PORT) -> int:
@@ -195,7 +205,7 @@ def _run_server_daemon(port: int = DEFAULT_SERVER_PORT) -> int:
 def _resolve_ai_ids(ai_args: list, total_players: int) -> list[int]:
     if not ai_args:
         return []
-    
+
     resolved = set()
     for val in ai_args:
         if val == "ALL":
@@ -217,7 +227,7 @@ def _main_interactive(argv: list[str]) -> int:
     if args.version:
         print(_get_version())
         return 0
-    
+
     ai_ids = _resolve_ai_ids(args.ai_players, args.players)
     args.ai_player = ai_ids
 
@@ -246,17 +256,13 @@ def _main_interactive(argv: list[str]) -> int:
 
     time_limit = args.time
     if _is_time_passed_on_cli(argv) and not args.blitz:
-        sys.stderr.write(
-            "warning: --time is ignored unless --blitz is enabled\n"
-        )
+        sys.stderr.write("warning: --time is ignored unless --blitz is enabled\n")
         time_limit = float(defaults.get("time", DEFAULTS["time"]))
     if args.ai_mode == AI_MODE_MINIMAX and _is_ai_time_passed_on_cli(argv):
-        sys.stderr.write(
-            "warning: --ai-time is ignored in minimax mode\n"
-        )
+        sys.stderr.write("warning: --ai-time is ignored in minimax mode\n")
     if args.ai_mode == "mcts" and "--ai-minimax-scoring" in sys.argv:
         sys.stderr.write("warning: --ai-minimax-scoring is ignored in MCTS mode\n")
-        
+
     _run_interactive_shell(
         blitz=args.blitz,
         time_limit=time_limit,
@@ -268,7 +274,6 @@ def _main_interactive(argv: list[str]) -> int:
         ai_mode=args.ai_mode,
         ai_time=args.ai_time,
         ai_minimax_depth=args.ai_minimax_depth,
-        ai_minimax_scoring=args.ai_minimax_scoring,
         startup_server_port=args.server,
         verbose=args.verbose,
         debug=args.debug,

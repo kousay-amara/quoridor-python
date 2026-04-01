@@ -45,4 +45,3 @@ class EventBus:
         listeners.extend(self._listeners.get("*", []))
         for listener in listeners:
             listener(event)
-

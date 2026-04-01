@@ -90,6 +90,11 @@ def build_command_registry(
     command_ping: Runner,
     command_players: Runner,
     command_scoreboard: Runner,
+    command_accept: Runner,
+    command_decline: Runner,
+    command_cancel: Runner,
+    command_away: Runner,
+    command_back: Runner,
     command_moves: Runner,
     command_move: Runner,
     command_wall: Runner,
@@ -164,12 +169,37 @@ def build_command_registry(
                 error_policy=ERROR_POLICY_INVALID,
             ),
             CommandSpec(
+                matcher=lambda line: _is_prefix_command(line, "accept"),
+                runner=command_accept,
+                error_policy=ERROR_POLICY_INVALID,
+            ),
+            CommandSpec(
+                matcher=lambda line: _is_prefix_command(line, "decline"),
+                runner=command_decline,
+                error_policy=ERROR_POLICY_INVALID,
+            ),
+            CommandSpec(
+                matcher=lambda line: _is_prefix_command(line, "cancel"),
+                runner=command_cancel,
+                error_policy=ERROR_POLICY_INVALID,
+            ),
+            CommandSpec(
+                matcher=lambda line: _is_prefix_command(line, "away"),
+                runner=command_away,
+                error_policy=ERROR_POLICY_INVALID,
+            ),
+            CommandSpec(
+                matcher=lambda line: _is_prefix_command(line, "back"),
+                runner=command_back,
+                error_policy=ERROR_POLICY_INVALID,
+            ),
+            CommandSpec(
                 matcher=lambda line: line.lower() == "ping",
                 runner=command_ping,
                 error_policy=ERROR_POLICY_INVALID,
             ),
             CommandSpec(
-                matcher=lambda line: line.lower() == "players",
+                matcher=lambda line: _is_prefix_command(line, "players"),
                 runner=command_players,
                 error_policy=ERROR_POLICY_INVALID,
             ),
@@ -227,4 +257,3 @@ def build_command_registry(
         ],
         invalid_handler=invalid_handler,
     )
-

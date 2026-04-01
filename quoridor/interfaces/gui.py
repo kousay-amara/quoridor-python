@@ -8,7 +8,7 @@ from pathlib import Path
 import gi
 
 gi.require_version("Gtk", "4.0")
-from gi.repository import Gio,GLib,Gtk  # noqa: E402
+from gi.repository import Gio, GLib, Gtk  # noqa: E402
 
 if __package__ in {None, ""}:
     project_root = Path(__file__).resolve().parents[2]
@@ -84,7 +84,7 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         ai_players: list[int] | None = None,
         ai_mode: str = "iterative",
         ai_time: int = 5,
-        ai_minimax_depth: int | None = None
+        ai_minimax_depth: int | None = None,
     ):
         super().__init__(application=app, title="Quoridor")
         self.set_default_size(680, 760)
@@ -95,15 +95,15 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         self._game_over = False
         self._turn_start_time: float | None = None
         self._blitz_timer_id: int | None = None
-        self._ai_players = ai_players or []   # le "or []" gère le cas None
+        self._ai_players = ai_players or []  # Handle None by using an empty list.
         self._ai_mode = ai_mode
         self._ai_time = ai_time
         self._ai_minimax_depth = ai_minimax_depth
         self._num_players = num_players
         self._init_board_size = board_size
         self._init_walls = walls
-        self._init_blitz=blitz
-        self._init_time_limit=time_limit
+        self._init_blitz = blitz
+        self._init_time_limit = time_limit
         self._pause_elapsed: float = 0.0
         self._shortcut_window: Gtk.Window | None = None
         self._shortcut_entries: dict[ActionType, Gtk.Entry] = {}
@@ -116,17 +116,16 @@ class QuoridorWindow(Gtk.ApplicationWindow):
             size=board_size,
             players=num_players,
             walls=walls,
-
         )
 
         if self._init_blitz:
             self.blitz = Blitz(
                 time_limit_minutes=self._init_time_limit,
                 player_ids=self.session.state.player_positions,
-        )
+            )
         else:
             self.blitz = Blitz(time_limit_minutes=0)
-        
+
         self.service = GameApplicationService(session=self.session, blitz=self.blitz)
         self.status = Gtk.Label(label="Ready.")
         self.status.set_xalign(0.0)
@@ -174,11 +173,10 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         self._turn_start_time = time.time()
         self._blitz_timer_id = GLib.timeout_add(100, self._on_blitz_tick)
 
-
     def _stop_blitz_turn(self, player_id: int) -> bool:
         if not self.blitz.is_enabled():
             return False
-        if self._turn_start_time is None: 
+        if self._turn_start_time is None:
             return False
         if self._blitz_timer_id is not None:
             GLib.source_remove(self._blitz_timer_id)
@@ -190,8 +188,8 @@ class QuoridorWindow(Gtk.ApplicationWindow):
     def _on_blitz_tick(self) -> bool:
         if self._turn_start_time is None:
             return False
-        if self._paused:   
-            return True 
+        if self._paused:
+            return True
         player_id = self.session.state.current_player
         elapsed = time.time() - self._turn_start_time
         remaining = self.blitz.remaining_time(player_id) - elapsed
@@ -228,9 +226,9 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         menu_model = Gio.Menu()
         menu_model.append_submenu("File", file_menu)
         menu_model.append_submenu("Game", game_menu)
-        
+
         menubar = Gtk.PopoverMenuBar(menu_model=menu_model)
-       
+
         menubar.set_hexpand(True)
 
         self.blitz_label = Gtk.Label(label="")
@@ -249,15 +247,15 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         positions = initial_player_positions(size, players)
         player_types = {}
         for p in positions:
-                if p in self._ai_players:
-                    player_types[p] = "ai"
-                else:
-                    player_types[p] = "human"
+            if p in self._ai_players:
+                player_types[p] = "ai"
+            else:
+                player_types[p] = "human"
         return GameApplicationService.new_session(
             board_size=size,
             players=players,
             walls_per_player=walls,
-            player_types = player_types    
+            player_types=player_types,
         )
 
     def _play_one_ai_turn(self):
@@ -276,7 +274,7 @@ class QuoridorWindow(Gtk.ApplicationWindow):
             mode=self._ai_mode,
             depth=self._ai_minimax_depth,
             time_limit_sec=self._ai_time,
-            )
+        )
         elapsed = time.time() - started
         if self.blitz.is_enabled():
             timed_out = self.blitz.consume_time(current, elapsed)
@@ -290,14 +288,14 @@ class QuoridorWindow(Gtk.ApplicationWindow):
                 self.area.queue_draw()
                 self._ai_thinking = False
                 return
-        self.session.apply_ai_move(move,player_id=current)
+        self.session.apply_ai_move(move, player_id=current)
         winner = self.session.winner_id()
         if winner is not None:
             self._set_status(f"Player {winner} wins!")
             self._game_over = True
             self.area.queue_draw()
             self._ai_thinking = False
-            return 
+            return
         self._set_status(f"AI player {current} played.")
         self.area.queue_draw()
         self._ai_thinking = False
@@ -308,7 +306,7 @@ class QuoridorWindow(Gtk.ApplicationWindow):
 
     def _schedule_ai_turn(self) -> None:
         if not self._ai_players:
-            return 
+            return
         GLib.idle_add(self._play_one_ai_turn)
 
     def _install_actions(self) -> None:
@@ -355,9 +353,7 @@ class QuoridorWindow(Gtk.ApplicationWindow):
 
     def _cell_size(self):
         size = self._board_size()
-        available = (
-            min(self.area.get_width(), self.area.get_height()) - 2 * MARGIN
-        )
+        available = min(self.area.get_width(), self.area.get_height()) - 2 * MARGIN
         return max((available - (size - 1) * GAP) / size, 1)
 
     def _cell_xy(self, row, col):
@@ -412,15 +408,18 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         ]
         target_funcs = self.session._build_player_target_funcs()
         valid, error = validate_wall(
-            self.session.state.graph, positions, edges,
-            target_funcs, self.session.state.remaining_walls, current
+            self.session.state.graph,
+            positions,
+            edges,
+            target_funcs,
+            self.session.state.remaining_walls,
+            current,
         )
         if valid:
-            self._stop_blitz_turn(current) 
+            self._stop_blitz_turn(current)
             self.session.place_wall(current, edges, orient)
             self._set_status(
-                f"Player {current} placed {orient} wall "
-                f"at ({row}, {col})."
+                f"Player {current} placed {orient} wall " f"at ({row}, {col})."
             )
             self._schedule_ai_turn()
             if self.session.player_types.get(self.session.state.current_player) != "ai":
@@ -459,12 +458,14 @@ class QuoridorWindow(Gtk.ApplicationWindow):
                     self._game_over = True
                 else:
                     self._set_status(
-                        f"Player {self._drag_pid} moved "
-                        f"to ({row}, {col})."
+                        f"Player {self._drag_pid} moved " f"to ({row}, {col})."
                     )
                     self._schedule_ai_turn()
-                    if self.session.player_types.get(self.session.state.current_player) != "ai":
-                        self._start_blitz_turn() 
+                    if (
+                        self.session.player_types.get(self.session.state.current_player)
+                        != "ai"
+                    ):
+                        self._start_blitz_turn()
             else:
                 self._set_status(error)
         self._drag_pid = None
@@ -570,7 +571,7 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         if total == 0:
             self._set_status("Nothing to undo.")
             return
-        self._game_over=False
+        self._game_over = False
         self._schedule_ai_turn()
         self.area.queue_draw()
         self._set_status(f"Undid {total} move(s).")
@@ -593,12 +594,11 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         winner = self.session.winner_id()
         if winner is not None:
             self._game_over = True
-            self._set_status(f"Player {winner} wins!")           
+            self._set_status(f"Player {winner} wins!")
         else:
             self._schedule_ai_turn()
             self._set_status(f"Redid {total} move(s).")
         self.area.queue_draw()
-
 
     def _action_pause(self) -> None:
         self._paused = not self._paused
@@ -852,13 +852,15 @@ class QuoridorWindow(Gtk.ApplicationWindow):
                     cr.rectangle(
                         self._ox + col * (cs + GAP) + cs,
                         self._oy + row * (cs + GAP),
-                        GAP, cs,
+                        GAP,
+                        cs,
                     )
                 else:
                     cr.rectangle(
                         self._ox + col * (cs + GAP),
                         self._oy + row * (cs + GAP) + cs,
-                        cs, GAP,
+                        cs,
+                        GAP,
                     )
                 cr.fill()
 
@@ -880,16 +882,16 @@ class QuoridorWindow(Gtk.ApplicationWindow):
 
 
 def main(
-        num_players=2, 
-         board_size=9, 
-         walls=20, 
-         blitz=False, 
-         time_limit=0,
-         ai_players=None, 
-         ai_mode="iterative", 
-         ai_time=5, 
-         ai_minimax_depth=None,
-         ):
+    num_players=2,
+    board_size=9,
+    walls=20,
+    blitz=False,
+    time_limit=0,
+    ai_players=None,
+    ai_mode="iterative",
+    ai_time=5,
+    ai_minimax_depth=None,
+):
     app = Gtk.Application(application_id="fr.ubordeaux.quoridor.demo")
     app.connect(
         "activate",
@@ -903,7 +905,7 @@ def main(
             ai_players=ai_players,
             ai_mode=ai_mode,
             ai_time=ai_time,
-            ai_minimax_depth=ai_minimax_depth
+            ai_minimax_depth=ai_minimax_depth,
         ).present(),
     )
     return app.run([sys.argv[0]])

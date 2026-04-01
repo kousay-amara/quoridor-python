@@ -86,7 +86,7 @@ def evaluate_state(
     state: GameState, ai_player_id: int, scoring_type: int = SCORING_DEFAULT
 ) -> float:
     """
-    Évalue l'état selon le mode choisi via --ai-minimax-scoring.
+    Evaluate the state using the mode selected with --ai-minimax-scoring.
     """
 
     if scoring_type == SCORING_MATERIAL:
@@ -99,9 +99,9 @@ def evaluate_state(
 
 
 """
-The three next fonctions are heuristics for AI.
-They return a note for a state for AI POV.
-Highest is the score, better is the position
+The next three functions are AI heuristics.
+They return a score for a given state from the AI point of view.
+The higher the score, the better the position.
 """
 
 
@@ -123,9 +123,7 @@ def evaluate_state_default(state: GameState, ai_player_id: int) -> float:
         targets[player_ids.index(ai_player_id)],
     )
     opp_distances = [
-        get_shortest_path_length(
-            state.graph, state.player_positions[p], targets[i]
-        )
+        get_shortest_path_length(state.graph, state.player_positions[p], targets[i])
         for i, p in enumerate(player_ids)
         if p != ai_player_id
     ]
@@ -170,9 +168,7 @@ def evaluate_state_material(state: GameState, ai_player_id: int) -> float:
         targets[player_ids.index(ai_player_id)],
     )
     opponents_dist = [
-        get_shortest_path_length(
-            state.graph, state.player_positions[p], targets[i]
-        )
+        get_shortest_path_length(state.graph, state.player_positions[p], targets[i])
         for i, p in enumerate(player_ids)
         if p != ai_player_id
     ]
@@ -221,9 +217,7 @@ def evaluate_state_hybrid(state: GameState, ai_player_id: int) -> float:
         targets[player_ids.index(ai_player_id)],
     )
     opp_distances = [
-        get_shortest_path_length(
-            state.graph, state.player_positions[p], targets[i]
-        )
+        get_shortest_path_length(state.graph, state.player_positions[p], targets[i])
         for i, p in enumerate(player_ids)
         if p != ai_player_id
     ]

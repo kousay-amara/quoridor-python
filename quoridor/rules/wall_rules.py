@@ -85,7 +85,7 @@ def get_all_legal_wall_placements(
             for orientation in ["h", "v"]:
                 if deadline_check is not None:
                     deadline_check()
-                
+
                 edges = get_edges_for_wall_at(r, c, orientation, size)
 
                 if _has_crossing_wall(state.graph, edges):
@@ -99,5 +99,5 @@ def get_all_legal_wall_placements(
                     deadline_check=deadline_check,
                 ):
                     legal_walls.append(("wall", edges, orientation))
-                    
+
     return legal_walls

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ..application.constants import WALLS_DEFAULT
+from ..application.constants import WALLS_DEFAULT as APP_WALLS_DEFAULT
 
 PLAYER_COUNT_MIN = 2
 PLAYER_COUNT_MAX = 4
@@ -13,6 +13,7 @@ PLAYER_ID_MAX = 4
 BOARD_SIZE_MIN = 3
 BOARD_SIZE_MAX = 15
 BOARD_SIZE_DEFAULT = 9
+WALLS_DEFAULT = APP_WALLS_DEFAULT
 
 AI_MODE_MINIMAX = "minimax"
 AI_MODE_ITERATIVE = "iterative"
