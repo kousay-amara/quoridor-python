@@ -281,8 +281,25 @@ class NetworkServer:
                     if session is None:
                         break
                     last_client_activity_time = session.last_activity_time
+                    client_status = session.status
+                    waiting_invitation = None
+                    if client_status == _PLAYER_STATUS_WAITGAME:
+                        waiting_invitation = (
+                            self._pending_invitations_by_inviter.get(
+                                client_id
+                            )
+                        )
+                        if waiting_invitation is None:
+                            waiting_invitation = (
+                                self._pending_invitations_by_invitee.get(
+                                    client_id
+                                )
+                            )
 
                 if (
+                    client_status != _PLAYER_STATUS_WAITGAME
+                    or waiting_invitation is None
+                ) and (
                     last_client_activity_time is not None
                     and time.time() - last_client_activity_time
                     > self.client_timeout_sec
@@ -502,6 +519,7 @@ class NetworkServer:
     def _clear_invitation_locked(self, invitation: _Invitation) -> None:
         self._pending_invitations_by_inviter.pop(invitation.inviter_id, None)
         self._pending_invitations_by_invitee.pop(invitation.invitee_id, None)
+        now = time.time()
 
         for client_id in (invitation.inviter_id, invitation.invitee_id):
             session = self._client_sessions.get(client_id)
@@ -512,6 +530,7 @@ class NetworkServer:
                 and session.game_id is None
             ):
                 session.status = _PLAYER_STATUS_IDLE
+                session.last_activity_time = now
 
     def _expire_invitations(self) -> None:
         notifications = []

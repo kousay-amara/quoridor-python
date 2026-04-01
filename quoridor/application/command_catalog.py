@@ -22,12 +22,12 @@ _HISTORY_DESCRIPTION = (
 COMMAND_CATALOG: tuple[CommandHelp, ...] = (
     CommandHelp(
         "new",
-        "new [ARGS] | new PLAYER_ID [PLAYER_ID...]",
+        "new [ARGS] | new PLAYER_ID",
         (
             "Start a new game. Without ARGS, reuse the current "
             "configuration. With ARGS, override it for the new game. "
-            "When connected to a server, new PLAYER_ID [PLAYER_ID...] "
-            "creates a room with idle players."
+            "When connected to a server, new PLAYER_ID sends a game "
+            "invitation to an idle player."
         ),
     ),
     CommandHelp("help", "help [CMD]", "Show shell help, or help for CMD."),
@@ -110,6 +110,21 @@ COMMAND_CATALOG: tuple[CommandHelp, ...] = (
         ),
     ),
     CommandHelp(
+        "accept",
+        "accept",
+        "Accept the pending game invitation and start the game.",
+    ),
+    CommandHelp(
+        "decline",
+        "decline",
+        "Decline the pending game invitation.",
+    ),
+    CommandHelp(
+        "cancel",
+        "cancel",
+        "Cancel the invitation you previously sent.",
+    ),
+    CommandHelp(
         "scoreboard",
         "scoreboard",
         "Display server scoreboard (played, wins, losses).",
@@ -152,7 +167,7 @@ OVERVIEW_TEXT = (
     "Commands: new [ARGS], help [CMD], load, save, set, hint, show board, "
     "show history, show configuration, show time, server list, server start, "
     "server status, server stop, join, ping, players, scoreboard, pause, "
-    "moves, move, wall, "
+    "accept, decline, cancel, moves, move, wall, "
     "undo, redo, quit\n"
     "Use: help <command>"
 )
@@ -176,6 +191,9 @@ COMPLETION_COMMANDS = [
     "join ",
     "ping",
     "players",
+    "accept",
+    "decline",
+    "cancel",
     "scoreboard",
     "pause",
     "moves",
