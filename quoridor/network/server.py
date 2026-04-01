@@ -423,6 +423,26 @@ class NetworkServer:
                     self._send_notifications(notifications)
                     continue
 
+                if command_upper == "AWAY":
+                    try:
+                        _send_line(
+                            client_sock,
+                            self._handle_away_command(client_id),
+                        )
+                    except OSError:
+                        break
+                    continue
+
+                if command_upper == "BACK":
+                    try:
+                        _send_line(
+                            client_sock,
+                            self._handle_back_command(client_id),
+                        )
+                    except OSError:
+                        break
+                    continue
+
                 if (
                     command_upper == "MOVE"
                     or command_upper.startswith("MOVE ")
@@ -959,6 +979,30 @@ class NetworkServer:
                 )
 
         return f"CANCEL_OK PLAYER={invitee_name}", notifications
+
+    def _handle_away_command(self, client_id: int) -> str:
+        with self._lock:
+            session = self._client_sessions.get(client_id)
+            if session is None:
+                return "ERROR PLAYER_NOT_FOUND"
+            if session.status == _PLAYER_STATUS_AWAY:
+                return "ERROR ALREADY_AWAY"
+            if session.status != _PLAYER_STATUS_IDLE or session.game_id is not None:
+                return "ERROR CANNOT_GO_AWAY"
+            session.status = _PLAYER_STATUS_AWAY
+            session.last_activity_time = time.time()
+        return "AWAY_OK"
+
+    def _handle_back_command(self, client_id: int) -> str:
+        with self._lock:
+            session = self._client_sessions.get(client_id)
+            if session is None:
+                return "ERROR PLAYER_NOT_FOUND"
+            if session.status != _PLAYER_STATUS_AWAY:
+                return "ERROR NOT_AWAY"
+            session.status = _PLAYER_STATUS_IDLE
+            session.last_activity_time = time.time()
+        return "BACK_OK"
 
     def _handle_move_command(
         self,

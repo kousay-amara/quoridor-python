@@ -125,6 +125,16 @@ COMMAND_CATALOG: tuple[CommandHelp, ...] = (
         "Cancel the invitation you previously sent.",
     ),
     CommandHelp(
+        "away",
+        "away",
+        "Mark yourself as unavailable for invitations.",
+    ),
+    CommandHelp(
+        "back",
+        "back",
+        "Return from away status to idle.",
+    ),
+    CommandHelp(
         "scoreboard",
         "scoreboard",
         "Display server scoreboard (played, wins, losses).",
@@ -167,7 +177,7 @@ OVERVIEW_TEXT = (
     "Commands: new [ARGS], help [CMD], load, save, set, hint, show board, "
     "show history, show configuration, show time, server list, server start, "
     "server status, server stop, join, ping, players, scoreboard, pause, "
-    "accept, decline, cancel, moves, move, wall, "
+    "accept, decline, cancel, away, back, moves, move, wall, "
     "undo, redo, quit\n"
     "Use: help <command>"
 )
@@ -194,6 +204,8 @@ COMPLETION_COMMANDS = [
     "accept",
     "decline",
     "cancel",
+    "away",
+    "back",
     "scoreboard",
     "pause",
     "moves",

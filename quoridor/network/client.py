@@ -422,6 +422,12 @@ class NetworkClient:
     def cancel(self) -> str:
         return self.send_command("CANCEL")
 
+    def away(self) -> str:
+        return self.send_command("AWAY")
+
+    def back(self) -> str:
+        return self.send_command("BACK")
+
     def drain_opponent_moves(self) -> list[str]:
         with self._response_condition:
             moves = list(self._pending_opponent_moves)

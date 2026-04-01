@@ -43,6 +43,12 @@ _INVITATION_ACTION_ERRORS = {
     "ERROR PLAYER_NOT_FOUND": "Invitation is no longer available.",
 }
 
+_STATUS_CHANGE_ERRORS = {
+    "ERROR ALREADY_AWAY": "You are already away.",
+    "ERROR CANNOT_GO_AWAY": "Cannot go away right now.",
+    "ERROR NOT_AWAY": "You are not away.",
+}
+
 _MOVE_ERRORS = {
     "ERROR NOT_IN_GAME": "Cannot play move: you are not in a network game.",
     "ERROR NOT_YOUR_TURN": "Cannot play move: not your turn.",
@@ -463,6 +469,60 @@ def command_cancel(state: NetworkState, line: str) -> bool:
         _INVITATION_ACTION_ERRORS.get(
             response,
             f"Cannot cancel invitation: unexpected response ({response}).",
+        )
+    )
+    return False
+
+
+def command_away(state: NetworkState, line: str) -> bool:
+    if line.strip().lower() != "away":
+        raise ValueError("Invalid format. Use: away")
+
+    if state.network_client is None:
+        print("Not connected to any server.")
+        return False
+
+    try:
+        response = state.network_client.away()
+    except OSError as exc:
+        _handle_connection_lost(state, exc)
+        return False
+
+    if response == "AWAY_OK":
+        print("Status changed to away.")
+        return False
+
+    print(
+        _STATUS_CHANGE_ERRORS.get(
+            response,
+            f"Cannot change status: unexpected response ({response}).",
+        )
+    )
+    return False
+
+
+def command_back(state: NetworkState, line: str) -> bool:
+    if line.strip().lower() != "back":
+        raise ValueError("Invalid format. Use: back")
+
+    if state.network_client is None:
+        print("Not connected to any server.")
+        return False
+
+    try:
+        response = state.network_client.back()
+    except OSError as exc:
+        _handle_connection_lost(state, exc)
+        return False
+
+    if response == "BACK_OK":
+        print("Status changed to idle.")
+        return False
+
+    print(
+        _STATUS_CHANGE_ERRORS.get(
+            response,
+            f"Cannot change status: unexpected response ({response}).",
         )
     )
     return False

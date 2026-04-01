@@ -1402,6 +1402,14 @@ def _command_cancel(state: _ShellState, line: str) -> bool:
     return cli_network.command_cancel(state, line)
 
 
+def _command_away(state: _ShellState, line: str) -> bool:
+    return cli_network.command_away(state, line)
+
+
+def _command_back(state: _ShellState, line: str) -> bool:
+    return cli_network.command_back(state, line)
+
+
 def _command_undo(state: _ShellState, line: str) -> bool:
     if _pause_blocks_gameplay(state.blitz):
         return False
@@ -1579,6 +1587,22 @@ class _CancelCommand(_InvalidAsCommandError):
 
     def run(self, state: _ShellState, line: str) -> bool:
         return _command_cancel(state, line)
+
+
+class _AwayCommand(_InvalidAsCommandError):
+    def matches(self, line: str) -> bool:
+        return line.lower() == "away"
+
+    def run(self, state: _ShellState, line: str) -> bool:
+        return _command_away(state, line)
+
+
+class _BackCommand(_InvalidAsCommandError):
+    def matches(self, line: str) -> bool:
+        return line.lower() == "back"
+
+    def run(self, state: _ShellState, line: str) -> bool:
+        return _command_back(state, line)
 
 
 class _HelpCommand(_BaseCommand):
@@ -1802,6 +1826,8 @@ def _build_command_registry() -> _CommandRegistry:
             _AcceptCommand(),
             _DeclineCommand(),
             _CancelCommand(),
+            _AwayCommand(),
+            _BackCommand(),
             _NewCommand(),
             _HelpCommand(),
             _HistoryCommand(),
