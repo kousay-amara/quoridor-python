@@ -10,9 +10,13 @@ import pytest
 class _DummyLabel:
     def __init__(self) -> None:
         self.text = ""
+        self.visible = True
 
     def set_text(self, value: str) -> None:
         self.text = value
+
+    def set_visible(self, value: bool) -> None:
+        self.visible = value
 
 
 class _DummyArea:
@@ -122,10 +126,16 @@ def gui_mod(monkeypatch):
         Menu=type("Menu", (), {}),
         SimpleAction=_SimpleAction,
     )
+    fake_glib = types.SimpleNamespace(
+        timeout_add=lambda *_a, **_k: 1,
+        source_remove=lambda *_a, **_k: None,
+        idle_add=lambda *_a, **_k: 1,
+    )
 
     fake_gi.require_version = lambda *_a, **_k: None
     fake_repo.Gtk = fake_gtk
     fake_repo.Gio = fake_gio
+    fake_repo.GLib = fake_glib
     fake_gi.repository = fake_repo
 
     monkeypatch.setitem(sys.modules, "gi", fake_gi)
@@ -137,17 +147,30 @@ def gui_mod(monkeypatch):
 def _make_window(gui_mod):
     win = gui_mod.QuoridorWindow.__new__(gui_mod.QuoridorWindow)
     win.status = _DummyLabel()
+    win.blitz_label = _DummyLabel()
     win.area = _DummyArea()
     win._ox = gui_mod.MARGIN
     win._oy = gui_mod.MARGIN
     win._paused = False
+    win._ai_thinking = False
     win._game_over = False
+    win._turn_start_time = None
+    win._blitz_timer_id = None
+    win._ai_players = []
     win._num_players = 2
     win._init_board_size = 9
     win._init_walls = 10
+    win._init_blitz = False
+    win._init_time_limit = 0
     win._drag_pid = None
     win._drag_start = None
     win._drag_offset = (0, 0)
+    win.blitz = types.SimpleNamespace(
+        is_enabled=lambda: False,
+        toggle_pause=lambda: None,
+        consume_time=lambda *_a, **_k: False,
+        remaining_time=lambda *_a, **_k: 0.0,
+    )
     win.session = types.SimpleNamespace(
         state=types.SimpleNamespace(
             board_size=9,
@@ -322,9 +345,17 @@ def test_load_response_branches(gui_mod):
         ),
         player_types={1: "human", 2: "human"},
     )
+    loaded_blitz = types.SimpleNamespace(
+        is_enabled=lambda: False,
+        toggle_pause=lambda: None,
+        consume_time=lambda *_a, **_k: False,
+        remaining_time=lambda *_a, **_k: 0.0,
+    )
     win._paused = True
     win._game_over = True
-    win.service = types.SimpleNamespace(load=lambda *_args, **_kwargs: (new_session, None))
+    win.service = types.SimpleNamespace(
+        load=lambda *_args, **_kwargs: (new_session, loaded_blitz)
+    )
     dialog = _DummyDialog(path="/tmp/game.qrd")
     win._on_load_response(dialog, gui_mod.Gtk.ResponseType.ACCEPT)
     assert win.session is new_session
@@ -362,7 +393,9 @@ def test_action_routing_new_game_show_info_quit(gui_mod, monkeypatch):
 
     win._action_new_game()
     assert win.session is new_session
-    assert called["ctx"] == {"session": new_session, "blitz": None}
+    assert called["ctx"]["session"] is new_session
+    assert called["ctx"]["blitz"] is win.blitz
+    assert called["ctx"]["blitz"].is_enabled() is False
     assert win.status.text == "New game started."
 
     win._action_show_info()

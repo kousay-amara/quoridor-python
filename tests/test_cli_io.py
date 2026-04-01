@@ -108,7 +108,7 @@ def test_prompt_save_before_quit_save_success_after_empty_path(monkeypatch, caps
         del session
         calls.append((path, blitz is not None))
 
-    monkeypatch.setattr("quoridor.interfaces.cli._save_session_to_file", fake_save)
+    monkeypatch.setattr("quoridor.interfaces.cli_io._save_session_to_file", fake_save)
     assert cli_io._prompt_save_before_quit(_make_session(), blitz=Blitz(time_limit_minutes=0)) is True
     out = capsys.readouterr().out
     assert "Invalid path." in out
@@ -124,7 +124,7 @@ def test_prompt_save_before_quit_save_fails_then_abort(monkeypatch, capsys):
         del blitz
         raise OSError("disk full")
 
-    monkeypatch.setattr("quoridor.interfaces.cli._save_session_to_file", fake_save)
+    monkeypatch.setattr("quoridor.interfaces.cli_io._save_session_to_file", fake_save)
     assert cli_io._prompt_save_before_quit(_make_session()) is True
     out = capsys.readouterr().out
     assert "Cannot save file: disk full" in out

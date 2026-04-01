@@ -80,4 +80,9 @@ temp/
 # Donnees generees localement
 data/raw_games/
 quoridor/ML/data/raw_games/
+.codex
 .codex/
+
+# Artefacts ponctuels de tests locaux
+/game.txt
+/bad.txt
