@@ -82,12 +82,15 @@ def initialize_shell_state(
         print_blitz_times(blitz_state)
     print_state(session)
 
+    ai_mcts_selection = getattr(config, "ai_mcts_selection", "UCT")
+
     if auto_play_fn(
         session,
         config.ai_mode,
         config.ai_time,
         config.ai_minimax_depth,
         blitz=blitz_state,
+        mcts_selection=ai_mcts_selection,
     ):
         return None, True
 
@@ -99,9 +102,11 @@ def initialize_shell_state(
         ai_mode=config.ai_mode,
         ai_time=config.ai_time,
         ai_minimax_depth=config.ai_minimax_depth,
+        ai_mcts_selection=ai_mcts_selection,
         current_ai_mode=config.ai_mode,
         current_ai_time=config.ai_time,
         current_ai_minimax_depth=config.ai_minimax_depth,
+        current_ai_mcts_selection=ai_mcts_selection,
         players=len(session.state.player_positions),
         walls_per_player=config.walls_per_player,
         board_size=session.state.board_size,

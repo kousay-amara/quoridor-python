@@ -274,6 +274,7 @@ def _main_interactive(argv: list[str]) -> int:
         ai_mode=args.ai_mode,
         ai_time=args.ai_time,
         ai_minimax_depth=args.ai_minimax_depth,
+        ai_mcts_selection=args.ai_mcts_selection,
         startup_server_port=args.server,
         verbose=args.verbose,
         debug=args.debug,

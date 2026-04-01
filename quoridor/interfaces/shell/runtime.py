@@ -104,6 +104,7 @@ def auto_play_ai_until_human_or_end(
     now_fn: Callable[[], float] = time.time,
     event_bus: Any | None = None,
     print_fn: Callable[[str], None] = print,
+    mcts_selection: str = "UCT",
 ) -> bool:
     if is_game_paused(blitz):
         return False
@@ -121,6 +122,7 @@ def auto_play_ai_until_human_or_end(
             mode=ai_mode,
             depth=ai_minimax_depth,
             time_limit_sec=current_ai_time,
+            mcts_selection=mcts_selection,
         )
         elapsed = now_fn() - started
         if blitz.consume_time(current_ai, elapsed):
@@ -162,6 +164,7 @@ def run_auto_play_with_interrupt_handling(
     auto_play_fn: Callable[..., bool],
     event_bus: Any | None = None,
     print_fn: Callable[..., None] = print,
+    mcts_selection: str = "UCT",
 ) -> tuple[bool, bool]:
     try:
         return (
@@ -172,6 +175,7 @@ def run_auto_play_with_interrupt_handling(
                 ai_minimax_depth,
                 blitz=blitz,
                 event_bus=event_bus,
+                mcts_selection=mcts_selection,
             ),
             False,
         )

@@ -124,19 +124,34 @@ def check_any_winner(state):
     return None
 
 
-def mcts_search(root_state, time_limit=5.0, exploration_weight=1.41):
+def mcts_search(
+    root_state,
+    time_limit=5.0,
+    exploration_weight=1.41,
+    selection_policy="UCT",
+):
+    from quoridor.ML.ml_selector import ml_select_child
+
     root_node = MCTSNode(root_state)
     start_time = time.time()
     iterations = 0
+    turn_counter = [1]
 
     while time.time() - start_time < time_limit:
         iterations += 1
         node = root_node
 
         while not node.untried_moves and node.childrens:
-            node = node.uct_select_child(exploration_weight=exploration_weight)
+            if selection_policy == "ML":
+                node._turn = turn_counter[0]
+                node = ml_select_child(node)
+            else:
+                node = node.uct_select_child(
+                    exploration_weight=exploration_weight
+                )
 
         if node.untried_moves:
+            turn_counter[0] += 1
             move = random.choice(node.untried_moves)
             node.untried_moves.remove(move)
             new_state = clone_state(node.state)

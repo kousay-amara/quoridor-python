@@ -12,6 +12,9 @@ from .cli_constants import (
     AI_MODE_ITERATIVE,
     AI_MODE_MINIMAX,
     AI_MODE_MCTS,
+    AI_MCTS_SELECTION_DEFAULT,
+    AI_MCTS_SELECTION_ML,
+    AI_MCTS_SELECTION_UCT,
     AI_TIME_DEFAULT,
     BOARD_SIZE_DEFAULT,
     BOARD_SIZE_MAX,
@@ -263,6 +266,12 @@ def _build_parser(
         choices=[1, 2, 3],
         default=1,
         help=_("AI scoring type (1: Default, 2: Material, 3: Hybrid)"),
+    )
+    parser.add_argument(
+        "--ai-mcts-selection",
+        choices=[AI_MCTS_SELECTION_UCT, AI_MCTS_SELECTION_ML],
+        default=AI_MCTS_SELECTION_DEFAULT,
+        help=_("MCTS selection policy (UCT or ML)"),
     )
     parser.set_defaults(
         verbose=bool(defaults["verbose"]), blitz=bool(defaults["blitz"])

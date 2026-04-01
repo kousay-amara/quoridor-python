@@ -151,6 +151,7 @@ def _config_from_state(state: "_ShellState") -> _ShellConfig:
         ai_mode=state.ai_mode,
         ai_time=state.ai_time,
         ai_minimax_depth=state.ai_minimax_depth,
+        ai_mcts_selection=state.ai_mcts_selection,
     )
 
 
@@ -266,6 +267,7 @@ def _start_shell_session(
         config.ai_time,
         config.ai_minimax_depth,
         blitz=blitz_state,
+        ai_mcts_selection=config.ai_mcts_selection,
     )
     return blitz_state, should_break or interrupted
 
@@ -378,6 +380,7 @@ def _parse_new_config(state: "_ShellState", line: str) -> _ShellConfig:
         ai_mode=args.ai_mode,
         ai_time=args.ai_time,
         ai_minimax_depth=args.ai_minimax_depth,
+        ai_mcts_selection=args.ai_mcts_selection,
     )
 
 
@@ -556,6 +559,7 @@ def _auto_play_ai_until_human_or_end(
     *,
     blitz: Blitz | None = None,
     event_bus: shell_events.EventBus | None = None,
+    mcts_selection: str = "UCT",
 ) -> bool:
     if blitz is None:
         blitz = Blitz(time_limit_minutes=0)
@@ -570,6 +574,7 @@ def _auto_play_ai_until_human_or_end(
         timeout_handler=_handle_timeout,
         now_fn=time.time,
         event_bus=event_bus,
+        mcts_selection=mcts_selection,
     )
 
 
@@ -581,6 +586,7 @@ def _run_auto_play_with_interrupt_handling(
     *,
     blitz: Blitz,
     event_bus: shell_events.EventBus | None = None,
+    mcts_selection: str = "UCT",
 ) -> tuple[bool, bool]:
     return shell_runtime.run_auto_play_with_interrupt_handling(
         session,
@@ -591,6 +597,7 @@ def _run_auto_play_with_interrupt_handling(
         auto_play_fn=_auto_play_ai_until_human_or_end,
         event_bus=event_bus,
         print_fn=print,
+        mcts_selection=mcts_selection,
     )
 
 
@@ -627,6 +634,7 @@ def _apply_and_maybe_auto_play(
     ai_minimax_depth: int | None,
     *,
     blitz: Blitz,
+    ai_mcts_selection: str = "UCT",
     base_unsaved: bool = True,
 ) -> tuple[bool, bool]:
     has_unsaved_changes = base_unsaved
@@ -637,6 +645,7 @@ def _apply_and_maybe_auto_play(
         ai_time,
         ai_minimax_depth,
         blitz=blitz,
+        ai_mcts_selection=ai_mcts_selection,
     )
     if interrupted:
         if session.history.cursor != before_ai_cursor:
@@ -660,6 +669,7 @@ def _auto_play_pending_ai(state: "_ShellState") -> bool:
         state.current_ai_minimax_depth,
         blitz=state.blitz,
         event_bus=state.event_bus,
+        mcts_selection=state.current_ai_mcts_selection,
     )
     if state.session.history.cursor != before_ai_cursor:
         state.has_unsaved_changes = True
@@ -753,6 +763,7 @@ def _handle_move(
     ai_minimax_depth: int | None,
     *,
     blitz: Blitz,
+    ai_mcts_selection: str = "UCT",
 ) -> tuple[bool, bool]:
     if _play_pawn_move_from_token(session, move_token):
         return True, True
@@ -762,6 +773,7 @@ def _handle_move(
         ai_time,
         ai_minimax_depth,
         blitz=blitz,
+        ai_mcts_selection=ai_mcts_selection,
     )
 
 
@@ -773,6 +785,7 @@ def _handle_wall(
     ai_minimax_depth: int | None,
     *,
     blitz: Blitz,
+    ai_mcts_selection: str = "UCT",
 ) -> tuple[bool, bool]:
     _place_wall_from_token(session, wall_token)
     return _apply_and_maybe_auto_play(
@@ -781,6 +794,7 @@ def _handle_wall(
         ai_time,
         ai_minimax_depth,
         blitz=blitz,
+        ai_mcts_selection=ai_mcts_selection,
     )
 
 
@@ -1018,6 +1032,7 @@ def _command_move(state: _ShellState, line: str) -> bool:
         state.current_ai_time,
         state.current_ai_minimax_depth,
         blitz=state.blitz,
+        ai_mcts_selection=state.current_ai_mcts_selection,
     )
     state.has_unsaved_changes = has_unsaved_changes
     return should_break
@@ -1037,6 +1052,7 @@ def _command_wall(state: _ShellState, line: str) -> bool:
         state.current_ai_time,
         state.current_ai_minimax_depth,
         blitz=state.blitz,
+        ai_mcts_selection=state.current_ai_mcts_selection,
     )
     state.has_unsaved_changes = has_unsaved_changes
     return should_break
@@ -1201,6 +1217,7 @@ def _command_shorthand_move(state: _ShellState, line: str) -> bool:
         state.current_ai_time,
         state.current_ai_minimax_depth,
         blitz=state.blitz,
+        ai_mcts_selection=state.current_ai_mcts_selection,
     )
     state.has_unsaved_changes = has_unsaved_changes
     return should_break
@@ -1220,6 +1237,7 @@ def _command_shorthand_wall(state: _ShellState, line: str) -> bool:
         state.current_ai_time,
         state.current_ai_minimax_depth,
         blitz=state.blitz,
+        ai_mcts_selection=state.current_ai_mcts_selection,
     )
     state.has_unsaved_changes = has_unsaved_changes
     return should_break
@@ -1286,6 +1304,7 @@ def _run_interactive_shell(
     ai_mode: str,
     ai_time: int,
     ai_minimax_depth: int | None,
+    ai_mcts_selection: str = "UCT",
     startup_server_port: int | None = None,
     verbose: bool = False,
     debug: bool = False,
@@ -1303,6 +1322,7 @@ def _run_interactive_shell(
         ai_mode=ai_mode,
         ai_time=ai_time,
         ai_minimax_depth=ai_minimax_depth,
+        ai_mcts_selection=ai_mcts_selection,
     )
     state, should_break = shell_bootstrap.initialize_shell_state(
         config=config,

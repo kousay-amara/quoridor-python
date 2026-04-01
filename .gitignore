@@ -86,3 +86,7 @@ quoridor/ML/data/raw_games/
 # Artefacts ponctuels de tests locaux
 /game.txt
 /bad.txt
+
+# ML datasets (trop volumineux)
+quoridor/ML/data/ml_moves_dataset.csv
+quoridor/ML/data/ml_dataset.csv

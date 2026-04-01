@@ -208,6 +208,7 @@ class GameSession:
         mode: str = "iterative",
         depth: int | None = None,
         time_limit_sec: float = 5.0,
+        mcts_selection: str = "UCT",
     ) -> AIMove:
         """Compute the current AI player's move without applying it."""
         player_id = self.state.current_player
@@ -218,6 +219,7 @@ class GameSession:
             move = mcts_search(
                 self.state,
                 time_limit=time_limit_sec,
+                selection_policy=mcts_selection,
             )
         elif mode == "iterative":
             move = find_best_move_iterative(

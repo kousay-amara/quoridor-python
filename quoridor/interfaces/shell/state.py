@@ -23,6 +23,7 @@ class _ShellConfig:
     ai_mode: str
     ai_time: int
     ai_minimax_depth: int | None
+    ai_mcts_selection: str = "UCT"
 
 
 class _SavedLocalShellState:
@@ -65,9 +66,11 @@ class _ShellState:
     ai_mode: str
     ai_time: int
     ai_minimax_depth: int | None
+    ai_mcts_selection: str
     current_ai_mode: str
     current_ai_time: int
     current_ai_minimax_depth: int | None
+    current_ai_mcts_selection: str
     players: int
     walls_per_player: int
     board_size: int
