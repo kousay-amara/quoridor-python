@@ -83,9 +83,7 @@ def get_tree_moves(state):
             )
             if opp_dist <= 5:
                 blocking = get_blocking_walls(state, opponent_id)
-                moves.extend(
-                    random.sample(blocking, min(3, len(blocking)))
-                )
+                moves.extend(random.sample(blocking, min(3, len(blocking))))
 
     return moves
 
@@ -104,8 +102,7 @@ class MCTSNode:
         return max(
             self.childrens,
             key=lambda child: (child.wins / child.visits)
-            + exploration_weight
-            * math.sqrt(math.log(self.visits) / child.visits),
+            + exploration_weight * math.sqrt(math.log(self.visits) / child.visits),
         )
 
 
@@ -137,9 +134,7 @@ def mcts_search(root_state, time_limit=5.0, exploration_weight=1.41):
         node = root_node
 
         while not node.untried_moves and node.childrens:
-            node = node.uct_select_child(
-                exploration_weight=exploration_weight
-            )
+            node = node.uct_select_child(exploration_weight=exploration_weight)
 
         if node.untried_moves:
             move = random.choice(node.untried_moves)

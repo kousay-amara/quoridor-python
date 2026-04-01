@@ -88,8 +88,7 @@ def load_or_init_config(
             _write_minimal_config(config_path)
         except OSError as exc:
             sys.stderr.write(
-                "warning: could not create config file "
-                f"'{config_path}': {exc}\n"
+                "warning: could not create config file " f"'{config_path}': {exc}\n"
             )
         return _copy_defaults()
 
@@ -106,9 +105,7 @@ def load_or_init_config(
         values["verbose"] = section.getboolean(
             "verbose", fallback=bool(values["verbose"])
         )
-        values["blitz"] = section.getboolean(
-            "blitz", fallback=bool(values["blitz"])
-        )
+        values["blitz"] = section.getboolean("blitz", fallback=bool(values["blitz"]))
 
         if "time" in section:
             timeout = section.getfloat("time")
@@ -125,25 +122,17 @@ def load_or_init_config(
             raise ValueError("players must be one of: 2, 3, 4")
         values["players"] = players
 
-        values["walls"] = section.getint(
-            "walls", fallback=int(values["walls"])
-        )
+        values["walls"] = section.getint("walls", fallback=int(values["walls"]))
 
         size = section.getint("size", fallback=int(values["size"]))
-        if (
-            size < _BOARD_SIZE_MIN
-            or size > _BOARD_SIZE_MAX
-            or size % 2 == 0
-        ):
+        if size < _BOARD_SIZE_MIN or size > _BOARD_SIZE_MAX or size % 2 == 0:
             raise ValueError("size must be odd and between 3 and 15")
         values["size"] = size
 
         ai_mode = section.get("ai_mode", fallback=str(values["ai_mode"]))
         ai_mode = ai_mode.strip().lower()
         if ai_mode not in _AI_MODES:
-            raise ValueError(
-                "ai_mode must be one of: iterative, mcts, minimax"
-            )
+            raise ValueError("ai_mode must be one of: iterative, mcts, minimax")
         values["ai_mode"] = ai_mode
 
         ai_time = section.getint("ai_time", fallback=int(values["ai_time"]))
@@ -160,13 +149,9 @@ def load_or_init_config(
                 raise ValueError("ai_minimax_depth must be > 0")
             values["ai_minimax_depth"] = depth
 
-        values["ai_players"] = _parse_ai_players(
-            section.get("ai_players", fallback="")
-        )
+        values["ai_players"] = _parse_ai_players(section.get("ai_players", fallback=""))
 
         return values
     except (OSError, configparser.Error, ValueError) as exc:
-        sys.stderr.write(
-            f"warning: invalid config file '{config_path}': {exc}\n"
-        )
+        sys.stderr.write(f"warning: invalid config file '{config_path}': {exc}\n")
         return _copy_defaults()

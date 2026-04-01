@@ -42,9 +42,7 @@ def apply_network_game_state_to_local_session(
         state.players = len(state.session.state.player_positions)
         state.board_size = state.session.state.board_size
         if state.session.state.remaining_walls:
-            state.walls_per_player = max(
-                state.session.state.remaining_walls.values()
-            )
+            state.walls_per_player = max(state.session.state.remaining_walls.values())
         state.ai_players = []
         state.network_player_id = local_player_id
         state.has_unsaved_changes = True
@@ -94,6 +92,8 @@ def command_join(
     command_join_fn: Callable[[Any, str], bool],
     save_local_state_before_network: Callable[[Any], None],
     apply_game_state_to_local_session: Callable[[Any, dict], None],
+    on_notification: Callable[[str], None] | None = None,
+    on_connection_lost: Callable[[OSError], None] | None = None,
 ) -> bool:
     handled = command_join_fn(state, line)
     client = state.network_client
@@ -107,12 +107,29 @@ def command_join(
     def _on_game_state(game_state_update: dict) -> None:
         apply_game_state_to_local_session(state, game_state_update)
 
+    def _on_notification(message: str) -> None:
+        if on_notification is None:
+            return
+        on_notification(message)
+
+    def _on_connection_lost(exc: OSError) -> None:
+        if on_connection_lost is None:
+            return
+        on_connection_lost(exc)
+
     client.set_opponent_move_callback(_on_opponent_move)
     client.set_game_state_callback(_on_game_state)
+    if hasattr(client, "set_notification_callback"):
+        client.set_notification_callback(_on_notification)
+    if hasattr(client, "set_connection_lost_callback"):
+        client.set_connection_lost_callback(_on_connection_lost)
     for pending_move in client.drain_opponent_moves():
         _on_opponent_move(pending_move)
     for game_state_update in client.drain_game_state_updates():
         _on_game_state(game_state_update)
+    if hasattr(client, "drain_notifications"):
+        for notification in client.drain_notifications():
+            _on_notification(notification)
     _emit_from_state(state, "network.join", line=line, handled=handled)
     return handled
 

@@ -101,8 +101,7 @@ class GameGenerator:
             winner_id = session.winner_id()
 
             move_data = self._serialize_move(move)
-            
-            
+
             turn_log = {
                 "turn": turn_index,
                 "player_id": player_id,
@@ -196,9 +195,7 @@ class GameGenerator:
 
         raise ValueError(f"unsupported move type: {move_type}")
 
-    def _get_eval_fn(
-        self, scoring: str
-    ) -> Callable[[GameState, int], float]:
+    def _get_eval_fn(self, scoring: str) -> Callable[[GameState, int], float]:
         scoring_name = scoring.lower()
 
         if scoring_name == "default":
@@ -250,7 +247,7 @@ class GameGenerator:
                 writer.writerow(row)
 
     def _serialize_move(self, move: tuple) -> dict:
-        """Transform a game move into a json move """
+        """Transform a game move into a json move"""
         move_type = move[0]
 
         if move_type == "pawn":
@@ -286,6 +283,5 @@ class GameGenerator:
         if given_ids != expected_ids:
             expected_text = sorted(expected_ids)
             raise ValueError(
-                "player_bots must define exactly players "
-                f"{expected_text}"
+                "player_bots must define exactly players " f"{expected_text}"
             )

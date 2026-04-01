@@ -59,4 +59,3 @@ def setup_readline(
     readline.set_completer_delims("")
     readline.set_completer(completer)
     readline.parse_and_bind("tab: complete")
-

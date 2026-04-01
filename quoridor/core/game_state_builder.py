@@ -26,9 +26,7 @@ class GameStateBuilder:
         self._player_positions = dict(positions)
         return self
 
-    def with_remaining_walls(
-        self, remaining: dict[int, int]
-    ) -> GameStateBuilder:
+    def with_remaining_walls(self, remaining: dict[int, int]) -> GameStateBuilder:
         self._remaining_walls = dict(remaining)
         return self
 

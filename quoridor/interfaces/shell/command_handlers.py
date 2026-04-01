@@ -143,4 +143,3 @@ def command_quit(
     )
     stop_server(state)
     return True
-

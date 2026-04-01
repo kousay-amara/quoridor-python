@@ -25,10 +25,10 @@ def _goal_for_player(player_id: int, size: int) -> str:
 
 def _render_ascii_board(state) -> str:
     """
-    Render proche du format contest/spec:
-    - cellules: '_', '1','2','3','4'
-    - mur vertical: préfixe 'X' devant la cellule de droite (col > 0)
-    - ligne séparatrice: 'X' si mur horizontal, sinon '.'
+    Rendering close to the contest/spec format:
+    - cells: '_', '1', '2', '3', '4'
+    - vertical wall: 'X' prefix before the right cell (col > 0)
+    - separator row: 'X' for a horizontal wall, '.' otherwise
     """
     size = state.board_size
 
@@ -92,8 +92,7 @@ def _print_state(
         for pid in ordered_ids
     )
     walls_line = ", ".join(
-        f"Player {pid}: {count}"
-        for pid, count in zip(ordered_ids, wall_counts)
+        f"Player {pid}: {count}" for pid, count in zip(ordered_ids, wall_counts)
     )
     print(_render_ascii_board(state))
     print()
@@ -102,9 +101,7 @@ def _print_state(
         current_line += " (your turn)"
     print(current_line)
     if perspective_player_id in player_positions:
-        position = get_notation_from_node(
-            player_positions[perspective_player_id], size
-        )
+        position = get_notation_from_node(player_positions[perspective_player_id], size)
         print(
             f"You are player {perspective_player_id}. "
             f"Position: {position}. "
@@ -124,8 +121,7 @@ def _print_moves(session: GameSession) -> None:
         session.state.graph, from_node, all_positions
     )
     legal_notation = [
-        get_notation_from_node(n, session.state.board_size)
-        for n in sorted(legal_nodes)
+        get_notation_from_node(n, session.state.board_size) for n in sorted(legal_nodes)
     ]
     print(f"Legal pawn moves for player {current}: {legal_notation}")
 

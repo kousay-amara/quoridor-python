@@ -38,9 +38,7 @@ def start_blitz_alarm(timeout_sec: float | None) -> tuple[bool, object | None]:
     return True, previous_handler
 
 
-def stop_blitz_alarm(
-    alarm_started: bool, previous_handler: object | None
-) -> None:
+def stop_blitz_alarm(alarm_started: bool, previous_handler: object | None) -> None:
     if not alarm_started:
         return
 
@@ -197,9 +195,7 @@ def read_shell_input(
     print_fn: Callable[..., None] = print,
 ) -> tuple[str | None, bool]:
     timed_player = state.session.state.current_player
-    before_blitz_snapshot = (
-        state.blitz.snapshot() if state.blitz.is_enabled() else None
-    )
+    before_blitz_snapshot = state.blitz.snapshot() if state.blitz.is_enabled() else None
     timeout_sec = state.blitz.input_timeout_for(timed_player)
     if timeout_sec is not None and timeout_sec <= 0:
         state.has_unsaved_changes = True

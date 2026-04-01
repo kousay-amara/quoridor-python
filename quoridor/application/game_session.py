@@ -69,9 +69,7 @@ class GameSession:
 
         from_node = self.state.player_positions[player_id]
         all_positions = list(self.state.player_positions.values())
-        legal = get_all_legal_pawn_moves(
-            self.state.graph, from_node, all_positions
-        )
+        legal = get_all_legal_pawn_moves(self.state.graph, from_node, all_positions)
         if to_node not in legal:
             raise ValueError(f"illegal pawn move: {from_node} -> {to_node}")
 
@@ -101,16 +99,12 @@ class GameSession:
         self._ensure_current_player(player_id)
         current_node = self.state.player_positions[player_id]
         if current_node != from_node:
-            raise ValueError(
-                f"player {player_id} pawn is not on node {from_node}"
-            )
+            raise ValueError(f"player {player_id} pawn is not on node {from_node}")
         return self.play_pawn_move(player_id, to_node)
 
     # Needed by is_wall_legal to know each player's target rows/columns.
     def _build_player_target_funcs(self):
-        return get_player_target_funcs(
-            self.state.board_size, self.active_player_ids()
-        )
+        return get_player_target_funcs(self.state.board_size, self.active_player_ids())
 
     def place_wall(
         self,
@@ -127,13 +121,10 @@ class GameSession:
 
         active_players = self.active_player_ids()
         positions = [
-            self.state.player_positions[player_id]
-            for player_id in active_players
+            self.state.player_positions[player_id] for player_id in active_players
         ]
         target_funcs = self._build_player_target_funcs()
-        if not is_wall_legal(
-            self.state.graph, positions, wall_edges, target_funcs
-        ):
+        if not is_wall_legal(self.state.graph, positions, wall_edges, target_funcs):
             raise ValueError(f"illegal wall placement: {wall_edges}")
 
         before = self.state.to_snapshot()
@@ -270,9 +261,7 @@ class GameSession:
             edges = move[1]
             orientation_token = move[2]
             orientation: WallOrientation = (
-                "horizontal"
-                if orientation_token in {"h", "horizontal"}
-                else "vertical"
+                "horizontal" if orientation_token in {"h", "horizontal"} else "vertical"
             )
             return self.place_wall(player_id, edges, orientation)
 
@@ -312,9 +301,7 @@ class GameSession:
 
         idx = self._turn_order.index(self.state.current_player)
         for offset in range(1, len(self._turn_order) + 1):
-            next_player = self._turn_order[
-                (idx + offset) % len(self._turn_order)
-            ]
+            next_player = self._turn_order[(idx + offset) % len(self._turn_order)]
             if next_player in active_players:
                 self.state.current_player = next_player
                 return
