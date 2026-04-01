@@ -94,12 +94,10 @@ def _prompt_save_before_quit(
             print("Invalid path.")
         else:
             try:
-                from . import cli as cli_mod
-
                 if blitz is None:
-                    cli_mod._save_session_to_file(path, session)
+                    _save_session_to_file(path, session)
                 else:
-                    cli_mod._save_session_to_file(path, session, blitz)
+                    _save_session_to_file(path, session, blitz)
                 print(_("Game saved to {path}").format(path=path))
                 return True
             except OSError as exc:

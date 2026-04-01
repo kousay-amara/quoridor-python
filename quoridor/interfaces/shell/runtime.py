@@ -6,14 +6,11 @@ import signal
 import time
 from typing import Any, Callable
 
+from .events import emit_event
+
 
 def _emit(event_bus: Any | None, event_name: str, **payload: Any) -> None:
-    if event_bus is None:
-        return
-    emit = getattr(event_bus, "emit", None)
-    if emit is None:
-        return
-    emit(event_name, **payload)
+    emit_event(event_bus, event_name, **payload)
 
 
 class BlitzInputTimeout(Exception):

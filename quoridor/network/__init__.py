@@ -1,5 +1,7 @@
 """Network helpers for Quoridor."""
 
+# pylint: disable=duplicate-code
+
 from .basic_network import (
     CLIENT_TIMEOUT_SEC,
     DEFAULT_SERVER_HOST,

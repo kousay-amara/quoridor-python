@@ -9,6 +9,16 @@ from typing import Any, Callable
 EventListener = Callable[["ShellEvent"], None]
 
 
+def emit_event(event_bus: Any | None, event_name: str, **payload: Any) -> None:
+    """Emit an event when a bus with an ``emit`` method is available."""
+    if event_bus is None:
+        return
+    emit = getattr(event_bus, "emit", None)
+    if emit is None:
+        return
+    emit(event_name, **payload)
+
+
 @dataclass(frozen=True)
 class ShellEvent:
     """Immutable event payload emitted by the shell runtime."""

@@ -4,15 +4,11 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
+from .events import emit_event
+
 
 def _emit_from_state(state: Any, event_name: str, **payload: Any) -> None:
-    event_bus = getattr(state, "event_bus", None)
-    if event_bus is None:
-        return
-    emit = getattr(event_bus, "emit", None)
-    if emit is None:
-        return
-    emit(event_name, **payload)
+    emit_event(getattr(state, "event_bus", None), event_name, **payload)
 
 
 def command_server(

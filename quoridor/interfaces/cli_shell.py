@@ -1,10 +1,14 @@
 """Interactive shell loop for the Quoridor CLI."""
 
+# pylint: disable=duplicate-code
+
 from __future__ import annotations
 
 import argparse
 import gettext
+import importlib
 import shlex
+import sys
 import time
 
 from ..application.blitz import Blitz
@@ -609,6 +613,13 @@ def _show_help(line: str) -> bool:
     return False
 
 
+def _get_cli_module():
+    module = sys.modules.get("quoridor.interfaces.cli")
+    if module is not None:
+        return module
+    return importlib.import_module(".cli", package=__package__)
+
+
 def _apply_and_maybe_auto_play(
     session: GameSession,
     ai_mode: str,
@@ -701,8 +712,7 @@ def _handle_save(
 
 
 def _handle_history(session: GameSession) -> None:
-    from . import cli as cli_mod
-
+    cli_mod = _get_cli_module()
     print(cli_mod._serialize_history_section(session), end="")
 
 
@@ -714,8 +724,7 @@ def _handle_hint(
     *,
     blitz: Blitz,
 ) -> None:
-    from . import cli as cli_mod
-
+    cli_mod = _get_cli_module()
     if _is_game_paused(blitz):
         raise ValueError("Game is paused.")
 
@@ -894,8 +903,7 @@ def _print_configuration(state: "_ShellState") -> None:
 
 
 def _command_new(state: _ShellState, line: str) -> bool:
-    from . import cli as cli_mod
-
+    cli_mod = _get_cli_module()
     return shell_command_handlers.command_new(
         state,
         line,
@@ -1282,8 +1290,7 @@ def _run_interactive_shell(
     verbose: bool = False,
     debug: bool = False,
 ) -> None:
-    from . import cli as cli_mod
-
+    cli_mod = _get_cli_module()
     config = _ShellConfig(
         verbose=verbose,
         debug=debug,
