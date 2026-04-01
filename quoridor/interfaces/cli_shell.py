@@ -1354,12 +1354,23 @@ def _command_join(state: _ShellState, line: str) -> bool:
     def _on_game_state(game_state_update: GameStateUpdate) -> None:
         _apply_network_game_state_to_local_session(state, game_state_update)
 
+    def _on_notification(message: str) -> None:
+        print(f"\n{message}")
+
+    def _on_connection_lost(exc: OSError) -> None:
+        print()
+        cli_network._handle_connection_lost(state, exc)
+
     client.set_opponent_move_callback(_on_opponent_move)
     client.set_game_state_callback(_on_game_state)
+    client.set_notification_callback(_on_notification)
+    client.set_connection_lost_callback(_on_connection_lost)
     for pending_move in client.drain_opponent_moves():
         _on_opponent_move(pending_move)
     for game_state_update in client.drain_game_state_updates():
         _on_game_state(game_state_update)
+    for notification in client.drain_notifications():
+        _on_notification(notification)
     return handled
 
 
@@ -1377,6 +1388,26 @@ def _command_scoreboard(state: _ShellState, line: str) -> bool:
 
 def _command_new_player(state: _ShellState, line: str) -> bool:
     return cli_network.command_new_player(state, line)
+
+
+def _command_accept(state: _ShellState, line: str) -> bool:
+    return cli_network.command_accept(state, line)
+
+
+def _command_decline(state: _ShellState, line: str) -> bool:
+    return cli_network.command_decline(state, line)
+
+
+def _command_cancel(state: _ShellState, line: str) -> bool:
+    return cli_network.command_cancel(state, line)
+
+
+def _command_away(state: _ShellState, line: str) -> bool:
+    return cli_network.command_away(state, line)
+
+
+def _command_back(state: _ShellState, line: str) -> bool:
+    return cli_network.command_back(state, line)
 
 
 def _command_undo(state: _ShellState, line: str) -> bool:
@@ -1534,6 +1565,46 @@ class _NetworkNewPlayerCommand(_InvalidAsCommandError):
         return _command_new_player(state, line)
 
 
+class _AcceptCommand(_InvalidAsCommandError):
+    def matches(self, line: str) -> bool:
+        return line.lower() == "accept"
+
+    def run(self, state: _ShellState, line: str) -> bool:
+        return _command_accept(state, line)
+
+
+class _DeclineCommand(_InvalidAsCommandError):
+    def matches(self, line: str) -> bool:
+        return line.lower() == "decline"
+
+    def run(self, state: _ShellState, line: str) -> bool:
+        return _command_decline(state, line)
+
+
+class _CancelCommand(_InvalidAsCommandError):
+    def matches(self, line: str) -> bool:
+        return line.lower() == "cancel"
+
+    def run(self, state: _ShellState, line: str) -> bool:
+        return _command_cancel(state, line)
+
+
+class _AwayCommand(_InvalidAsCommandError):
+    def matches(self, line: str) -> bool:
+        return line.lower() == "away"
+
+    def run(self, state: _ShellState, line: str) -> bool:
+        return _command_away(state, line)
+
+
+class _BackCommand(_InvalidAsCommandError):
+    def matches(self, line: str) -> bool:
+        return line.lower() == "back"
+
+    def run(self, state: _ShellState, line: str) -> bool:
+        return _command_back(state, line)
+
+
 class _HelpCommand(_BaseCommand):
     def matches(self, line: str) -> bool:
         line_lower = line.lower()
@@ -1645,7 +1716,8 @@ class _PingCommand(_InvalidAsCommandError):
 
 class _PlayersCommand(_InvalidAsCommandError):
     def matches(self, line: str) -> bool:
-        return line.lower() == "players"
+        line_lower = line.lower()
+        return line_lower == "players" or line_lower.startswith("players ")
 
     def run(self, state: _ShellState, line: str) -> bool:
         return _command_players(state, line)
@@ -1751,6 +1823,11 @@ def _build_command_registry() -> _CommandRegistry:
     return _CommandRegistry(
         [
             _NetworkNewPlayerCommand(),
+            _AcceptCommand(),
+            _DeclineCommand(),
+            _CancelCommand(),
+            _AwayCommand(),
+            _BackCommand(),
             _NewCommand(),
             _HelpCommand(),
             _HistoryCommand(),

@@ -31,14 +31,17 @@ def _clear_discovery_cache():
     discovery_mod._discovery_cache.clear()
 
 
-def _run_shell(monkeypatch, commands: list[str], **kwargs) -> None:
+def _run_shell(monkeypatch, commands: list[object], **kwargs) -> None:
     iterator = iter(commands)
 
     def fake_input(_prompt: str = "") -> str:
         if _prompt:
             print(_prompt, end="")
         try:
-            return next(iterator)
+            value = next(iterator)
+            if callable(value):
+                value = value()
+            return value
         except StopIteration as exc:
             raise EOFError from exc
 
@@ -90,6 +93,48 @@ def _wait_for_game_state_update(
             return updates[-1]
         time.sleep(0.01)
     return None
+
+
+def _wait_for_client_id(server: NetworkServer, name: str) -> int | None:
+    deadline = time.time() + 1.0
+    while time.time() < deadline:
+        with server._lock:
+            for client_id, session in server._client_sessions.items():
+                if session.name == name:
+                    return client_id
+        time.sleep(0.01)
+    return None
+
+
+def _start_room_for_clients(
+    server: NetworkServer,
+    *clients: NetworkClient,
+):
+    participant_ids = []
+    for client in clients:
+        assert client.client_id is not None
+        participant_ids.append(client.client_id)
+
+    with server._lock:
+        room = server._create_room_locked(participant_ids)
+    server._send_room_state(room)
+    return room
+
+
+def _start_room_for_names(
+    server: NetworkServer,
+    *names: str,
+):
+    participant_ids = []
+    for name in names:
+        client_id = _wait_for_client_id(server, name)
+        assert client_id is not None
+        participant_ids.append(client_id)
+
+    with server._lock:
+        room = server._create_room_locked(participant_ids)
+    server._send_room_state(room)
+    return room
 
 
 class _FakeNetworkState:
@@ -286,6 +331,45 @@ def test_network_server_status_snapshot_updates_with_connections():
             server.stop()
 
 
+def test_network_players_supports_detailed_lookup_by_id():
+    port = _unused_port()
+    server = NetworkServer(port=port)
+    first_client = NetworkClient(host="127.0.0.1", port=port, name="alice")
+    second_client = NetworkClient(host="127.0.0.1", port=port, name="bob")
+
+    try:
+        server.start()
+        first_client.connect()
+        second_client.connect()
+
+        assert first_client.player_details(2) == (
+            2,
+            "bob",
+            "idle",
+            0,
+            0,
+            0,
+        )
+
+        _start_room_for_clients(server, first_client, second_client)
+        assert _wait_for_game_state_update(first_client) is not None
+        assert _wait_for_game_state_update(second_client) is not None
+
+        assert first_client.player_details(2) == (
+            2,
+            "bob",
+            "ingame",
+            0,
+            0,
+            0,
+        )
+    finally:
+        first_client.close()
+        second_client.close()
+        if server.running():
+            server.stop()
+
+
 def test_network_scoreboard_tracks_runtime_stats():
     port = _unused_port()
     server = NetworkServer(port=port)
@@ -330,8 +414,9 @@ def test_network_new_creates_room_and_sets_players_ingame():
         first_client.connect()
         second_client.connect()
 
-        response = first_client.send_command("NEW 2")
-        assert response == "NEW_OK 1"
+        _start_room_for_clients(server, first_client, second_client)
+        assert _wait_for_game_state_update(first_client) is not None
+        assert _wait_for_game_state_update(second_client) is not None
 
         status = server.server_status_snapshot()
         assert status["active_games"] == 1
@@ -367,7 +452,10 @@ def test_network_new_rejects_absent_or_unavailable_player():
 
         assert first_client.send_command("NEW 999") == "ERROR PLAYER_NOT_FOUND"
 
-        assert first_client.send_command("NEW 2") == "NEW_OK 1"
+        assert (
+            first_client.send_command("NEW 2")
+            == "INVITATION_SENT PLAYER=bob TIMEOUT=300s"
+        )
         assert (
             third_client.send_command("NEW 2")
             == "ERROR PLAYER_NOT_AVAILABLE"
@@ -394,16 +482,16 @@ def test_network_new_supports_multiple_target_players():
         third_client.connect()
 
         response = first_client.send_command("NEW 2 3")
-        assert response == "NEW_OK 1"
+        assert response == "ERROR INVALID_NEW_FORMAT"
 
         status = server.server_status_snapshot()
-        assert status["active_games"] == 1
+        assert status["active_games"] == 0
 
         players = first_client.players()
         assert players == [
-            (1, "alice", "ingame"),
-            (2, "bob", "ingame"),
-            (3, "charlie", "ingame"),
+            (1, "alice", "idle"),
+            (2, "bob", "idle"),
+            (3, "charlie", "idle"),
         ]
     finally:
         first_client.close()
@@ -431,7 +519,7 @@ def test_network_new_rejects_unsupported_player_count():
 
         assert (
             clients[0].send_command("NEW 2 3 4 5")
-            == "ERROR UNSUPPORTED_PLAYER_COUNT"
+            == "ERROR INVALID_NEW_FORMAT"
         )
     finally:
         for client in clients:
@@ -450,7 +538,7 @@ def test_network_move_routes_to_opponent_and_enforces_turn_order():
         server.start()
         first_client.connect()
         second_client.connect()
-        assert first_client.send_command("NEW 2") == "NEW_OK 1"
+        _start_room_for_clients(server, first_client, second_client)
 
         first_update = _wait_for_game_state_update(first_client)
         second_update = _wait_for_game_state_update(second_client)
@@ -502,8 +590,12 @@ def test_network_moves_are_isolated_between_parallel_games():
         third_client.connect()
         fourth_client.connect()
 
-        assert first_client.send_command("NEW 2") == "NEW_OK 1"
-        assert third_client.send_command("NEW 4") == "NEW_OK 2"
+        _start_room_for_clients(server, first_client, second_client)
+        _start_room_for_clients(server, third_client, fourth_client)
+        assert _wait_for_game_state_update(first_client) is not None
+        assert _wait_for_game_state_update(second_client) is not None
+        assert _wait_for_game_state_update(third_client) is not None
+        assert _wait_for_game_state_update(fourth_client) is not None
 
         assert first_client.move("e1-e2") == "MOVE_OK"
         assert second_client.ping() >= 0
@@ -558,7 +650,9 @@ def test_network_move_rejects_illegal_move():
         server.start()
         first_client.connect()
         second_client.connect()
-        assert first_client.send_command("NEW 2") == "NEW_OK 1"
+        _start_room_for_clients(server, first_client, second_client)
+        assert _wait_for_game_state_update(first_client) is not None
+        assert _wait_for_game_state_update(second_client) is not None
 
         assert first_client.move("e1-e3") == "ERROR ILLEGAL_MOVE"
         assert second_client.ping() >= 0
@@ -580,7 +674,9 @@ def test_network_game_end_closes_room_and_updates_scoreboard():
         server.start()
         first_client.connect()
         second_client.connect()
-        assert first_client.send_command("NEW 2") == "NEW_OK 1"
+        _start_room_for_clients(server, first_client, second_client)
+        assert _wait_for_game_state_update(first_client) is not None
+        assert _wait_for_game_state_update(second_client) is not None
 
         assert first_client.move("e1-e2") == "MOVE_OK"
         assert second_client.move("e9-d9") == "MOVE_OK"
@@ -679,12 +775,11 @@ def test_cli_new_player_creates_game_with_explicit_errors(
             server.stop()
 
     out = capsys.readouterr().out
-    assert "Cannot create game: one or more players were not found." in out
-    assert "Game 1 started with player(s) 1." in out
-    assert "You are player 1. Position: e1. Goal: reach row 9." in out
-    assert "Cannot create game: you are already in game." in out
-    assert "- 1: bob (ingame)" in out
-    assert "- 2: alice (ingame)" in out
+    assert "Cannot send invitation: player not found." in out
+    assert "INVITATION_SENT PLAYER=bob TIMEOUT=300s" in out
+    assert "Cannot send invitation: you are not idle." in out
+    assert "- 1: bob (waitgame)" in out
+    assert "- 2: alice (waitgame)" in out
 
 
 def test_cli_network_move_routes_and_enforces_turn(monkeypatch, capsys):
@@ -699,8 +794,10 @@ def test_cli_network_move_routes_and_enforces_turn(monkeypatch, capsys):
             monkeypatch,
             [
                 f"join 127.0.0.1:{port} alice",
-                "new 1",
-                "move e1-e2",
+                lambda: (
+                    _start_room_for_names(server, "alice", "bob"),
+                    "move e1-e2",
+                )[1],
                 "move e2-e3",
                 "quit",
                 "quit",
@@ -736,8 +833,10 @@ def test_cli_quit_from_network_restores_previous_local_game(
             monkeypatch,
             [
                 f"join 127.0.0.1:{port} alice",
-                "new 1",
-                "quit",
+                lambda: (
+                    _start_room_for_names(server, "alice", "bob"),
+                    "quit",
+                )[1],
                 "e1-e2",
                 "quit",
                 "n",
@@ -766,8 +865,10 @@ def test_cli_network_shorthand_wall_routes_to_server(monkeypatch, capsys):
             monkeypatch,
             [
                 f"join 127.0.0.1:{port} alice",
-                "new 1",
-                "e2h",
+                lambda: (
+                    _start_room_for_names(server, "alice", "bob"),
+                    "e2h",
+                )[1],
                 "quit",
                 "quit",
             ],
@@ -810,10 +911,10 @@ def test_cli_new_player_accepts_multiple_ids(monkeypatch, capsys):
             server.stop()
 
     out = capsys.readouterr().out
-    assert "Game 1 started with player(s) 1, 2." in out
-    assert "- 1: bob (ingame)" in out
-    assert "- 2: charlie (ingame)" in out
-    assert "- 3: alice (ingame)" in out
+    assert "Invalid command: Invalid format. Use: new PLAYER_ID" in out
+    assert "- 1: bob (idle)" in out
+    assert "- 2: charlie (idle)" in out
+    assert "- 3: alice (idle)" in out
 
 
 def test_cli_join_accepts_custom_name(monkeypatch, capsys):
@@ -835,6 +936,32 @@ def test_cli_join_accepts_custom_name(monkeypatch, capsys):
     assert f"Connected to server 127.0.0.1:{port}." in out
     assert "Connected players:" in out
     assert "- 1: alice (idle)" in out
+
+
+def test_cli_players_with_id_displays_detailed_player_info(
+    monkeypatch,
+    capsys,
+):
+    port = _unused_port()
+
+    _run_shell(
+        monkeypatch,
+        [
+            f"server start {port}",
+            f"join 127.0.0.1:{port} alice",
+            "players 1",
+            "quit",
+            "server stop",
+            "quit",
+        ],
+    )
+
+    out = capsys.readouterr().out
+    assert "Player 1: alice" in out
+    assert "- status: idle" in out
+    assert "- played: 0" in out
+    assert "- wins: 0" in out
+    assert "- losses: 0" in out
 
 
 def test_cli_scoreboard_displays_server_stats(monkeypatch, capsys):

@@ -25,20 +25,28 @@ class NetworkState(Protocol):
 
 _NEW_GAME_ERRORS = {
     "ERROR PLAYER_NOT_FOUND": (
-        "Cannot create game: one or more players were not found."
+        "Cannot send invitation: player not found."
     ),
     "ERROR PLAYER_NOT_AVAILABLE": (
-        "Cannot create game: one or more players are busy."
+        "Cannot send invitation: player is not available."
     ),
     "ERROR REQUESTER_NOT_IDLE": (
-        "Cannot create game: you are already in game."
+        "Cannot send invitation: you are not idle."
     ),
     "ERROR SELF_INVITE": (
-        "Cannot create game: choose player IDs different from yours."
+        "Cannot send invitation: choose a player ID different from yours."
     ),
-    "ERROR UNSUPPORTED_PLAYER_COUNT": (
-        "Cannot create game: player count must be between 2 and 4."
-    ),
+}
+
+_INVITATION_ACTION_ERRORS = {
+    "ERROR NO_INVITATION": "No pending invitation.",
+    "ERROR PLAYER_NOT_FOUND": "Invitation is no longer available.",
+}
+
+_STATUS_CHANGE_ERRORS = {
+    "ERROR ALREADY_AWAY": "You are already away.",
+    "ERROR CANNOT_GO_AWAY": "Cannot go away right now.",
+    "ERROR NOT_AWAY": "You are not away.",
 }
 
 _MOVE_ERRORS = {
@@ -265,11 +273,43 @@ def command_ping(state: NetworkState, _line: str) -> bool:
 
 
 def command_players(state: NetworkState, line: str) -> bool:
-    if line.strip().lower() != "players":
-        raise ValueError("Invalid format. Use: players")
+    parts = line.split()
+    if len(parts) > 2 or not parts or parts[0].lower() != "players":
+        raise ValueError("Invalid format. Use: players [PLAYER_ID]")
 
     if state.network_client is None:
         print("Not connected to any server.")
+        return False
+
+    if len(parts) == 2:
+        try:
+            requested_player_id = int(parts[1])
+        except ValueError:
+            raise ValueError("Invalid format. Use: players [PLAYER_ID]")
+        if requested_player_id <= 0:
+            raise ValueError("Invalid format. Use: players [PLAYER_ID]")
+
+        try:
+            (
+                client_id,
+                name,
+                status,
+                wins,
+                losses,
+                played,
+            ) = state.network_client.player_details(requested_player_id)
+        except ValueError as exc:
+            print(str(exc))
+            return False
+        except OSError as exc:
+            _handle_connection_lost(state, exc)
+            return False
+
+        print(f"Player {client_id}: {name}")
+        print(f"- status: {status}")
+        print(f"- played: {played}")
+        print(f"- wins: {wins}")
+        print(f"- losses: {losses}")
         return False
 
     try:
@@ -317,63 +357,174 @@ def command_scoreboard(state: NetworkState, line: str) -> bool:
 
 def command_new_player(state: NetworkState, line: str) -> bool:
     parts = line.split()
-    if len(parts) < 2:
-        raise ValueError("Invalid format. Use: new PLAYER_ID [PLAYER_ID...]")
+    if len(parts) != 2:
+        raise ValueError("Invalid format. Use: new PLAYER_ID")
 
     if state.network_client is None:
         print("Not connected to any server.")
         return False
 
-    target_player_ids = []
-    seen_targets = set()
-    for raw_target_id in parts[1:]:
-        try:
-            target_player_id = int(raw_target_id)
-        except ValueError:
-            raise ValueError(
-                "Invalid format. Use: new PLAYER_ID [PLAYER_ID...]"
-            )
-        if target_player_id <= 0:
-            raise ValueError(
-                "Invalid format. Use: new PLAYER_ID [PLAYER_ID...]"
-            )
-        if target_player_id in seen_targets:
-            raise ValueError(
-                "Invalid format. Use: new PLAYER_ID [PLAYER_ID...]"
-            )
-        seen_targets.add(target_player_id)
-        target_player_ids.append(target_player_id)
-
-    command_payload = " ".join(str(pid) for pid in target_player_ids)
     try:
-        response = state.network_client.send_command(f"NEW {command_payload}")
+        target_player_id = int(parts[1])
+    except ValueError:
+        raise ValueError("Invalid format. Use: new PLAYER_ID")
+    if target_player_id <= 0:
+        raise ValueError("Invalid format. Use: new PLAYER_ID")
+
+    try:
+        response = state.network_client.send_command(
+            f"NEW {target_player_id}"
+        )
     except OSError as exc:
         _handle_connection_lost(state, exc)
         return False
 
-    if response.startswith("NEW_OK "):
-        response_parts = response.split()
-        if len(response_parts) != 2:
-            print(f"Cannot create game: unexpected response ({response}).")
-            return False
-        try:
-            game_id = int(response_parts[1])
-        except ValueError:
-            print(f"Cannot create game: unexpected response ({response}).")
-            return False
-        targets_text = ", ".join(str(pid) for pid in target_player_ids)
-        print(f"Game {game_id} started with player(s) {targets_text}.")
+    if response.startswith("INVITATION_SENT "):
+        print(response)
         return False
 
     if response == "ERROR INVALID_NEW_FORMAT":
-        raise ValueError(
-            "Invalid format. Use: new PLAYER_ID [PLAYER_ID...]"
-        )
+        raise ValueError("Invalid format. Use: new PLAYER_ID")
     if response in _NEW_GAME_ERRORS:
         print(_NEW_GAME_ERRORS[response])
         return False
 
-    print(f"Cannot create game: unexpected response ({response}).")
+    print(f"Cannot send invitation: unexpected response ({response}).")
+    return False
+
+
+def command_accept(state: NetworkState, line: str) -> bool:
+    if line.strip().lower() != "accept":
+        raise ValueError("Invalid format. Use: accept")
+
+    if state.network_client is None:
+        print("Not connected to any server.")
+        return False
+
+    try:
+        response = state.network_client.accept()
+    except OSError as exc:
+        _handle_connection_lost(state, exc)
+        return False
+
+    if response.startswith("GAME_START "):
+        print(response)
+        return False
+
+    print(
+        _INVITATION_ACTION_ERRORS.get(
+            response,
+            f"Cannot accept invitation: unexpected response ({response}).",
+        )
+    )
+    return False
+
+
+def command_decline(state: NetworkState, line: str) -> bool:
+    if line.strip().lower() != "decline":
+        raise ValueError("Invalid format. Use: decline")
+
+    if state.network_client is None:
+        print("Not connected to any server.")
+        return False
+
+    try:
+        response = state.network_client.decline()
+    except OSError as exc:
+        _handle_connection_lost(state, exc)
+        return False
+
+    if response.startswith("DECLINE_OK"):
+        print(response)
+        return False
+
+    print(
+        _INVITATION_ACTION_ERRORS.get(
+            response,
+            f"Cannot decline invitation: unexpected response ({response}).",
+        )
+    )
+    return False
+
+
+def command_cancel(state: NetworkState, line: str) -> bool:
+    if line.strip().lower() != "cancel":
+        raise ValueError("Invalid format. Use: cancel")
+
+    if state.network_client is None:
+        print("Not connected to any server.")
+        return False
+
+    try:
+        response = state.network_client.cancel()
+    except OSError as exc:
+        _handle_connection_lost(state, exc)
+        return False
+
+    if response.startswith("CANCEL_OK"):
+        print(response)
+        return False
+
+    print(
+        _INVITATION_ACTION_ERRORS.get(
+            response,
+            f"Cannot cancel invitation: unexpected response ({response}).",
+        )
+    )
+    return False
+
+
+def command_away(state: NetworkState, line: str) -> bool:
+    if line.strip().lower() != "away":
+        raise ValueError("Invalid format. Use: away")
+
+    if state.network_client is None:
+        print("Not connected to any server.")
+        return False
+
+    try:
+        response = state.network_client.away()
+    except OSError as exc:
+        _handle_connection_lost(state, exc)
+        return False
+
+    if response == "AWAY_OK":
+        print("Status changed to away.")
+        return False
+
+    print(
+        _STATUS_CHANGE_ERRORS.get(
+            response,
+            f"Cannot change status: unexpected response ({response}).",
+        )
+    )
+    return False
+
+
+def command_back(state: NetworkState, line: str) -> bool:
+    if line.strip().lower() != "back":
+        raise ValueError("Invalid format. Use: back")
+
+    if state.network_client is None:
+        print("Not connected to any server.")
+        return False
+
+    try:
+        response = state.network_client.back()
+    except OSError as exc:
+        _handle_connection_lost(state, exc)
+        return False
+
+    if response == "BACK_OK":
+        print("Status changed to idle.")
+        return False
+
+    print(
+        _STATUS_CHANGE_ERRORS.get(
+            response,
+            f"Cannot change status: unexpected response ({response}).",
+        )
+    )
     return False
 
 

@@ -22,12 +22,12 @@ _HISTORY_DESCRIPTION = (
 COMMAND_CATALOG: tuple[CommandHelp, ...] = (
     CommandHelp(
         "new",
-        "new [ARGS] | new PLAYER_ID [PLAYER_ID...]",
+        "new [ARGS] | new PLAYER_ID",
         (
             "Start a new game. Without ARGS, reuse the current "
             "configuration. With ARGS, override it for the new game. "
-            "When connected to a server, new PLAYER_ID [PLAYER_ID...] "
-            "creates a room with idle players."
+            "When connected to a server, new PLAYER_ID sends a game "
+            "invitation to an idle player."
         ),
     ),
     CommandHelp("help", "help [CMD]", "Show shell help, or help for CMD."),
@@ -103,8 +103,36 @@ COMMAND_CATALOG: tuple[CommandHelp, ...] = (
     ),
     CommandHelp(
         "players",
-        "players",
-        "List players connected to the current game server.",
+        "players [PLAYER_ID]",
+        (
+            "List players connected to the current game server, "
+            "or show detailed information for PLAYER_ID."
+        ),
+    ),
+    CommandHelp(
+        "accept",
+        "accept",
+        "Accept the pending game invitation and start the game.",
+    ),
+    CommandHelp(
+        "decline",
+        "decline",
+        "Decline the pending game invitation.",
+    ),
+    CommandHelp(
+        "cancel",
+        "cancel",
+        "Cancel the invitation you previously sent.",
+    ),
+    CommandHelp(
+        "away",
+        "away",
+        "Mark yourself as unavailable for invitations.",
+    ),
+    CommandHelp(
+        "back",
+        "back",
+        "Return from away status to idle.",
     ),
     CommandHelp(
         "scoreboard",
@@ -149,7 +177,7 @@ OVERVIEW_TEXT = (
     "Commands: new [ARGS], help [CMD], load, save, set, hint, show board, "
     "show history, show configuration, show time, server list, server start, "
     "server status, server stop, join, ping, players, scoreboard, pause, "
-    "moves, move, wall, "
+    "accept, decline, cancel, away, back, moves, move, wall, "
     "undo, redo, quit\n"
     "Use: help <command>"
 )
@@ -173,6 +201,11 @@ COMPLETION_COMMANDS = [
     "join ",
     "ping",
     "players",
+    "accept",
+    "decline",
+    "cancel",
+    "away",
+    "back",
     "scoreboard",
     "pause",
     "moves",

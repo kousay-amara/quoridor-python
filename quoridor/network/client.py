@@ -32,6 +32,7 @@ class NetworkClient:
         self._buffer = ""
         self._pending_opponent_moves = []
         self._pending_game_state_updates = []
+        self._pending_notifications = []
         self._response_queue = []
         self._response_condition = threading.Condition()
         self._send_lock = threading.Lock()
@@ -40,6 +41,8 @@ class NetworkClient:
         self._reader_error = None
         self._opponent_move_callback = None
         self._game_state_callback = None
+        self._notification_callback = None
+        self._connection_lost_callback = None
 
     def connected(self) -> bool:
         return self._sock is not None
@@ -93,6 +96,7 @@ class NetworkClient:
                 self._response_queue.clear()
                 self._pending_opponent_moves.clear()
                 self._pending_game_state_updates.clear()
+                self._pending_notifications.clear()
                 self._reader_error = None
                 self._reader_stop_requested.clear()
                 self._reader_thread = threading.Thread(
@@ -120,9 +124,13 @@ class NetworkClient:
             try:
                 line, buffer, closed = _recv_line(sock, buffer)
             except OSError as exc:
+                if self._reader_stop_requested.is_set():
+                    break
                 self._set_reader_error(exc)
                 break
             if closed:
+                if self._reader_stop_requested.is_set():
+                    break
                 self._set_reader_error(OSError("server closed the connection"))
                 break
             if line is None:
@@ -168,15 +176,52 @@ class NetworkClient:
                     )
                 continue
 
+            if line.startswith(
+                (
+                    "INVITATION_RECEIVED ",
+                    "INVITATION_ACCEPTED ",
+                    "INVITATION_DECLINED ",
+                    "INVITATION_CANCELLED ",
+                    "INVITATION_EXPIRED ",
+                )
+            ):
+                callback = self._notification_callback
+                if callback is not None:
+                    try:
+                        callback(line)
+                    except Exception:
+                        with self._response_condition:
+                            self._pending_notifications.append(line)
+                    continue
+
+                with self._response_condition:
+                    self._pending_notifications.append(line)
+                continue
+
+            if line == "ERROR TIMEOUT":
+                self._set_reader_error(
+                    OSError("server timed out the connection")
+                )
+                break
+
             with self._response_condition:
                 self._response_queue.append(line)
                 self._response_condition.notify_all()
 
     def _set_reader_error(self, exc: OSError) -> None:
+        callback = None
+        reader_error = None
         with self._response_condition:
             if self._reader_error is None:
                 self._reader_error = OSError(str(exc))
+                reader_error = self._reader_error
+                callback = self._connection_lost_callback
             self._response_condition.notify_all()
+        if callback is not None and reader_error is not None:
+            try:
+                callback(reader_error)
+            except Exception:
+                pass
 
     def set_opponent_move_callback(
         self,
@@ -190,11 +235,28 @@ class NetworkClient:
     ) -> None:
         self._game_state_callback = callback
 
+    def set_notification_callback(
+        self,
+        callback,
+    ) -> None:
+        self._notification_callback = callback
+
+    def set_connection_lost_callback(
+        self,
+        callback,
+    ) -> None:
+        self._connection_lost_callback = callback
+
     def send_command(self, command: str) -> str:
         if self._sock is None:
             raise OSError("client is not connected")
 
         with self._send_lock:
+            with self._response_condition:
+                if self._reader_error is not None:
+                    error = self._reader_error
+                    self.close()
+                    raise OSError(str(error))
             _send_line(self._sock, command)
             with self._response_condition:
                 while True:
@@ -228,6 +290,7 @@ class NetworkClient:
 
     def close(self) -> None:
         self._reader_stop_requested.set()
+        self._connection_lost_callback = None
         if self._sock is not None:
             try:
                 self._sock.close()
@@ -247,11 +310,14 @@ class NetworkClient:
         with self._response_condition:
             self._pending_opponent_moves.clear()
             self._pending_game_state_updates.clear()
+            self._pending_notifications.clear()
             self._response_queue.clear()
             self._reader_error = None
             self._response_condition.notify_all()
         self._opponent_move_callback = None
         self._game_state_callback = None
+        self._notification_callback = None
+        self._connection_lost_callback = None
         self._reader_thread = None
 
     def players(self) -> list[tuple[int, str, str]]:
@@ -275,6 +341,42 @@ class NetworkClient:
                 )
             players.append((client_id, parts[1], parts[2]))
         return players
+
+    def player_details(
+        self,
+        client_id: int,
+    ) -> tuple[int, str, str, int, int, int]:
+        if client_id <= 0:
+            raise ValueError("player id must be positive")
+
+        response = self.send_command(f"PLAYERS {client_id}")
+        if response == "ERROR PLAYER_NOT_FOUND":
+            raise ValueError("Player not found.")
+        if response == "ERROR INVALID_PLAYERS_FORMAT":
+            raise OSError(f"unexpected players response: {response}")
+        if not response.startswith("PLAYER "):
+            raise OSError(f"unexpected players response: {response}")
+
+        parts = response[7:].split("|")
+        if len(parts) != 6:
+            raise OSError(f"unexpected players response: {response}")
+
+        try:
+            detail_client_id = int(parts[0])
+            wins = int(parts[3])
+            losses = int(parts[4])
+            played = int(parts[5])
+        except ValueError:
+            raise OSError(f"unexpected players response: {response}")
+
+        return (
+            detail_client_id,
+            parts[1],
+            parts[2],
+            wins,
+            losses,
+            played,
+        )
 
     def scoreboard(self) -> list[tuple[int, str, int, int, int]]:
         response = self.send_command("SCOREBOARD")
@@ -311,6 +413,21 @@ class NetworkClient:
             raise ValueError("move notation must not contain spaces")
         return self.send_command(f"MOVE {move_notation}")
 
+    def accept(self) -> str:
+        return self.send_command("ACCEPT")
+
+    def decline(self) -> str:
+        return self.send_command("DECLINE")
+
+    def cancel(self) -> str:
+        return self.send_command("CANCEL")
+
+    def away(self) -> str:
+        return self.send_command("AWAY")
+
+    def back(self) -> str:
+        return self.send_command("BACK")
+
     def drain_opponent_moves(self) -> list[str]:
         with self._response_condition:
             moves = list(self._pending_opponent_moves)
@@ -322,6 +439,12 @@ class NetworkClient:
             updates = list(self._pending_game_state_updates)
             self._pending_game_state_updates.clear()
             return updates
+
+    def drain_notifications(self) -> list[str]:
+        with self._response_condition:
+            notifications = list(self._pending_notifications)
+            self._pending_notifications.clear()
+            return notifications
 
 
 __all__ = ["NetworkClient"]

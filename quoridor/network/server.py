@@ -22,6 +22,11 @@ from .basic_network import (
 
 _ROOM_BOARD_SIZE = 9
 _ROOM_WALLS_PER_PLAYER = 20
+_INVITATION_TIMEOUT_SEC = 300.0
+_PLAYER_STATUS_IDLE = "idle"
+_PLAYER_STATUS_AWAY = "away"
+_PLAYER_STATUS_WAITGAME = "waitgame"
+_PLAYER_STATUS_INGAME = "ingame"
 
 
 class _ClientSession:
@@ -79,6 +84,21 @@ class _GameRoom:
         self.session = session
 
 
+class _Invitation:
+    def __init__(
+        self,
+        *,
+        inviter_id: int,
+        invitee_id: int,
+        created_at: float,
+        expires_at: float,
+    ) -> None:
+        self.inviter_id = inviter_id
+        self.invitee_id = invitee_id
+        self.created_at = created_at
+        self.expires_at = expires_at
+
+
 class NetworkServer:
     def __init__(
         self,
@@ -89,6 +109,7 @@ class NetworkServer:
         discovery_port: int = DISCOVERY_PORT,
         broadcast_interval_sec: float = DISCOVERY_BROADCAST_INTERVAL_SEC,
         client_timeout_sec: float = CLIENT_TIMEOUT_SEC,
+        invitation_timeout_sec: float = _INVITATION_TIMEOUT_SEC,
     ) -> None:
         self.host = host
         self.port = _validate_port(port)
@@ -96,6 +117,7 @@ class NetworkServer:
         self.discovery_port = _validate_port(discovery_port)
         self.broadcast_interval_sec = broadcast_interval_sec
         self.client_timeout_sec = client_timeout_sec
+        self.invitation_timeout_sec = invitation_timeout_sec
         self._broadcaster = DiscoveryBroadcaster(
             port=self.port,
             name=self.name,
@@ -108,6 +130,8 @@ class NetworkServer:
         self._client_sessions: dict[int, _ClientSession] = {}
         self._scoreboard: dict[int, _ScoreEntry] = {}
         self._game_rooms: dict[int, _GameRoom] = {}
+        self._pending_invitations_by_inviter: dict[int, _Invitation] = {}
+        self._pending_invitations_by_invitee: dict[int, _Invitation] = {}
         self._next_client_id = 1
         self._next_game_id = 1
         self._lock = threading.Lock()
@@ -198,6 +222,7 @@ class NetworkServer:
     def _accept_loop(self) -> None:
         assert self._listener_sock is not None
         while not self._stop_requested.is_set():
+            self._expire_invitations()
             try:
                 client_sock, _ = self._listener_sock.accept()
             except socket.timeout:
@@ -222,7 +247,7 @@ class NetworkServer:
                     thread=client_thread,
                     last_activity_time=time.time(),
                     name=f"client-{client_id}",
-                    status="idle",
+                    status=_PLAYER_STATUS_IDLE,
                     game_id=None,
                     buffer="",
                 )
@@ -256,8 +281,25 @@ class NetworkServer:
                     if session is None:
                         break
                     last_client_activity_time = session.last_activity_time
+                    client_status = session.status
+                    waiting_invitation = None
+                    if client_status == _PLAYER_STATUS_WAITGAME:
+                        waiting_invitation = (
+                            self._pending_invitations_by_inviter.get(
+                                client_id
+                            )
+                        )
+                        if waiting_invitation is None:
+                            waiting_invitation = (
+                                self._pending_invitations_by_invitee.get(
+                                    client_id
+                                )
+                            )
 
                 if (
+                    client_status != _PLAYER_STATUS_WAITGAME
+                    or waiting_invitation is None
+                ) and (
                     last_client_activity_time is not None
                     and time.time() - last_client_activity_time
                     > self.client_timeout_sec
@@ -298,11 +340,14 @@ class NetworkServer:
                         break
                     continue
 
-                if command_upper == "PLAYERS":
+                if (
+                    command_upper == "PLAYERS"
+                    or command_upper.startswith("PLAYERS ")
+                ):
                     try:
                         _send_line(
                             client_sock,
-                            self._format_players_response(),
+                            self._handle_players_command(command),
                         )
                     except OSError:
                         break
@@ -320,7 +365,7 @@ class NetworkServer:
 
                 if command_upper == "NEW" or command_upper.startswith("NEW "):
                     try:
-                        response, room = self._handle_new_command(
+                        response, notifications = self._handle_new_command(
                             client_id, command
                         )
                         _send_line(
@@ -329,8 +374,73 @@ class NetworkServer:
                         )
                     except OSError:
                         break
+                    self._send_notifications(notifications)
+                    continue
+
+                if command_upper == "ACCEPT":
+                    try:
+                        (
+                            response,
+                            notifications,
+                            room,
+                        ) = self._handle_accept_command(client_id)
+                        _send_line(
+                            client_sock,
+                            response,
+                        )
+                    except OSError:
+                        break
+                    self._send_notifications(notifications)
                     if room is not None:
                         self._send_room_state(room)
+                    continue
+
+                if command_upper == "DECLINE":
+                    try:
+                        response, notifications = self._handle_decline_command(
+                            client_id
+                        )
+                        _send_line(
+                            client_sock,
+                            response,
+                        )
+                    except OSError:
+                        break
+                    self._send_notifications(notifications)
+                    continue
+
+                if command_upper == "CANCEL":
+                    try:
+                        response, notifications = self._handle_cancel_command(
+                            client_id
+                        )
+                        _send_line(
+                            client_sock,
+                            response,
+                        )
+                    except OSError:
+                        break
+                    self._send_notifications(notifications)
+                    continue
+
+                if command_upper == "AWAY":
+                    try:
+                        _send_line(
+                            client_sock,
+                            self._handle_away_command(client_id),
+                        )
+                    except OSError:
+                        break
+                    continue
+
+                if command_upper == "BACK":
+                    try:
+                        _send_line(
+                            client_sock,
+                            self._handle_back_command(client_id),
+                        )
+                    except OSError:
+                        break
                     continue
 
                 if (
@@ -395,6 +505,13 @@ class NetworkServer:
             del self._client_sessions[client_id]
             if game_id is not None:
                 self._close_game_room_locked(game_id)
+            invitation = self._pending_invitations_by_inviter.get(client_id)
+            if invitation is None:
+                invitation = self._pending_invitations_by_invitee.get(
+                    client_id
+                )
+            if invitation is not None:
+                self._clear_invitation_locked(invitation)
 
     def _close_client(
         self,
@@ -408,6 +525,85 @@ class NetworkServer:
 
         with self._lock:
             self._close_client_locked(client_id, client_sock)
+
+    def _send_notifications(
+        self,
+        notifications: list[tuple[int, socket.socket, str]],
+    ) -> None:
+        for recipient_client_id, recipient_sock, message in notifications:
+            try:
+                _send_line(recipient_sock, message)
+            except OSError:
+                self._close_client(recipient_client_id, recipient_sock)
+
+    def _clear_invitation_locked(self, invitation: _Invitation) -> None:
+        self._pending_invitations_by_inviter.pop(invitation.inviter_id, None)
+        self._pending_invitations_by_invitee.pop(invitation.invitee_id, None)
+        now = time.time()
+
+        for client_id in (invitation.inviter_id, invitation.invitee_id):
+            session = self._client_sessions.get(client_id)
+            if session is None:
+                continue
+            if (
+                session.status == _PLAYER_STATUS_WAITGAME
+                and session.game_id is None
+            ):
+                session.status = _PLAYER_STATUS_IDLE
+                session.last_activity_time = now
+
+    def _expire_invitations(self) -> None:
+        notifications = []
+        with self._lock:
+            now = time.time()
+            expired_invitations = []
+            for invitation in self._pending_invitations_by_inviter.values():
+                if invitation.expires_at <= now:
+                    expired_invitations.append(invitation)
+
+            for invitation in expired_invitations:
+                inviter_session = self._client_sessions.get(
+                    invitation.inviter_id
+                )
+                invitee_session = self._client_sessions.get(
+                    invitation.invitee_id
+                )
+                inviter_name = (
+                    inviter_session.name
+                    if inviter_session is not None
+                    else f"client-{invitation.inviter_id}"
+                )
+                invitee_name = (
+                    invitee_session.name
+                    if invitee_session is not None
+                    else f"client-{invitation.invitee_id}"
+                )
+                inviter_sock = (
+                    inviter_session.sock if inviter_session is not None else None
+                )
+                invitee_sock = (
+                    invitee_session.sock if invitee_session is not None else None
+                )
+                self._clear_invitation_locked(invitation)
+
+                if inviter_sock is not None:
+                    notifications.append(
+                        (
+                            invitation.inviter_id,
+                            inviter_sock,
+                            f"INVITATION_EXPIRED PLAYER={invitee_name}",
+                        )
+                    )
+                if invitee_sock is not None:
+                    notifications.append(
+                        (
+                            invitation.invitee_id,
+                            invitee_sock,
+                            f"INVITATION_EXPIRED PLAYER={inviter_name}",
+                        )
+                    )
+
+        self._send_notifications(notifications)
 
     def _perform_handshake(
         self,
@@ -458,7 +654,7 @@ class NetworkServer:
                 if session is None:
                     return False
                 session.name = client_name
-                session.status = "idle"
+                session.status = _PLAYER_STATUS_IDLE
                 session.game_id = None
                 session.buffer = buffer
                 self._ensure_score_entry(client_id, client_name)
@@ -495,6 +691,43 @@ class NetworkServer:
         )
         return f"PLAYERS {payload}"
 
+    def _player_response(self, requested_client_id: int) -> str:
+        with self._lock:
+            session = self._client_sessions.get(requested_client_id)
+            if session is None:
+                return "ERROR PLAYER_NOT_FOUND"
+
+            self._ensure_score_entry(requested_client_id, session.name)
+            entry = self._scoreboard[requested_client_id]
+            player_name = session.name
+            player_status = session.status
+            wins = entry.wins
+            losses = entry.losses
+            played = entry.played
+
+        return (
+            "PLAYER "
+            f"{requested_client_id}|{player_name}|{player_status}|"
+            f"{wins}|{losses}|{played}"
+        )
+
+    def _handle_players_command(self, command: str) -> str:
+        parts = command.split()
+        if len(parts) == 1:
+            return self._format_players_response()
+        if len(parts) != 2:
+            return "ERROR INVALID_PLAYERS_FORMAT"
+
+        try:
+            requested_client_id = int(parts[1])
+        except ValueError:
+            return "ERROR INVALID_PLAYERS_FORMAT"
+
+        if requested_client_id <= 0:
+            return "ERROR INVALID_PLAYERS_FORMAT"
+
+        return self._player_response(requested_client_id)
+
     def _scoreboard_response(self) -> str:
         with self._lock:
             items = [
@@ -525,83 +758,251 @@ class NetworkServer:
             return
         entry.name = client_name
 
+    def _create_room_locked(
+        self,
+        participants_client_ids: list[int],
+    ) -> _GameRoom:
+        participant_count = len(participants_client_ids)
+        room_session = GameApplicationService.new_session(
+            board_size=_ROOM_BOARD_SIZE,
+            players=participant_count,
+            walls_per_player=_ROOM_WALLS_PER_PLAYER,
+            player_types={
+                player_id: "human"
+                for player_id in range(1, participant_count + 1)
+            },
+        )
+        game_id = self._next_game_id
+        self._next_game_id += 1
+        client_to_player_id = {
+            participants_client_ids[index]: index + 1
+            for index in range(len(participants_client_ids))
+        }
+        room = _GameRoom(
+            game_id=game_id,
+            player_ids=tuple(participants_client_ids),
+            client_to_player_id=client_to_player_id,
+            session=room_session,
+        )
+        self._game_rooms[game_id] = room
+
+        for participant_client_id in participants_client_ids:
+            participant_session = self._client_sessions.get(
+                participant_client_id
+            )
+            if participant_session is None:
+                continue
+            participant_session.status = _PLAYER_STATUS_INGAME
+            participant_session.game_id = game_id
+
+        return room
+
     def _handle_new_command(
         self,
         client_id: int,
         command: str,
-    ) -> tuple[str, _GameRoom | None]:
+    ) -> tuple[str, list[tuple[int, socket.socket, str]]]:
         parts = command.split()
-        if len(parts) < 2:
-            return "ERROR INVALID_NEW_FORMAT", None
+        if len(parts) != 2:
+            return "ERROR INVALID_NEW_FORMAT", []
 
-        target_client_ids = []
-        seen_targets = set()
-        for raw_target_id in parts[1:]:
-            try:
-                target_client_id = int(raw_target_id)
-            except ValueError:
-                return "ERROR INVALID_NEW_FORMAT", None
-            if target_client_id <= 0:
-                return "ERROR INVALID_NEW_FORMAT", None
-            if target_client_id == client_id:
-                return "ERROR SELF_INVITE", None
-            if target_client_id in seen_targets:
-                return "ERROR INVALID_NEW_FORMAT", None
-            seen_targets.add(target_client_id)
-            target_client_ids.append(target_client_id)
+        try:
+            target_client_id = int(parts[1])
+        except ValueError:
+            return "ERROR INVALID_NEW_FORMAT", []
+        if target_client_id <= 0:
+            return "ERROR INVALID_NEW_FORMAT", []
+        if target_client_id == client_id:
+            return "ERROR SELF_INVITE", []
 
         with self._lock:
             requester = self._client_sessions.get(client_id)
             if requester is None:
-                return "ERROR REQUESTER_NOT_FOUND", None
-            if requester.status != "idle":
-                return "ERROR REQUESTER_NOT_IDLE", None
+                return "ERROR REQUESTER_NOT_FOUND", []
+            if requester.status != _PLAYER_STATUS_IDLE:
+                return "ERROR REQUESTER_NOT_IDLE", []
+            if client_id in self._pending_invitations_by_inviter:
+                return "ERROR REQUESTER_NOT_IDLE", []
+            if client_id in self._pending_invitations_by_invitee:
+                return "ERROR REQUESTER_NOT_IDLE", []
 
-            participants_client_ids = [client_id]
-            for target_client_id in target_client_ids:
-                target = self._client_sessions.get(target_client_id)
-                if target is None:
-                    return "ERROR PLAYER_NOT_FOUND", None
-                if target.status != "idle":
-                    return "ERROR PLAYER_NOT_AVAILABLE", None
-                participants_client_ids.append(target_client_id)
+            target = self._client_sessions.get(target_client_id)
+            if target is None:
+                return "ERROR PLAYER_NOT_FOUND", []
+            if target.status != _PLAYER_STATUS_IDLE:
+                return "ERROR PLAYER_NOT_AVAILABLE", []
+            if target_client_id in self._pending_invitations_by_inviter:
+                return "ERROR PLAYER_NOT_AVAILABLE", []
+            if target_client_id in self._pending_invitations_by_invitee:
+                return "ERROR PLAYER_NOT_AVAILABLE", []
 
-            participant_count = len(participants_client_ids)
-            if participant_count < 2 or participant_count > 4:
-                return "ERROR UNSUPPORTED_PLAYER_COUNT", None
-
-            room_session = GameApplicationService.new_session(
-                board_size=_ROOM_BOARD_SIZE,
-                players=participant_count,
-                walls_per_player=_ROOM_WALLS_PER_PLAYER,
-                player_types={
-                    player_id: "human"
-                    for player_id in range(1, participant_count + 1)
-                },
+            created_at = time.time()
+            invitation = _Invitation(
+                inviter_id=client_id,
+                invitee_id=target_client_id,
+                created_at=created_at,
+                expires_at=created_at + self.invitation_timeout_sec,
             )
-            game_id = self._next_game_id
-            self._next_game_id += 1
-            client_to_player_id = {
-                participants_client_ids[index]: index + 1
-                for index in range(len(participants_client_ids))
-            }
-            self._game_rooms[game_id] = _GameRoom(
-                game_id=game_id,
-                player_ids=tuple(participants_client_ids),
-                client_to_player_id=client_to_player_id,
-                session=room_session,
-            )
-            for participant_client_id in participants_client_ids:
-                participant_session = self._client_sessions.get(
-                    participant_client_id
+            self._pending_invitations_by_inviter[client_id] = invitation
+            self._pending_invitations_by_invitee[target_client_id] = invitation
+            requester.status = _PLAYER_STATUS_WAITGAME
+            target.status = _PLAYER_STATUS_WAITGAME
+
+            timeout_sec = round(self.invitation_timeout_sec)
+            notifications = [
+                (
+                    target_client_id,
+                    target.sock,
+                    (
+                        "INVITATION_RECEIVED "
+                        f"FROM={requester.name} EXPIRES={timeout_sec}s"
+                    ),
                 )
-                if participant_session is not None:
-                    participant_session.status = "ingame"
-                    participant_session.game_id = game_id
+            ]
 
-            room = self._game_rooms[game_id]
+        return (
+            "INVITATION_SENT "
+            f"PLAYER={target.name} TIMEOUT={timeout_sec}s",
+            notifications,
+        )
 
-        return f"NEW_OK {game_id}", room
+    def _handle_accept_command(
+        self,
+        client_id: int,
+    ) -> tuple[str, list[tuple[int, socket.socket, str]], _GameRoom | None]:
+        with self._lock:
+            invitation = self._pending_invitations_by_invitee.get(client_id)
+            if invitation is None:
+                return "ERROR NO_INVITATION", [], None
+
+            inviter_session = self._client_sessions.get(invitation.inviter_id)
+            invitee_session = self._client_sessions.get(invitation.invitee_id)
+            if inviter_session is None or invitee_session is None:
+                self._clear_invitation_locked(invitation)
+                return "ERROR PLAYER_NOT_FOUND", [], None
+
+            inviter_name = inviter_session.name
+            invitee_name = invitee_session.name
+            inviter_sock = inviter_session.sock
+            self._clear_invitation_locked(invitation)
+            room = self._create_room_locked(
+                [invitation.inviter_id, invitation.invitee_id]
+            )
+
+        return (
+            f"GAME_START OPPONENT={inviter_name}",
+            [
+                (
+                    invitation.inviter_id,
+                    inviter_sock,
+                    (
+                        "INVITATION_ACCEPTED "
+                        f"PLAYER={invitee_name} STARTING_GAME"
+                    ),
+                )
+            ],
+            room,
+        )
+
+    def _handle_decline_command(
+        self,
+        client_id: int,
+    ) -> tuple[str, list[tuple[int, socket.socket, str]]]:
+        with self._lock:
+            invitation = self._pending_invitations_by_invitee.get(client_id)
+            if invitation is None:
+                return "ERROR NO_INVITATION", []
+
+            inviter_session = self._client_sessions.get(invitation.inviter_id)
+            invitee_session = self._client_sessions.get(invitation.invitee_id)
+            inviter_name = (
+                inviter_session.name
+                if inviter_session is not None
+                else f"client-{invitation.inviter_id}"
+            )
+            invitee_name = (
+                invitee_session.name
+                if invitee_session is not None
+                else f"client-{invitation.invitee_id}"
+            )
+            inviter_sock = (
+                inviter_session.sock if inviter_session is not None else None
+            )
+            self._clear_invitation_locked(invitation)
+
+            notifications = []
+            if inviter_sock is not None:
+                notifications.append(
+                    (
+                        invitation.inviter_id,
+                        inviter_sock,
+                        f"INVITATION_DECLINED PLAYER={invitee_name}",
+                    )
+                )
+
+        return f"DECLINE_OK PLAYER={inviter_name}", notifications
+
+    def _handle_cancel_command(
+        self,
+        client_id: int,
+    ) -> tuple[str, list[tuple[int, socket.socket, str]]]:
+        with self._lock:
+            invitation = self._pending_invitations_by_inviter.get(client_id)
+            if invitation is None:
+                return "ERROR NO_INVITATION", []
+
+            inviter_session = self._client_sessions.get(invitation.inviter_id)
+            invitee_session = self._client_sessions.get(invitation.invitee_id)
+            inviter_name = (
+                inviter_session.name
+                if inviter_session is not None
+                else f"client-{invitation.inviter_id}"
+            )
+            invitee_name = (
+                invitee_session.name
+                if invitee_session is not None
+                else f"client-{invitation.invitee_id}"
+            )
+            invitee_sock = (
+                invitee_session.sock if invitee_session is not None else None
+            )
+            self._clear_invitation_locked(invitation)
+
+            notifications = []
+            if invitee_sock is not None:
+                notifications.append(
+                    (
+                        invitation.invitee_id,
+                        invitee_sock,
+                        f"INVITATION_CANCELLED PLAYER={inviter_name}",
+                    )
+                )
+
+        return f"CANCEL_OK PLAYER={invitee_name}", notifications
+
+    def _handle_away_command(self, client_id: int) -> str:
+        with self._lock:
+            session = self._client_sessions.get(client_id)
+            if session is None:
+                return "ERROR PLAYER_NOT_FOUND"
+            if session.status == _PLAYER_STATUS_AWAY:
+                return "ERROR ALREADY_AWAY"
+            if session.status != _PLAYER_STATUS_IDLE or session.game_id is not None:
+                return "ERROR CANNOT_GO_AWAY"
+            session.status = _PLAYER_STATUS_AWAY
+            session.last_activity_time = time.time()
+        return "AWAY_OK"
+
+    def _handle_back_command(self, client_id: int) -> str:
+        with self._lock:
+            session = self._client_sessions.get(client_id)
+            if session is None:
+                return "ERROR PLAYER_NOT_FOUND"
+            if session.status != _PLAYER_STATUS_AWAY:
+                return "ERROR NOT_AWAY"
+            session.status = _PLAYER_STATUS_IDLE
+            session.last_activity_time = time.time()
+        return "BACK_OK"
 
     def _handle_move_command(
         self,
@@ -619,12 +1020,15 @@ class NetworkServer:
             session = self._client_sessions.get(client_id)
             if session is None:
                 return "ERROR PLAYER_NOT_FOUND", None, None
-            if session.game_id is None or session.status != "ingame":
+            if (
+                session.game_id is None
+                or session.status != _PLAYER_STATUS_INGAME
+            ):
                 return "ERROR NOT_IN_GAME", None, None
 
             room = self._game_rooms.get(session.game_id)
             if room is None:
-                session.status = "idle"
+                session.status = _PLAYER_STATUS_IDLE
                 session.game_id = None
                 return "ERROR NOT_IN_GAME", None, None
 
@@ -743,7 +1147,7 @@ class NetworkServer:
             session = self._client_sessions.get(room_player_id)
             if session is None:
                 continue
-            session.status = "idle"
+            session.status = _PLAYER_STATUS_IDLE
             session.game_id = None
 
     def record_finished_game(

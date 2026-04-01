@@ -47,8 +47,20 @@ def patch_main_defaults(monkeypatch, **overrides):
     return defaults
 
 
-def make_gui_args(players: int = 2, size: int = 9, walls: int = 20):
-    return SimpleNamespace(players=players, size=size, walls=walls)
+def make_gui_args(
+    players: int = 2,
+    size: int = 9,
+    walls: int = 20,
+    blitz: bool = False,
+    time: int = 30,
+):
+    return SimpleNamespace(
+        players=players,
+        size=size,
+        walls=walls,
+        blitz=blitz,
+        time=time,
+    )
 
 
 def run_shell(monkeypatch, capsys, commands: list[str], **overrides):
@@ -753,8 +765,8 @@ def test_main_interactive_routes_server_modes(monkeypatch):
 def test_main_gui_calls_gui_main_with_cli_values(monkeypatch):
     calls = []
     fake_gui = SimpleNamespace(
-        main=lambda num_players, board_size, walls: calls.append(
-            (num_players, board_size, walls)
+        main=lambda num_players, board_size, walls, blitz, time_limit: calls.append(
+            (num_players, board_size, walls, blitz, time_limit)
         )
         or 7
     )
@@ -763,7 +775,7 @@ def test_main_gui_calls_gui_main_with_cli_values(monkeypatch):
     monkeypatch.setattr(interfaces_pkg, "gui", fake_gui, raising=False)
 
     assert cli_mod._main_gui(make_gui_args(players=4, size=11, walls=8)) == 7
-    assert calls == [(4, 11, 8)]
+    assert calls == [(4, 11, 8, False, 30)]
 
 
 def test_main_gui_falls_back_to_system_python_when_gi_is_missing(monkeypatch):
