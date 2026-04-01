@@ -80,3 +80,7 @@ temp/
 # Donnees generees localement
 data/raw_games/
 quoridor/ML/data/raw_games/
+
+# ML datasets (trop volumineux)
+quoridor/ML/data/ml_moves_dataset.csv
+quoridor/ML/data/ml_dataset.csv

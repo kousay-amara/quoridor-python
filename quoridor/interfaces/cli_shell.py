@@ -200,6 +200,7 @@ class _ShellConfig:
     ai_mode: str
     ai_time: int
     ai_minimax_depth: int | None
+    ai_mcts_selection: str = "UCT"
 
 
 class _SavedLocalShellState:
@@ -246,6 +247,7 @@ def _config_from_state(state: "_ShellState") -> _ShellConfig:
         ai_mode=state.ai_mode,
         ai_time=state.ai_time,
         ai_minimax_depth=state.ai_minimax_depth,
+        ai_mcts_selection=state.ai_mcts_selection,
     )
 
 
@@ -375,6 +377,7 @@ def _start_shell_session(
         config.ai_time,
         config.ai_minimax_depth,
         blitz=blitz_state,
+        ai_mcts_selection=config.ai_mcts_selection,
     )
     return blitz_state, should_break or interrupted
 
@@ -487,6 +490,7 @@ def _parse_new_config(state: "_ShellState", line: str) -> _ShellConfig:
         ai_mode=args.ai_mode,
         ai_time=args.ai_time,
         ai_minimax_depth=args.ai_minimax_depth,
+        ai_mcts_selection=args.ai_mcts_selection,
     )
 
 
@@ -673,6 +677,7 @@ def _auto_play_ai_until_human_or_end(
     ai_minimax_depth: int | None,
     *,
     blitz: Blitz | None = None,
+    ai_mcts_selection: str = "UCT",
 ) -> bool:
     if blitz is None:
         blitz = Blitz(time_limit_minutes=0)
@@ -695,6 +700,7 @@ def _auto_play_ai_until_human_or_end(
             mode=ai_mode,
             depth=ai_minimax_depth,
             time_limit_sec=effective_ai_time,
+            mcts_selection=ai_mcts_selection,
         )
         elapsed = time.time() - started
         if blitz.consume_time(current_ai, elapsed):
@@ -725,6 +731,7 @@ def _run_auto_play_with_interrupt_handling(
     ai_minimax_depth: int | None,
     *,
     blitz: Blitz,
+    ai_mcts_selection: str = "UCT",
 ) -> tuple[bool, bool]:
     try:
         return (
@@ -734,6 +741,7 @@ def _run_auto_play_with_interrupt_handling(
                 ai_time,
                 ai_minimax_depth,
                 blitz=blitz,
+                ai_mcts_selection=ai_mcts_selection,
             ),
             False,
         )
@@ -768,6 +776,7 @@ def _apply_and_maybe_auto_play(
     ai_minimax_depth: int | None,
     *,
     blitz: Blitz,
+    ai_mcts_selection: str = "UCT",
     base_unsaved: bool = True,
 ) -> tuple[bool, bool]:
     has_unsaved_changes = base_unsaved
@@ -778,6 +787,7 @@ def _apply_and_maybe_auto_play(
         ai_time,
         ai_minimax_depth,
         blitz=blitz,
+        ai_mcts_selection=ai_mcts_selection,
     )
     if interrupted:
         if session.history.cursor != before_ai_cursor:
@@ -800,6 +810,7 @@ def _auto_play_pending_ai(state: "_ShellState") -> bool:
         state.current_ai_time,
         state.current_ai_minimax_depth,
         blitz=state.blitz,
+        ai_mcts_selection=state.current_ai_mcts_selection,
     )
     if state.session.history.cursor != before_ai_cursor:
         state.has_unsaved_changes = True
@@ -895,6 +906,7 @@ def _handle_move(
     ai_minimax_depth: int | None,
     *,
     blitz: Blitz,
+    ai_mcts_selection: str = "UCT",
 ) -> tuple[bool, bool]:
     if _play_pawn_move_from_token(session, move_token):
         return True, True
@@ -904,6 +916,7 @@ def _handle_move(
         ai_time,
         ai_minimax_depth,
         blitz=blitz,
+        ai_mcts_selection=ai_mcts_selection,
     )
 
 
@@ -915,6 +928,7 @@ def _handle_wall(
     ai_minimax_depth: int | None,
     *,
     blitz: Blitz,
+    ai_mcts_selection: str = "UCT",
 ) -> tuple[bool, bool]:
     _place_wall_from_token(session, wall_token)
     return _apply_and_maybe_auto_play(
@@ -923,6 +937,7 @@ def _handle_wall(
         ai_time,
         ai_minimax_depth,
         blitz=blitz,
+        ai_mcts_selection=ai_mcts_selection,
     )
 
 
@@ -1234,6 +1249,7 @@ def _command_move(state: _ShellState, line: str) -> bool:
         state.current_ai_time,
         state.current_ai_minimax_depth,
         blitz=state.blitz,
+        ai_mcts_selection=state.current_ai_mcts_selection,
     )
     state.has_unsaved_changes = has_unsaved_changes
     return should_break
@@ -1253,6 +1269,7 @@ def _command_wall(state: _ShellState, line: str) -> bool:
         state.current_ai_time,
         state.current_ai_minimax_depth,
         blitz=state.blitz,
+        ai_mcts_selection=state.current_ai_mcts_selection,
     )
     state.has_unsaved_changes = has_unsaved_changes
     return should_break
@@ -1411,6 +1428,7 @@ def _command_shorthand_move(state: _ShellState, line: str) -> bool:
         state.current_ai_time,
         state.current_ai_minimax_depth,
         blitz=state.blitz,
+        ai_mcts_selection=state.current_ai_mcts_selection,
     )
     state.has_unsaved_changes = has_unsaved_changes
     return should_break
@@ -1430,6 +1448,7 @@ def _command_shorthand_wall(state: _ShellState, line: str) -> bool:
         state.current_ai_time,
         state.current_ai_minimax_depth,
         blitz=state.blitz,
+        ai_mcts_selection=state.current_ai_mcts_selection,
     )
     state.has_unsaved_changes = has_unsaved_changes
     return should_break
@@ -1457,9 +1476,11 @@ class _ShellState:
     ai_mode: str
     ai_time: int
     ai_minimax_depth: int | None
+    ai_mcts_selection: str
     current_ai_mode: str
     current_ai_time: int
     current_ai_minimax_depth: int | None
+    current_ai_mcts_selection: str
     players: int
     walls_per_player: int
     board_size: int
@@ -1795,6 +1816,7 @@ def _run_interactive_shell(
     ai_mode: str,
     ai_time: int,
     ai_minimax_depth: int | None,
+    ai_mcts_selection: str = "UCT",
     startup_server_port: int | None = None,
     verbose: bool = False,
     debug: bool = False,
@@ -1811,6 +1833,7 @@ def _run_interactive_shell(
         ai_mode=ai_mode,
         ai_time=ai_time,
         ai_minimax_depth=ai_minimax_depth,
+        ai_mcts_selection=ai_mcts_selection,
     )
     if save_file:
         print(_("Loading game from {path}").format(path=save_file))
@@ -1879,6 +1902,7 @@ def _run_interactive_shell(
         ai_time,
         ai_minimax_depth,
         blitz=blitz_state,
+        ai_mcts_selection=ai_mcts_selection,
     ):
         return
 
@@ -1890,9 +1914,11 @@ def _run_interactive_shell(
         ai_mode=config.ai_mode,
         ai_time=config.ai_time,
         ai_minimax_depth=config.ai_minimax_depth,
+        ai_mcts_selection=config.ai_mcts_selection,
         current_ai_mode=config.ai_mode,
         current_ai_time=config.ai_time,
         current_ai_minimax_depth=config.ai_minimax_depth,
+        current_ai_mcts_selection=config.ai_mcts_selection,
         players=len(session.state.player_positions),
         walls_per_player=config.walls_per_player,
         board_size=session.state.board_size,
