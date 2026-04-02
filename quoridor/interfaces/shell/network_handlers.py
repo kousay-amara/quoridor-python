@@ -72,9 +72,11 @@ def save_local_shell_state_before_network(
     state.saved_local_state = saved_state_factory(
         session=state.session,
         has_unsaved_changes=state.has_unsaved_changes,
+        ai_mcts_selection=state.ai_mcts_selection,
         current_ai_mode=state.current_ai_mode,
         current_ai_time=state.current_ai_time,
         current_ai_minimax_depth=state.current_ai_minimax_depth,
+        current_ai_mcts_selection=state.current_ai_mcts_selection,
         players=state.players,
         walls_per_player=state.walls_per_player,
         board_size=state.board_size,

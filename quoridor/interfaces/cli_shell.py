@@ -346,6 +346,14 @@ def _build_new_argument_parser(
         type=int,
         default=current_config.ai_minimax_depth,
     )
+    parser.add_argument(
+        "--ai-mcts-selection",
+        choices=[
+            parser_mod.AI_MCTS_SELECTION_UCT,
+            parser_mod.AI_MCTS_SELECTION_ML,
+        ],
+        default=current_config.ai_mcts_selection,
+    )
     return parser
 
 
@@ -414,6 +422,7 @@ _SET_ALIASES = {
     "ai_mode": "ai_mode",
     "ai_time": "ai_time",
     "ai_minimax_depth": "ai_minimax_depth",
+    "ai_mcts_selection": "ai_mcts_selection",
 }
 
 
@@ -466,6 +475,7 @@ def _sync_active_ai_settings_from_config(state: "_ShellState") -> None:
     state.current_ai_mode = state.ai_mode
     state.current_ai_time = state.ai_time
     state.current_ai_minimax_depth = state.ai_minimax_depth
+    state.current_ai_mcts_selection = state.ai_mcts_selection
 
 
 def _format_set_value(param: str, value: object) -> str:
@@ -551,6 +561,12 @@ def _handle_set(state: "_ShellState", line: str) -> None:
                 value, field_name="ai_minimax_depth"
             )
         parsed_value = state.ai_minimax_depth
+    elif param == "ai_mcts_selection":
+        normalized = value.upper()
+        if normalized not in {"UCT", "ML"}:
+            raise ValueError("ai_mcts_selection must be one of: UCT, ML")
+        state.ai_mcts_selection = normalized
+        parsed_value = state.ai_mcts_selection
     else:
         raise ValueError(f"unsupported setting: {param}")
 
@@ -605,8 +621,11 @@ def _run_auto_play_with_interrupt_handling(
     *,
     blitz: Blitz,
     event_bus: shell_events.EventBus | None = None,
+    ai_mcts_selection: str | None = None,
     mcts_selection: str = "UCT",
 ) -> tuple[bool, bool]:
+    if ai_mcts_selection is not None:
+        mcts_selection = ai_mcts_selection
     return shell_runtime.run_auto_play_with_interrupt_handling(
         session,
         ai_mode,
@@ -935,6 +954,7 @@ def _print_configuration(state: "_ShellState") -> None:
     print(f"ai_mode={state.ai_mode}")
     print(f"ai_time={state.ai_time}")
     print(f"ai_minimax_depth={state.ai_minimax_depth}")
+    print(f"ai_mcts_selection={state.ai_mcts_selection}")
     print(f"blitz={state.blitz_enabled}")
     print(f"time_limit={_format_minutes(state.time_limit)}")
     print(f"timer_paused={state.blitz.paused}")
@@ -1125,9 +1145,13 @@ def _restore_saved_local_shell_state(state: "_ShellState") -> None:
     with state.network_sync_lock:
         state.session = saved_state.session
         state.has_unsaved_changes = saved_state.has_unsaved_changes
+        state.ai_mcts_selection = saved_state.ai_mcts_selection
         state.current_ai_mode = saved_state.current_ai_mode
         state.current_ai_time = saved_state.current_ai_time
         state.current_ai_minimax_depth = saved_state.current_ai_minimax_depth
+        state.current_ai_mcts_selection = (
+            saved_state.current_ai_mcts_selection
+        )
         state.players = saved_state.players
         state.walls_per_player = saved_state.walls_per_player
         state.board_size = saved_state.board_size

@@ -225,11 +225,10 @@ class GameSession:
             raise ValueError(f"player {player_id} is not an AI player")
 
         if mode == "mcts":
-            move = mcts_search(
-                self.state,
-                time_limit=time_limit_sec,
-                selection_policy=mcts_selection,
-            )
+            kwargs: dict[str, object] = {"time_limit": time_limit_sec}
+            if mcts_selection != "UCT":
+                kwargs["selection_policy"] = mcts_selection
+            move = mcts_search(self.state, **kwargs)
         elif mode == "iterative":
             move = find_best_move_iterative(
                 self.state,

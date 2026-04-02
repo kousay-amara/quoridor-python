@@ -26,6 +26,7 @@ def command_new(
     state.ai_mode = config.ai_mode
     state.ai_time = config.ai_time
     state.ai_minimax_depth = config.ai_minimax_depth
+    state.ai_mcts_selection = config.ai_mcts_selection
     state.players = config.players
     state.walls_per_player = config.walls_per_player
     state.board_size = config.board_size
