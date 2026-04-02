@@ -3,7 +3,9 @@ from ..rules.pawn_rules import get_all_legal_pawn_moves
 from ..rules.wall_rules import is_wall_legal, _has_crossing_wall
 
 
-def validate_pawn_move(graph: Graph, from_node, to_node, all_positions, board_size):
+def validate_pawn_move(
+    graph: Graph, from_node, to_node, all_positions, board_size
+):
     legal = get_all_legal_pawn_moves(graph, from_node, all_positions)
     if to_node in legal:
         return True, None

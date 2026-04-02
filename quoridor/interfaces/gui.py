@@ -95,7 +95,9 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         self._game_over = False
         self._turn_start_time: float | None = None
         self._blitz_timer_id: int | None = None
-        self._ai_players = ai_players or []  # Handle None by using an empty list.
+        self._ai_players = (
+            ai_players or []
+        )  # Handle None by using an empty list.
         self._ai_mode = ai_mode
         self._ai_time = ai_time
         self._ai_minimax_depth = ai_minimax_depth
@@ -126,7 +128,9 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         else:
             self.blitz = Blitz(time_limit_minutes=0)
 
-        self.service = GameApplicationService(session=self.session, blitz=self.blitz)
+        self.service = GameApplicationService(
+            session=self.session, blitz=self.blitz
+        )
         self.status = Gtk.Label(label="Ready.")
         self.status.set_xalign(0.0)
 
@@ -164,7 +168,10 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         self._install_actions()
         self._bind_shortcuts()
         self._schedule_ai_turn()
-        if self.session.player_types.get(self.session.state.current_player) != "ai":
+        if (
+            self.session.player_types.get(self.session.state.current_player)
+            != "ai"
+        ):
             self._start_blitz_turn()
 
     def _start_blitz_turn(self) -> None:
@@ -265,7 +272,10 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         if self._game_over:
             self._set_status("Game is over. Start a new game.")
             return
-        if self.session.player_types.get(self.session.state.current_player) != "ai":
+        if (
+            self.session.player_types.get(self.session.state.current_player)
+            != "ai"
+        ):
             return
         self._ai_thinking = True
         current = self.session.state.current_player
@@ -299,7 +309,10 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         self._set_status(f"AI player {current} played.")
         self.area.queue_draw()
         self._ai_thinking = False
-        if self.session.player_types.get(self.session.state.current_player) == "ai":
+        if (
+            self.session.player_types.get(self.session.state.current_player)
+            == "ai"
+        ):
             GLib.idle_add(self._play_one_ai_turn)
         else:
             self._start_blitz_turn()
@@ -353,7 +366,9 @@ class QuoridorWindow(Gtk.ApplicationWindow):
 
     def _cell_size(self):
         size = self._board_size()
-        available = min(self.area.get_width(), self.area.get_height()) - 2 * MARGIN
+        available = (
+            min(self.area.get_width(), self.area.get_height()) - 2 * MARGIN
+        )
         return max((available - (size - 1) * GAP) / size, 1)
 
     def _cell_xy(self, row, col):
@@ -422,7 +437,12 @@ class QuoridorWindow(Gtk.ApplicationWindow):
                 f"Player {current} placed {orient} wall " f"at ({row}, {col})."
             )
             self._schedule_ai_turn()
-            if self.session.player_types.get(self.session.state.current_player) != "ai":
+            if (
+                self.session.player_types.get(
+                    self.session.state.current_player
+                )
+                != "ai"
+            ):
                 self._start_blitz_turn()
         else:
             self._set_status(error)
@@ -462,7 +482,9 @@ class QuoridorWindow(Gtk.ApplicationWindow):
                     )
                     self._schedule_ai_turn()
                     if (
-                        self.session.player_types.get(self.session.state.current_player)
+                        self.session.player_types.get(
+                            self.session.state.current_player
+                        )
                         != "ai"
                     ):
                         self._start_blitz_turn()
@@ -531,7 +553,10 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         self._game_over = False
         self.area.queue_draw()
         self._schedule_ai_turn()
-        if self.session.player_types.get(self.session.state.current_player) != "ai":
+        if (
+            self.session.player_types.get(self.session.state.current_player)
+            != "ai"
+        ):
             self._start_blitz_turn()
         self._set_status("New game started.")
 
@@ -802,7 +827,12 @@ class QuoridorWindow(Gtk.ApplicationWindow):
             self._game_over = False
             self.area.queue_draw()
             self._schedule_ai_turn()
-            if self.session.player_types.get(self.session.state.current_player) != "ai":
+            if (
+                self.session.player_types.get(
+                    self.session.state.current_player
+                )
+                != "ai"
+            ):
                 self._start_blitz_turn()
             self._set_status(f"Loaded from: {path}")
         except Exception as exc:

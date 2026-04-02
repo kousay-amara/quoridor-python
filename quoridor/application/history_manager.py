@@ -36,7 +36,9 @@ class HistoryManager:
         self,
         apply_snapshot: Callable[[GameSnapshot], None],
         requester_type: PlayerType = "human",
-        apply_blitz_snapshot: Callable[[BlitzSnapshot | None], None] | None = None,
+        apply_blitz_snapshot: (
+            Callable[[BlitzSnapshot | None], None] | None
+        ) = None,
     ) -> list[MoveRecord]:
         """Undo moves until the previous human boundary is reached."""
         self._ensure_human_requester(requester_type)
@@ -70,7 +72,9 @@ class HistoryManager:
         self,
         apply_snapshot: Callable[[GameSnapshot], None],
         requester_type: PlayerType = "human",
-        apply_blitz_snapshot: Callable[[BlitzSnapshot | None], None] | None = None,
+        apply_blitz_snapshot: (
+            Callable[[BlitzSnapshot | None], None] | None
+        ) = None,
     ) -> list[MoveRecord]:
         """Redo moves until the next human boundary is reached."""
         self._ensure_human_requester(requester_type)
@@ -99,4 +103,6 @@ class HistoryManager:
     @staticmethod
     def _ensure_human_requester(requester_type: PlayerType) -> None:
         if requester_type != "human":
-            raise PermissionError("undo/redo is allowed for human players only")
+            raise PermissionError(
+                "undo/redo is allowed for human players only"
+            )

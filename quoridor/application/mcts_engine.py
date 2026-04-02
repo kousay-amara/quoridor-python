@@ -102,7 +102,8 @@ class MCTSNode:
         return max(
             self.childrens,
             key=lambda child: (child.wins / child.visits)
-            + exploration_weight * math.sqrt(math.log(self.visits) / child.visits),
+            + exploration_weight
+            * math.sqrt(math.log(self.visits) / child.visits),
         )
 
 

@@ -111,7 +111,9 @@ def _configure_logging(verbose: bool, debug: bool) -> None:
         format="%(levelname)s: %(message)s",
         force=True,
     )
-    LOGGER.debug("Logging configured with level=%s", logging.getLevelName(level))
+    LOGGER.debug(
+        "Logging configured with level=%s", logging.getLevelName(level)
+    )
 
 
 def _get_version() -> str:
@@ -256,12 +258,16 @@ def _main_interactive(argv: list[str]) -> int:
 
     time_limit = args.time
     if _is_time_passed_on_cli(argv) and not args.blitz:
-        sys.stderr.write("warning: --time is ignored unless --blitz is enabled\n")
+        sys.stderr.write(
+            "warning: --time is ignored unless --blitz is enabled\n"
+        )
         time_limit = float(defaults.get("time", DEFAULTS["time"]))
     if args.ai_mode == AI_MODE_MINIMAX and _is_ai_time_passed_on_cli(argv):
         sys.stderr.write("warning: --ai-time is ignored in minimax mode\n")
     if args.ai_mode == "mcts" and "--ai-minimax-scoring" in sys.argv:
-        sys.stderr.write("warning: --ai-minimax-scoring is ignored in MCTS mode\n")
+        sys.stderr.write(
+            "warning: --ai-minimax-scoring is ignored in MCTS mode\n"
+        )
 
     _run_interactive_shell(
         blitz=args.blitz,

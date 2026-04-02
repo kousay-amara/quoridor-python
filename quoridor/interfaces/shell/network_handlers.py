@@ -18,7 +18,9 @@ def command_server(
     command_server_fn: Callable[[Any, str], bool],
 ) -> bool:
     handled = command_server_fn(state, line)
-    _emit_from_state(state, "network.server_command", line=line, handled=handled)
+    _emit_from_state(
+        state, "network.server_command", line=line, handled=handled
+    )
     return handled
 
 
@@ -38,7 +40,9 @@ def apply_network_game_state_to_local_session(
         state.players = len(state.session.state.player_positions)
         state.board_size = state.session.state.board_size
         if state.session.state.remaining_walls:
-            state.walls_per_player = max(state.session.state.remaining_walls.values())
+            state.walls_per_player = max(
+                state.session.state.remaining_walls.values()
+            )
         state.ai_players = []
         state.network_player_id = local_player_id
         state.has_unsaved_changes = True

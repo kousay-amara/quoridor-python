@@ -34,7 +34,9 @@ def _deserialize_move(move_data: dict) -> tuple:
 def _build_initial_state(game_data: dict):
     board_size = game_data["board_size"]
     players = game_data["players"]
-    walls_per_player = game_data.get("walls_per_player", DEFAULT_WALLS_PER_PLAYER)
+    walls_per_player = game_data.get(
+        "walls_per_player", DEFAULT_WALLS_PER_PLAYER
+    )
 
     positions = initial_player_positions(board_size, players)
     remaining_walls = {pid: walls_per_player for pid in positions}
@@ -96,7 +98,8 @@ def extract_moves_dataset(
                     total_turns=turn_count,
                 )
             except ValueError:
-                # Skip non-2-player turns (shouldn't happen given players check)
+                # Skip non-2-player turns.
+                # This should not happen given the earlier players check.
                 apply_move(state, move)
                 continue
 

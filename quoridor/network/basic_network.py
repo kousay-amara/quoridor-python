@@ -76,10 +76,16 @@ def _normalize_snapshot(snapshot_data: object) -> GameSnapshot:
     normalized_snapshot: GameSnapshot = {
         "board_size": int(snapshot_data["board_size"]),
         "current_player": int(snapshot_data["current_player"]),
-        "player_positions": _normalize_int_mapping(snapshot_data["player_positions"]),
-        "remaining_walls": _normalize_int_mapping(snapshot_data["remaining_walls"]),
+        "player_positions": _normalize_int_mapping(
+            snapshot_data["player_positions"]
+        ),
+        "remaining_walls": _normalize_int_mapping(
+            snapshot_data["remaining_walls"]
+        ),
         "vertical_walls": _normalize_edges(snapshot_data["vertical_walls"]),
-        "horizontal_walls": _normalize_edges(snapshot_data["horizontal_walls"]),
+        "horizontal_walls": _normalize_edges(
+            snapshot_data["horizontal_walls"]
+        ),
     }
     if raw_inactive_players:
         normalized_snapshot["inactive_players"] = [
@@ -113,7 +119,7 @@ def parse_game_state_message(message: str) -> GameStateUpdate | None:
         return None
 
     try:
-        payload = json.loads(message[len(prefix) :])
+        payload = json.loads(message[len(prefix):])
     except json.JSONDecodeError:
         return None
 

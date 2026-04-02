@@ -41,7 +41,10 @@ def score_move(
     turn: int,
     model_path: str | Path | None = None,
 ) -> float:
-    """Score a move from `player_id` perspective. Returns win probability [0, 1]."""
+    """Score a move from `player_id` perspective.
+
+    Returns a win probability in [0, 1].
+    """
     features = build_ml_feature_row(
         before_state,
         move,
@@ -66,7 +69,8 @@ def ml_select_child(parent_node, *, model_path: str | Path | None = None):
         raise ValueError("No children to select from")
 
     parent_state = parent_node.state
-    # The player who made the move to reach each child is the parent's current_player
+    # The player who made the move to reach each child is the parent's
+    # current_player.
     move_player_id = parent_state.current_player
     turn = getattr(parent_node, "_turn", 1)
 

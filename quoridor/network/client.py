@@ -80,11 +80,15 @@ class NetworkClient:
                 if hello_response is None:
                     raise OSError("server did not answer HELLO")
                 if not hello_response.startswith("HELLO_OK "):
-                    raise OSError(f"unexpected server response: {hello_response}")
+                    raise OSError(
+                        f"unexpected server response: {hello_response}"
+                    )
                 try:
                     self.client_id = int(hello_response.split(maxsplit=1)[1])
                 except (IndexError, ValueError):
-                    raise OSError(f"unexpected server response: {hello_response}")
+                    raise OSError(
+                        f"unexpected server response: {hello_response}"
+                    )
                 self._sock = sock
                 self._buffer = hello_buffer
                 self._response_queue.clear()
@@ -130,7 +134,7 @@ class NetworkClient:
             if line is None:
                 continue
             if line.startswith("OPPONENT_MOVE "):
-                move_notation = line[len("OPPONENT_MOVE ") :].strip()
+                move_notation = line[len("OPPONENT_MOVE "):].strip()
                 if not move_notation:
                     continue
                 callback = self._opponent_move_callback
@@ -159,7 +163,9 @@ class NetworkClient:
                         callback(game_state_update)
                     except Exception:
                         with self._response_condition:
-                            self._pending_game_state_updates.append(game_state_update)
+                            self._pending_game_state_updates.append(
+                                game_state_update
+                            )
                     continue
 
                 with self._response_condition:
@@ -189,7 +195,9 @@ class NetworkClient:
                 continue
 
             if line == "ERROR TIMEOUT":
-                self._set_reader_error(OSError("server timed out the connection"))
+                self._set_reader_error(
+                    OSError("server timed out the connection")
+                )
                 break
 
             with self._response_condition:

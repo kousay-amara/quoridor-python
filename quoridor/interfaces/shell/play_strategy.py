@@ -1,4 +1,5 @@
-"""Strategies for executing play commands in local or network mode."""
+"""Strategies for executing play commands in local or network mode.
+"""
 
 from __future__ import annotations
 
@@ -7,7 +8,10 @@ from typing import Any, Callable, Protocol
 
 
 class PlayCommandStrategy(Protocol):
-    """Execute one play command and return (has_unsaved_changes, should_break)."""
+    """Execute one play command.
+
+    Returns ``(has_unsaved_changes, should_break)``.
+    """
 
     def execute(self, state: Any, text: str) -> tuple[bool, bool]: ...
 

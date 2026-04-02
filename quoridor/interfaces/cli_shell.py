@@ -121,7 +121,8 @@ def _place_wall_from_token(session: GameSession, wall_token: str) -> None:
     current = session.state.current_player
     active_players = session.active_player_ids()
     positions = [
-        session.state.player_positions[player_id] for player_id in active_players
+        session.state.player_positions[player_id]
+        for player_id in active_players
     ]
     target_funcs = session._build_player_target_funcs()
     ok, error_msg = validate_wall(
@@ -166,7 +167,9 @@ def _format_minutes(minutes: float) -> str:
 
 
 def _fallback_remaining_walls(config: _ShellConfig) -> dict[int, int]:
-    wall_count = config.walls_per_player if config.walls_per_player >= 0 else -1
+    wall_count = (
+        config.walls_per_player if config.walls_per_player >= 0 else -1
+    )
     return {pid: wall_count for pid in range(1, config.players + 1)}
 
 
@@ -174,7 +177,9 @@ def _create_new_session(config: _ShellConfig) -> GameSession:
     state = GameState(
         board_size=config.board_size,
         current_player=1,
-        player_positions=initial_player_positions(config.board_size, config.players),
+        player_positions=initial_player_positions(
+            config.board_size, config.players
+        ),
         remaining_walls=_fallback_remaining_walls(config),
         vertical_walls=[],
         horizontal_walls=[],
@@ -189,7 +194,9 @@ def _create_network_session(snapshot: GameSnapshot) -> GameSession:
     state = GameState.from_snapshot(snapshot)
     return GameSession(
         state=state,
-        player_types={player_id: "human" for player_id in state.player_positions},
+        player_types={
+            player_id: "human" for player_id in state.player_positions
+        },
     )
 
 
@@ -215,7 +222,9 @@ def _effective_ai_time_limit(
 
 def _session_ai_players(session: GameSession) -> list[int]:
     return sorted(
-        pid for pid, player_type in session.player_types.items() if player_type == "ai"
+        pid
+        for pid, player_type in session.player_types.items()
+        if player_type == "ai"
     )
 
 
@@ -241,10 +250,14 @@ def _print_shell_startup(
     ai_players = _session_ai_players(session)
     if ai_players:
         depth_label = (
-            "auto" if config.ai_minimax_depth is None else config.ai_minimax_depth
+            "auto"
+            if config.ai_minimax_depth is None
+            else config.ai_minimax_depth
         )
         time_label = (
-            "" if config.ai_mode == AI_MODE_MINIMAX else f", time={config.ai_time}s"
+            ""
+            if config.ai_mode == AI_MODE_MINIMAX
+            else f", time={config.ai_time}s"
         )
         print(
             f"AI players: {ai_players} "
@@ -492,7 +505,9 @@ def _handle_set(state: "_ShellState", line: str) -> None:
             raise ValueError("ai_players ids must be <= players")
         state.players = parsed_value
     elif param == "walls_per_player":
-        state.walls_per_player = _parse_int(value, field_name="walls_per_player")
+        state.walls_per_player = _parse_int(
+            value, field_name="walls_per_player"
+        )
         parsed_value = state.walls_per_player
     elif param == "board_size":
         state.board_size = parser_mod._size_type(value)
@@ -513,7 +528,9 @@ def _handle_set(state: "_ShellState", line: str) -> None:
             AI_MODE_ITERATIVE,
             AI_MODE_MCTS,
         }:
-            raise ValueError("ai_mode must be one of: minimax, iterative, mcts")
+            raise ValueError(
+                "ai_mode must be one of: minimax, iterative, mcts"
+            )
         if normalized == AI_MODE_MINIMAX and state.ai_minimax_depth is None:
             raise ValueError("ai_mode=minimax requires ai_minimax_depth")
         state.ai_mode = normalized
@@ -525,7 +542,9 @@ def _handle_set(state: "_ShellState", line: str) -> None:
         normalized = value.lower()
         if normalized in {"auto", "none"}:
             if state.ai_mode == AI_MODE_MINIMAX:
-                raise ValueError("ai_minimax_depth cannot be auto/none in minimax mode")
+                raise ValueError(
+                    "ai_minimax_depth cannot be auto/none in minimax mode"
+                )
             state.ai_minimax_depth = None
         else:
             state.ai_minimax_depth = _parse_positive_int(
@@ -862,7 +881,8 @@ def _print_blitz_times(blitz: Blitz) -> None:
     remaining_times = blitz.remaining_times()
     ordered = sorted(remaining_times)
     text = ", ".join(
-        f"Player {pid}: {_format_blitz_time(remaining_times[pid])}" for pid in ordered
+        f"Player {pid}: {_format_blitz_time(remaining_times[pid])}"
+        for pid in ordered
     )
     print(f"Blitz time -> {text}")
 
@@ -884,7 +904,9 @@ def _handle_timeout(
     )
 
 
-def _read_shell_input(state: "_ShellState", prompt: str) -> tuple[str | None, bool]:
+def _read_shell_input(
+    state: "_ShellState", prompt: str
+) -> tuple[str | None, bool]:
     return shell_runtime.read_shell_input(
         state,
         prompt,
@@ -899,7 +921,9 @@ def _read_shell_input(state: "_ShellState", prompt: str) -> tuple[str | None, bo
 def _print_configuration(state: "_ShellState") -> None:
     ai_sorted = sorted(set(state.ai_players))
     walls_text = (
-        "unlimited" if state.walls_per_player < 0 else str(state.walls_per_player)
+        "unlimited"
+        if state.walls_per_player < 0
+        else str(state.walls_per_player)
     )
     print("Current configuration:")
     print(f"verbose={state.verbose}")
@@ -925,7 +949,9 @@ def _command_new(state: _ShellState, line: str) -> bool:
         configure_logging=cli_mod._configure_logging,
         create_new_session=_create_new_session,
         start_shell_session=_start_shell_session,
-        sync_active_ai_settings_from_config=_sync_active_ai_settings_from_config,
+        sync_active_ai_settings_from_config=(
+            _sync_active_ai_settings_from_config
+        ),
     )
 
 
@@ -940,7 +966,9 @@ def _command_load(state: _ShellState, line: str) -> bool:
         line,
         handle_load=_handle_load,
         sync_runtime_config_from_session=_sync_runtime_config_from_session,
-        sync_active_ai_settings_from_config=_sync_active_ai_settings_from_config,
+        sync_active_ai_settings_from_config=(
+            _sync_active_ai_settings_from_config
+        ),
         contest_error_type=ContestError,
     )
 
@@ -1127,7 +1155,9 @@ def _command_join(state: _ShellState, line: str) -> bool:
         line,
         command_join_fn=cli_network.command_join,
         save_local_state_before_network=_save_local_shell_state_before_network,
-        apply_game_state_to_local_session=_apply_network_game_state_to_local_session,
+        apply_game_state_to_local_session=(
+            _apply_network_game_state_to_local_session
+        ),
         on_notification=_on_notification,
         on_connection_lost=_on_connection_lost,
     )
@@ -1346,7 +1376,9 @@ def _run_interactive_shell(
     if should_break or state is None:
         return
     state.event_bus = shell_events.EventBus()
-    state.network_restore_callback = lambda: _restore_saved_local_shell_state(state)
+    state.network_restore_callback = lambda: _restore_saved_local_shell_state(
+        state
+    )
 
     registry = _build_command_registry()
     discovery_listener = cli_network.start_discovery_listener()
@@ -1357,7 +1389,9 @@ def _run_interactive_shell(
             f"server start {startup_server_port}",
         )
 
-    shell_input.setup_readline(completer=completer, history_size=MAX_HISTORY_SIZE)
+    shell_input.setup_readline(
+        completer=completer, history_size=MAX_HISTORY_SIZE
+    )
 
     try:
         while True:

@@ -42,7 +42,9 @@ class Graph:
         if node1 in self.adj[node2]:
             self.adj[node2].remove(node1)
 
-    def add_edge(self, node1: int, node2: int, bidirectional: bool = True) -> None:
+    def add_edge(
+        self, node1: int, node2: int, bidirectional: bool = True
+    ) -> None:
         """Add a bidirectional or not edge between two cells."""
         self.add_node(node1)
         self.add_node(node2)

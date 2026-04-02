@@ -54,9 +54,9 @@ def initialize_shell_state(
             player_ids=session.state.player_positions,
         )
         print(
-            translate("New game started (blitz: {minutes} min/player).").format(
-                minutes=format_minutes(config.time_limit)
-            )
+            translate(
+                "New game started (blitz: {minutes} min/player)."
+            ).format(minutes=format_minutes(config.time_limit))
         )
     else:
         print(translate("New game started with default options."))
@@ -69,10 +69,14 @@ def initialize_shell_state(
     active_ai_players = session_ai_players(session)
     if active_ai_players:
         depth_label = (
-            "auto" if config.ai_minimax_depth is None else config.ai_minimax_depth
+            "auto"
+            if config.ai_minimax_depth is None
+            else config.ai_minimax_depth
         )
         time_label = (
-            "" if config.ai_mode == ai_mode_minimax else f", time={config.ai_time}s"
+            ""
+            if config.ai_mode == ai_mode_minimax
+            else f", time={config.ai_time}s"
         )
         print(
             f"AI players: {active_ai_players} "

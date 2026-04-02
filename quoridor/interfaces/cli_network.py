@@ -25,7 +25,9 @@ class NetworkState(Protocol):
 
 _NEW_GAME_ERRORS = {
     "ERROR PLAYER_NOT_FOUND": ("Cannot send invitation: player not found."),
-    "ERROR PLAYER_NOT_AVAILABLE": ("Cannot send invitation: player is not available."),
+    "ERROR PLAYER_NOT_AVAILABLE": (
+        "Cannot send invitation: player is not available."
+    ),
     "ERROR REQUESTER_NOT_IDLE": ("Cannot send invitation: you are not idle."),
     "ERROR SELF_INVITE": (
         "Cannot send invitation: choose a player ID different from yours."
@@ -48,7 +50,9 @@ _MOVE_ERRORS = {
     "ERROR NOT_YOUR_TURN": "Cannot play move: not your turn.",
     "ERROR INVALID_MOVE_FORMAT": "Cannot play move: invalid move format.",
     "ERROR ILLEGAL_MOVE": "Cannot play move: illegal move.",
-    "ERROR OPPONENT_DISCONNECTED": ("Cannot play move: opponent disconnected."),
+    "ERROR OPPONENT_DISCONNECTED": (
+        "Cannot play move: opponent disconnected."
+    ),
 }
 
 _DISCOVERY_WARMUP_POLL_SEC = 0.05
@@ -124,7 +128,9 @@ def _load_discovered_servers_for_listing(
 def command_server(state: NetworkState, line: str) -> bool:
     parts = line.split()
     if len(parts) < 2:
-        raise ValueError("Invalid format. Use: server list|start [PORT]|status|stop")
+        raise ValueError(
+            "Invalid format. Use: server list|start [PORT]|status|stop"
+        )
 
     action = parts[1].lower()
     if action == "list":
@@ -149,7 +155,8 @@ def command_server(state: NetworkState, line: str) -> bool:
             servers = [
                 server
                 for server in servers
-                if (server.name, server.port) != (local_server.name, local_server.port)
+                if (server.name, server.port)
+                != (local_server.name, local_server.port)
             ]
             servers = [local_server, *servers]
         if not servers:
@@ -164,7 +171,9 @@ def command_server(state: NetworkState, line: str) -> bool:
         if len(parts) > 3:
             raise ValueError("Invalid format. Use: server start [PORT]")
         if state.network_server is not None:
-            print(f"Server already running on port {state.network_server.port}.")
+            print(
+                f"Server already running on port {state.network_server.port}."
+            )
             return False
         port = DEFAULT_SERVER_PORT
         if len(parts) == 3:
@@ -203,7 +212,9 @@ def command_server(state: NetworkState, line: str) -> bool:
         print("Server stopped.")
         return False
 
-    raise ValueError("Invalid format. Use: server list|start [PORT]|status|stop")
+    raise ValueError(
+        "Invalid format. Use: server list|start [PORT]|status|stop"
+    )
 
 
 def command_join(state: NetworkState, line: str) -> bool:
@@ -226,7 +237,9 @@ def command_join(state: NetworkState, line: str) -> bool:
     try:
         host, port = parse_endpoint(endpoint)
     except ValueError as exc:
-        raise ValueError("Invalid format. Use: join [HOST[:PORT]] [NAME]") from exc
+        raise ValueError(
+            "Invalid format. Use: join [HOST[:PORT]] [NAME]"
+        ) from exc
 
     client = NetworkClient(host=host, port=port, name=name or "player")
     try:
@@ -268,7 +281,9 @@ def command_players(state: NetworkState, line: str) -> bool:
         try:
             requested_player_id = int(parts[1])
         except ValueError as exc:
-            raise ValueError("Invalid format. Use: players [PLAYER_ID]") from exc
+            raise ValueError(
+                "Invalid format. Use: players [PLAYER_ID]"
+            ) from exc
         if requested_player_id <= 0:
             raise ValueError("Invalid format. Use: players [PLAYER_ID]")
 
@@ -332,7 +347,8 @@ def command_scoreboard(state: NetworkState, line: str) -> bool:
     print("Scoreboard:")
     for client_id, name, wins, losses, played in scores:
         print(
-            f"- {client_id}: {name} " f"(played={played} wins={wins} losses={losses})"
+            f"- {client_id}: {name} "
+            f"(played={played} wins={wins} losses={losses})"
         )
     return False
 

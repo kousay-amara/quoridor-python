@@ -63,7 +63,6 @@ def apply_move(state: GameState, move: tuple) -> None:
 
     state._rebuild_graph()
 
-    # Advance to the next active player.
     active_players = state.active_player_ids()
     if not active_players:
         return
@@ -123,7 +122,9 @@ def evaluate_state_default(state: GameState, ai_player_id: int) -> float:
         targets[player_ids.index(ai_player_id)],
     )
     opp_distances = [
-        get_shortest_path_length(state.graph, state.player_positions[p], targets[i])
+        get_shortest_path_length(
+            state.graph, state.player_positions[p], targets[i]
+        )
         for i, p in enumerate(player_ids)
         if p != ai_player_id
     ]
@@ -168,7 +169,9 @@ def evaluate_state_material(state: GameState, ai_player_id: int) -> float:
         targets[player_ids.index(ai_player_id)],
     )
     opponents_dist = [
-        get_shortest_path_length(state.graph, state.player_positions[p], targets[i])
+        get_shortest_path_length(
+            state.graph, state.player_positions[p], targets[i]
+        )
         for i, p in enumerate(player_ids)
         if p != ai_player_id
     ]
@@ -217,7 +220,9 @@ def evaluate_state_hybrid(state: GameState, ai_player_id: int) -> float:
         targets[player_ids.index(ai_player_id)],
     )
     opp_distances = [
-        get_shortest_path_length(state.graph, state.player_positions[p], targets[i])
+        get_shortest_path_length(
+            state.graph, state.player_positions[p], targets[i]
+        )
         for i, p in enumerate(player_ids)
         if p != ai_player_id
     ]

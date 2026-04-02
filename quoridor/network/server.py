@@ -136,7 +136,9 @@ class NetworkServer:
         self._lock = threading.Lock()
 
     def running(self) -> bool:
-        return self._accept_thread is not None and self._accept_thread.is_alive()
+        return (
+            self._accept_thread is not None and self._accept_thread.is_alive()
+        )
 
     def server_status_snapshot(self) -> dict[str, int]:
         with self._lock:
@@ -209,7 +211,10 @@ class NetworkServer:
         self._accept_thread = None
 
         for client_thread in client_threads:
-            if client_thread is not current_thread and client_thread.is_alive():
+            if (
+                client_thread is not current_thread
+                and client_thread.is_alive()
+            ):
                 client_thread.join(timeout=0.5)
 
     def _accept_loop(self) -> None:
@@ -277,12 +282,14 @@ class NetworkServer:
                     client_status = session.status
                     waiting_invitation = None
                     if client_status == _PLAYER_STATUS_WAITGAME:
-                        waiting_invitation = self._pending_invitations_by_inviter.get(
-                            client_id
+                        waiting_invitation = (
+                            self._pending_invitations_by_inviter.get(client_id)
                         )
                         if waiting_invitation is None:
                             waiting_invitation = (
-                                self._pending_invitations_by_invitee.get(client_id)
+                                self._pending_invitations_by_invitee.get(
+                                    client_id
+                                )
                             )
 
                 if (
@@ -329,7 +336,9 @@ class NetworkServer:
                         break
                     continue
 
-                if command_upper == "PLAYERS" or command_upper.startswith("PLAYERS "):
+                if command_upper == "PLAYERS" or command_upper.startswith(
+                    "PLAYERS "
+                ):
                     try:
                         _send_line(
                             client_sock,
@@ -397,7 +406,9 @@ class NetworkServer:
 
                 if command_upper == "CANCEL":
                     try:
-                        response, notifications = self._handle_cancel_command(client_id)
+                        response, notifications = self._handle_cancel_command(
+                            client_id
+                        )
                         _send_line(
                             client_sock,
                             response,
@@ -427,7 +438,9 @@ class NetworkServer:
                         break
                     continue
 
-                if command_upper == "MOVE" or command_upper.startswith("MOVE "):
+                if command_upper == "MOVE" or command_upper.startswith(
+                    "MOVE "
+                ):
                     try:
                         (
                             response,
@@ -488,7 +501,9 @@ class NetworkServer:
                 self._close_game_room_locked(game_id)
             invitation = self._pending_invitations_by_inviter.get(client_id)
             if invitation is None:
-                invitation = self._pending_invitations_by_invitee.get(client_id)
+                invitation = self._pending_invitations_by_invitee.get(
+                    client_id
+                )
             if invitation is not None:
                 self._clear_invitation_locked(invitation)
 
@@ -524,7 +539,10 @@ class NetworkServer:
             session = self._client_sessions.get(client_id)
             if session is None:
                 continue
-            if session.status == _PLAYER_STATUS_WAITGAME and session.game_id is None:
+            if (
+                session.status == _PLAYER_STATUS_WAITGAME
+                and session.game_id is None
+            ):
                 session.status = _PLAYER_STATUS_IDLE
                 session.last_activity_time = now
 
@@ -538,8 +556,12 @@ class NetworkServer:
                     expired_invitations.append(invitation)
 
             for invitation in expired_invitations:
-                inviter_session = self._client_sessions.get(invitation.inviter_id)
-                invitee_session = self._client_sessions.get(invitation.invitee_id)
+                inviter_session = self._client_sessions.get(
+                    invitation.inviter_id
+                )
+                invitee_session = self._client_sessions.get(
+                    invitation.invitee_id
+                )
                 inviter_name = (
                     inviter_session.name
                     if inviter_session is not None
@@ -551,10 +573,14 @@ class NetworkServer:
                     else f"client-{invitation.invitee_id}"
                 )
                 inviter_sock = (
-                    inviter_session.sock if inviter_session is not None else None
+                    inviter_session.sock
+                    if inviter_session is not None
+                    else None
                 )
                 invitee_sock = (
-                    invitee_session.sock if invitee_session is not None else None
+                    invitee_session.sock
+                    if invitee_session is not None
+                    else None
                 )
                 self._clear_invitation_locked(invitation)
 
@@ -658,7 +684,8 @@ class NetworkServer:
             return "PLAYERS"
 
         payload = ";".join(
-            f"{client_id}|{name}|{status}" for client_id, name, status in players
+            f"{client_id}|{name}|{status}"
+            for client_id, name, status in players
         )
         return f"PLAYERS {payload}"
 
@@ -739,7 +766,8 @@ class NetworkServer:
             players=participant_count,
             walls_per_player=_ROOM_WALLS_PER_PLAYER,
             player_types={
-                player_id: "human" for player_id in range(1, participant_count + 1)
+                player_id: "human"
+                for player_id in range(1, participant_count + 1)
             },
         )
         game_id = self._next_game_id
@@ -757,7 +785,9 @@ class NetworkServer:
         self._game_rooms[game_id] = room
 
         for participant_client_id in participants_client_ids:
-            participant_session = self._client_sessions.get(participant_client_id)
+            participant_session = self._client_sessions.get(
+                participant_client_id
+            )
             if participant_session is None:
                 continue
             participant_session.status = _PLAYER_STATUS_INGAME
@@ -862,7 +892,10 @@ class NetworkServer:
                 (
                     invitation.inviter_id,
                     inviter_sock,
-                    ("INVITATION_ACCEPTED " f"PLAYER={invitee_name} STARTING_GAME"),
+                    (
+                        "INVITATION_ACCEPTED "
+                        f"PLAYER={invitee_name} STARTING_GAME"
+                    ),
                 )
             ],
             room,
@@ -889,7 +922,9 @@ class NetworkServer:
                 if invitee_session is not None
                 else f"client-{invitation.invitee_id}"
             )
-            inviter_sock = inviter_session.sock if inviter_session is not None else None
+            inviter_sock = (
+                inviter_session.sock if inviter_session is not None else None
+            )
             self._clear_invitation_locked(invitation)
 
             notifications = []
@@ -925,7 +960,9 @@ class NetworkServer:
                 if invitee_session is not None
                 else f"client-{invitation.invitee_id}"
             )
-            invitee_sock = invitee_session.sock if invitee_session is not None else None
+            invitee_sock = (
+                invitee_session.sock if invitee_session is not None else None
+            )
             self._clear_invitation_locked(invitation)
 
             notifications = []
@@ -947,7 +984,10 @@ class NetworkServer:
                 return "ERROR PLAYER_NOT_FOUND"
             if session.status == _PLAYER_STATUS_AWAY:
                 return "ERROR ALREADY_AWAY"
-            if session.status != _PLAYER_STATUS_IDLE or session.game_id is not None:
+            if (
+                session.status != _PLAYER_STATUS_IDLE
+                or session.game_id is not None
+            ):
                 return "ERROR CANNOT_GO_AWAY"
             session.status = _PLAYER_STATUS_AWAY
             session.last_activity_time = time.time()
@@ -980,7 +1020,10 @@ class NetworkServer:
             session = self._client_sessions.get(client_id)
             if session is None:
                 return "ERROR PLAYER_NOT_FOUND", None, None
-            if session.game_id is None or session.status != _PLAYER_STATUS_INGAME:
+            if (
+                session.game_id is None
+                or session.status != _PLAYER_STATUS_INGAME
+            ):
                 return "ERROR NOT_IN_GAME", None, None
 
             room = self._game_rooms.get(session.game_id)
@@ -1010,7 +1053,9 @@ class NetworkServer:
                 if participant_client_id == client_id:
                     continue
 
-                opponent_session = self._client_sessions.get(participant_client_id)
+                opponent_session = self._client_sessions.get(
+                    participant_client_id
+                )
                 if opponent_session is None:
                     self._close_game_room_locked(room.game_id)
                     return "ERROR OPPONENT_DISCONNECTED", None, None
@@ -1047,7 +1092,9 @@ class NetworkServer:
             snapshot = room.session.state.to_snapshot()
             recipients = []
             for participant_client_id in room.player_ids:
-                participant_session = self._client_sessions.get(participant_client_id)
+                participant_session = self._client_sessions.get(
+                    participant_client_id
+                )
                 player_id = room.client_to_player_id.get(participant_client_id)
                 if participant_session is None or player_id is None:
                     continue
