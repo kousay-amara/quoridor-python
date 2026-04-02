@@ -19,7 +19,11 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
 ]
 
-dependencies = []
+dependencies = [
+    "joblib>=1.5.0",
+    "pandas>=2.3.0",
+    "scikit-learn>=1.5.0",
+]
 
 [project.scripts]
 quoridor = "quoridor.__main__:main"
@@ -47,6 +51,7 @@ where = ["."]
 
 [tool.setuptools.package-data]
 "*" = ["*.txt", "*.md"]
+"quoridor" = ["ML/data/*.pkl"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
