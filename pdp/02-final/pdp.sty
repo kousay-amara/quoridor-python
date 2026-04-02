@@ -31,10 +31,14 @@
 %	PACKAGES AND OTHER DOCUMENT CONFIGURATIONS
 %------------------------------------------------------------------------------
 
-\usepackage[french]{babel}
+\IfFileExists{french.ldf}{%
+  \usepackage[french]{babel}%
+}{%
+  \usepackage[english]{babel}%
+}
 
 \usepackage{tikz}
-\usetikzlibrary{calc}
+\usetikzlibrary{calc,arrows.meta,positioning}
 
 \usepackage{minted} % Required for including code snippets
 \setminted{fontfamily=tt}
