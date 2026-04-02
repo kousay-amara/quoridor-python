@@ -16,16 +16,14 @@ from quoridor.ML.ml_selector import ml_select_child
 
 def _make_goal_checker(player_id, board_size):
     if player_id == 1:
-
-        def is_target(node):
-            return node // board_size == board_size - 1
-
-    else:
-
-        def is_target(node):
-            return node // board_size == 0
-
-    return is_target
+        return lambda node: node // board_size == board_size - 1
+    elif player_id == 2:
+        return lambda node: node // board_size == 0
+    elif player_id == 3:
+        return lambda node: node % board_size == board_size - 1
+    elif player_id == 4:
+        return lambda node: node % board_size == 0
+    return None
 
 
 def get_blocking_walls(state, opponent_id):
@@ -91,10 +89,11 @@ def get_tree_moves(state):
 
 
 class MCTSNode:
-    def __init__(self, state, parent=None, move=None):
+    def __init__(self, state, parent=None, move=None, move_by=None):
         self.state = state
         self.parent = parent
         self.move = move
+        self.move_by = move_by
         self.childrens = []
         self.wins = 0
         self.visits = 0
@@ -110,9 +109,19 @@ class MCTSNode:
 
 
 def get_dist_to_goal(player_id, pos_index, board_size):
-    y = pos_index // board_size
-    target_y = board_size - 1 if player_id == 1 else 0
-    return abs(y - target_y)
+    if player_id == 1:
+        y = pos_index // board_size
+        return (board_size - 1) - y
+    elif player_id == 2:
+        y = pos_index // board_size
+        return y
+    elif player_id == 3:
+        x = pos_index % board_size
+        return (board_size - 1) - x
+    elif player_id == 4:
+        x = pos_index % board_size
+        return x
+    raise ValueError(f"player_id {player_id} non supporté (1-4 attendu)")
 
 
 def check_any_winner(state):
@@ -156,9 +165,10 @@ def mcts_search(
             turn_counter[0] += 1
             move = random.choice(node.untried_moves)
             node.untried_moves.remove(move)
+            player_who_moved = node.state.current_player
             new_state = clone_state(node.state)
             apply_move(new_state, move)
-            child_node = MCTSNode(state=new_state, parent=node, move=move)
+            child_node = MCTSNode(state=new_state, parent=node, move=move, move_by=player_who_moved)
             node.childrens.append(child_node)
             node = child_node
 
@@ -224,13 +234,8 @@ def mcts_search(
         temp_node = node
         while temp_node is not None:
             temp_node.visits += 1
-            active_players = temp_node.state.active_player_ids()
-            player_who_moved = next(
-                player_id
-                for player_id in active_players
-                if player_id != temp_node.state.current_player
-            )
-            temp_node.wins += 1 if winner == player_who_moved else 0
+            if temp_node.move_by is not None:
+                temp_node.wins += 1 if winner == temp_node.move_by else 0
             temp_node = temp_node.parent
 
     if not root_node.childrens:
