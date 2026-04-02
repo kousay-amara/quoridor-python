@@ -229,8 +229,13 @@ projet.
 \begin{itemize}
   \item \textbf{\texttt{GameSession}} : interface centrale pour appliquer les
     coups, changer de tour, manipuler l'historique et calculer le gagnant.
+    Cette classe expose notamment les opérations
+    \texttt{play\_pawn\_move\_from\_to()}, \texttt{place\_wall()},
+    \texttt{undo()}, \texttt{redo()} et \texttt{compute\_ai\_move()}.
   \item \textbf{\texttt{GameApplicationService}} : façade applicative exposée
-    au CLI et à la GUI.
+    au CLI et à la GUI. Elle fournit des points d'entrée cohérents comme
+    \texttt{load()}, \texttt{save()}, \texttt{hint()},
+    \texttt{play\_pawn\_move\_token()} et \texttt{place\_wall\_token()}.
   \item \textbf{\texttt{NetworkServer} / \texttt{NetworkClient}} : interface du
     mode réseau, responsable du protocole et du transport, mais pas des règles
     métier elles-mêmes.
@@ -239,6 +244,15 @@ projet.
   \item \textbf{\texttt{ConfigManager} et \texttt{setup\_i18n}} : services
     transverses partagés par plusieurs interfaces.
 \end{itemize}
+
+Ce choix d'interfaces est important d'un point de vue architectural. Les
+interfaces utilisateur ne manipulent pas directement les structures profondes
+du domaine ; elles passent par des services ou des sessions explicitement
+identifiés. En pratique, cela signifie qu'une commande du shell, un clic dans
+la GUI ou un événement réseau peuvent déclencher des opérations différentes au
+niveau de l'interface, tout en convergeant vers les mêmes abstractions
+internes. Cette convergence améliore la cohérence fonctionnelle et réduit le
+risque de divergence entre les modes d'utilisation du logiciel.
 
 La Fig.~\ref{fig:architecture-key-components} illustre ces composants et leurs
 interactions majeures.
@@ -330,6 +344,24 @@ interactions majeures.
   \label{fig:architecture-key-components}
 \end{figure}
 
+\subsection{Flux de contrôle typique}
+
+Pour rendre l'architecture plus concrète, on peut suivre le traitement d'une
+commande simple du CLI, par exemple un déplacement de pion. Le shell
+interactif lit la commande utilisateur, la normalise, puis délègue son
+interprétation à ses handlers spécialisés. Ceux-ci convertissent la saisie en
+appel vers la couche applicative ou directement vers \texttt{GameSession} selon
+le cas. La session consulte alors \texttt{GameState}, sollicite les modules de
+règles pour valider le coup, met à jour l'état, enregistre l'action dans
+l'historique, puis rend le contrôle à l'interface qui réaffiche l'état du jeu.
+
+Le même principe vaut pour la GUI et pour le réseau. Dans la GUI, l'action
+provient d'un menu ou d'un glisser-déposer ; côté réseau, elle provient d'une
+commande reçue par le serveur. Dans les deux cas, la validation du coup repose
+sur les mêmes modules métier. Ce point est essentiel : l'architecture ne se
+contente pas de juxtaposer plusieurs interfaces, elle leur impose un noyau
+commun qui garantit un comportement homogène.
+
 \subsection{Lien avec les structures de données et les algorithmes}
 
 L'architecture choisie n'est pas indépendante des structures de données.
@@ -347,6 +379,14 @@ l'état du jeu et les règles. Ce positionnement garantit qu'un conseil affiché
 en CLI, une suggestion de coup en GUI ou une décision prise en mode réseau
 s'appuient sur la même base algorithmique.
 
+Ce lien explicite entre architecture et structures de données justifie le
+découpage retenu. Une architecture uniquement pensée autour des interfaces
+aurait eu tendance à disperser la logique de validation dans plusieurs
+composants, alors que le choix effectué place la représentation du plateau et
+les algorithmes de graphe au centre du système. C'est précisément ce point qui
+rend possible la réutilisation des mêmes règles pour le jeu local, l'undo/redo,
+la sauvegarde, l'IA et le mode réseau.
+
 \subsection{Justification des choix}
 
 Les choix architecturaux retenus répondent principalement à trois objectifs.
@@ -357,6 +397,14 @@ sans démarrer l'interface graphique ni le réseau. Le troisième est
 l'\textbf{extensibilité} : l'ajout du blitz, du réseau ou de nouvelles
 heuristiques IA doit rester possible sans refondre complètement le coeur du
 jeu.
+
+Une autre justification importante tient à la granularité choisie. Le projet
+aurait pu rester organisé autour de quelques fichiers très larges, notamment
+pour le shell ou les services applicatifs. Au contraire, la factorisation en
+sous-modules spécialisés permet de limiter la taille des composants, de
+clarifier les responsabilités et de rendre les tests plus ciblés. Cette
+approche n'élimine pas complètement la complexité, mais elle la rend plus
+maîtrisable.
 
 Cette architecture présente toutefois certaines limites. Le shell interactif
 reste historiquement central et a nécessité une factorisation progressive.
