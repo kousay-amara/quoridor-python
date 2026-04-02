@@ -1435,22 +1435,35 @@ def test_network_invitation_accept_survives_waitgame_timeout_window():
     port = _unused_port()
     server = NetworkServer(
         port=port,
-        client_timeout_sec=0.05,
-        invitation_timeout_sec=0.3,
+        client_timeout_sec=0.3,
+        invitation_timeout_sec=1.0,
     )
-    alice = NetworkClient(host="127.0.0.1", port=port, name="alice")
-    bob = NetworkClient(host="127.0.0.1", port=port, name="bob")
+    alice = NetworkClient(
+        host="127.0.0.1",
+        port=port,
+        name="alice",
+        keepalive_interval_sec=0.05,
+    )
+    bob = NetworkClient(
+        host="127.0.0.1",
+        port=port,
+        name="bob",
+        keepalive_interval_sec=0.05,
+    )
 
     try:
         server.start()
         alice.connect()
         bob.connect()
 
-        assert alice.send_command("NEW 2") == "INVITATION_SENT PLAYER=bob TIMEOUT=0s"
+        assert (
+            alice.send_command("NEW 2")
+            == "INVITATION_SENT PLAYER=bob TIMEOUT=1s"
+        )
         received = _wait_for_notification_prefix(bob, "INVITATION_RECEIVED ")
-        assert received == "INVITATION_RECEIVED FROM=alice EXPIRES=0s"
+        assert received == "INVITATION_RECEIVED FROM=alice EXPIRES=1s"
 
-        time.sleep(0.1)
+        time.sleep(0.8)
 
         assert bob.accept() == "GAME_START OPPONENT=alice"
         accepted = _wait_for_notification_prefix(alice, "INVITATION_ACCEPTED ")

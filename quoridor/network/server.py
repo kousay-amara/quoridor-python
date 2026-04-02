@@ -279,23 +279,8 @@ class NetworkServer:
                     if session is None:
                         break
                     last_client_activity_time = session.last_activity_time
-                    client_status = session.status
-                    waiting_invitation = None
-                    if client_status == _PLAYER_STATUS_WAITGAME:
-                        waiting_invitation = (
-                            self._pending_invitations_by_inviter.get(client_id)
-                        )
-                        if waiting_invitation is None:
-                            waiting_invitation = (
-                                self._pending_invitations_by_invitee.get(
-                                    client_id
-                                )
-                            )
 
                 if (
-                    client_status != _PLAYER_STATUS_WAITGAME
-                    or waiting_invitation is None
-                ) and (
                     last_client_activity_time is not None
                     and time.time() - last_client_activity_time
                     > self.client_timeout_sec

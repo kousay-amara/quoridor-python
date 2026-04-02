@@ -5,6 +5,7 @@ import threading
 import time
 
 from .basic_network import (
+    CLIENT_TIMEOUT_SEC,
     DEFAULT_SERVER_HOST,
     DEFAULT_SERVER_PORT,
     GameStateUpdate,
@@ -23,10 +24,12 @@ class NetworkClient:
         host: str = DEFAULT_SERVER_HOST,
         port: int = DEFAULT_SERVER_PORT,
         name: str = "player",
+        keepalive_interval_sec: float | None = CLIENT_TIMEOUT_SEC / 4.0,
     ) -> None:
         self.host = host
         self.port = _validate_port(port)
         self.name = name.strip() or "player"
+        self.keepalive_interval_sec = keepalive_interval_sec
         self.client_id = None
         self._sock = None
         self._buffer = ""
@@ -38,6 +41,8 @@ class NetworkClient:
         self._send_lock = threading.Lock()
         self._reader_thread = None
         self._reader_stop_requested = threading.Event()
+        self._keepalive_thread = None
+        self._keepalive_stop_requested = threading.Event()
         self._reader_error = None
         self._opponent_move_callback = None
         self._game_state_callback = None
@@ -97,12 +102,23 @@ class NetworkClient:
                 self._pending_notifications.clear()
                 self._reader_error = None
                 self._reader_stop_requested.clear()
+                self._keepalive_stop_requested.clear()
                 self._reader_thread = threading.Thread(
                     target=self._reader_loop,
                     name="quoridor-network-client-reader",
                     daemon=True,
                 )
                 self._reader_thread.start()
+                if (
+                    self.keepalive_interval_sec is not None
+                    and self.keepalive_interval_sec > 0
+                ):
+                    self._keepalive_thread = threading.Thread(
+                        target=self._keepalive_loop,
+                        name="quoridor-network-client-keepalive",
+                        daemon=True,
+                    )
+                    self._keepalive_thread.start()
                 return
         except OSError:
             try:
@@ -204,6 +220,32 @@ class NetworkClient:
                 self._response_queue.append(line)
                 self._response_condition.notify_all()
 
+    def _keepalive_loop(self) -> None:
+        interval = self.keepalive_interval_sec
+        if interval is None or interval <= 0:
+            return
+
+        while not self._keepalive_stop_requested.wait(timeout=interval):
+            if self._sock is None or self._reader_stop_requested.is_set():
+                break
+            try:
+                response = self.send_command("PING")
+            except OSError as exc:
+                if not self._keepalive_stop_requested.is_set():
+                    self._set_reader_error(OSError(str(exc)))
+                    self.close()
+                break
+
+            if not (
+                response.startswith("PONG TIME=")
+                and response.endswith("ms")
+            ):
+                self._set_reader_error(
+                    OSError(f"unexpected keepalive response: {response}")
+                )
+                self.close()
+                break
+
     def _set_reader_error(self, exc: OSError) -> None:
         callback = None
         reader_error = None
@@ -275,6 +317,7 @@ class NetworkClient:
     def quit(self) -> None:
         if self._sock is None:
             return
+        self._keepalive_stop_requested.set()
         try:
             response = self.send_command("QUIT")
         except OSError:
@@ -286,6 +329,7 @@ class NetworkClient:
 
     def close(self) -> None:
         self._reader_stop_requested.set()
+        self._keepalive_stop_requested.set()
         self._connection_lost_callback = None
         if self._sock is not None:
             try:
@@ -294,12 +338,19 @@ class NetworkClient:
                 pass
         current_thread = threading.current_thread()
         reader_thread = self._reader_thread
+        keepalive_thread = self._keepalive_thread
         if (
             reader_thread is not None
             and reader_thread is not current_thread
             and reader_thread.is_alive()
         ):
             reader_thread.join(timeout=0.5)
+        if (
+            keepalive_thread is not None
+            and keepalive_thread is not current_thread
+            and keepalive_thread.is_alive()
+        ):
+            keepalive_thread.join(timeout=0.5)
         self._sock = None
         self.client_id = None
         self._buffer = ""
@@ -315,6 +366,7 @@ class NetworkClient:
         self._notification_callback = None
         self._connection_lost_callback = None
         self._reader_thread = None
+        self._keepalive_thread = None
 
     def players(self) -> list[tuple[int, str, str]]:
         response = self.send_command("PLAYERS")
