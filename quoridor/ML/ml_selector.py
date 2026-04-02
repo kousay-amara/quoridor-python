@@ -88,7 +88,7 @@ def ml_select_child(parent_node, *, model_path: str | Path | None = None):
                 model_path=model_path,
             )
         except (ValueError, Exception):
-            prob = 0.5  # fallback for unsupported cases
+            prob = 0.5  
 
         if prob > best_score:
             best_score = prob

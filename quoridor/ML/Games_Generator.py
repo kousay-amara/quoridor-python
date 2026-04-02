@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import csv
 import json
 import random
 from pathlib import Path
@@ -20,7 +19,8 @@ from ..application.minimax_engine import (
     find_best_move_minimax,
 )
 from ..core.game_state import GameState
-from .session_helpers import build_initial_ai_session
+from ..application.game_session import initial_player_positions
+from ..core.game_state_builder import GameStateBuilder
 
 
 class BotConfig:
@@ -133,11 +133,20 @@ class GameGenerator:
         return game_data
 
     def _build_session(self) -> GameSession:
-        return build_initial_ai_session(
-            board_size=self.board_size,
-            players=self.players,
-            walls_per_player=self.walls_per_player,
+        positions = initial_player_positions(self.board_size, self.players)
+        remaining_walls = {
+            player_id: self.walls_per_player for player_id in positions
+        }
+
+        state = (
+            GameStateBuilder(board_size=self.board_size)
+            .with_current_player(1)
+            .with_players(positions)
+            .with_remaining_walls(remaining_walls)
+            .build()
         )
+        player_types = {player_id: "ai" for player_id in positions}
+        return GameSession(state=state, player_types=player_types)
 
     def _choose_move(self, state: GameState, bot: BotConfig) -> tuple:
         if bot.mode == "minimax":
@@ -219,32 +228,6 @@ class GameGenerator:
         )
         game_path.write_text(text, encoding="utf-8")
 
-    def _write_index(self, games: list[dict]) -> None:
-        fieldnames = [
-            "game_id",
-            "seed",
-            "winner_id",
-            "termination",
-            "turn_count",
-            "player_1_bot",
-            "player_2_bot",
-        ]
-
-        with self.index_path.open("w", newline="", encoding="utf-8") as handle:
-            writer = csv.DictWriter(handle, fieldnames=fieldnames)
-            writer.writeheader()
-
-            for game in games:
-                row = {
-                    "game_id": game["game_id"],
-                    "seed": game["seed"],
-                    "winner_id": game["winner_id"],
-                    "termination": game["termination"],
-                    "turn_count": game["turn_count"],
-                    "player_1_bot": game["bots"]["1"]["name"],
-                    "player_2_bot": game["bots"]["2"]["name"],
-                }
-                writer.writerow(row)
 
     def _serialize_move(self, move: tuple) -> dict:
         """Transform a game move into a json move"""

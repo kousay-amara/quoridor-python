@@ -11,6 +11,8 @@ from quoridor.rules.wall_rules import get_all_legal_wall_placements
 from quoridor.rules.win_rules import has_player_won
 from quoridor.utils.graph import get_shortest_path_length
 
+from quoridor.rules.pawn_rules import get_all_legal_pawn_moves
+from quoridor.ML.ml_selector import ml_select_child
 
 def _make_goal_checker(player_id, board_size):
     if player_id == 1:
@@ -60,7 +62,7 @@ def get_tree_moves(state):
     current_pos = state.player_positions[current_id]
     all_pos = list(state.player_positions.values())
 
-    from quoridor.rules.pawn_rules import get_all_legal_pawn_moves
+    
 
     pawn_targets = get_all_legal_pawn_moves(
         state.graph,
@@ -131,7 +133,6 @@ def mcts_search(
     exploration_weight=1.41,
     selection_policy="UCT",
 ):
-    from quoridor.ML.ml_selector import ml_select_child
 
     root_node = MCTSNode(root_state)
     start_time = time.time()
@@ -171,7 +172,6 @@ def mcts_search(
             current_pos = rollout_state.player_positions[player_id]
             all_pos = list(rollout_state.player_positions.values())
 
-            from quoridor.rules.pawn_rules import get_all_legal_pawn_moves
 
             pawn_targets = get_all_legal_pawn_moves(
                 rollout_state.graph,
