@@ -167,3 +167,60 @@ def test_timeout_undo_restores_blitz_snapshot_and_keeps_redo_branch():
     assert session.state.is_player_active(1)
     assert blitz.remaining_time(1) == before_timeout["remaining_times"][1]
     assert session.history.can_redo() is True
+
+
+def test_game_session_compute_scores_returns_deterministic_values():
+    state = GameState(
+        board_size=9,
+        current_player=1,
+        player_positions={1: 4, 2: 76},
+        remaining_walls={1: 20, 2: 20},
+        vertical_walls=[],
+        horizontal_walls=[],
+    )
+    session = GameSession(state=state, player_types={1: "human", 2: "human"})
+
+    scores = session.compute_scores()
+
+    # Both players are at symmetric starting positions (distance 8 to target).
+    assert scores == {1: 73, 2: 73}
+    assert session.game_outcome().status == "ongoing"
+
+
+def test_game_session_declares_draw_when_turn_limit_reached():
+    state = GameState(
+        board_size=9,
+        current_player=1,
+        player_positions={1: 4, 2: 76},
+        remaining_walls={1: 20, 2: 20},
+    )
+    session = GameSession(
+        state=state,
+        player_types={1: "human", 2: "human"},
+        draw_turn_limit=2,
+    )
+
+    session.play_pawn_move(1, 13)
+    assert session.game_outcome().status == "ongoing"
+    session.play_pawn_move(2, 67)
+
+    outcome = session.game_outcome()
+    assert outcome.status == "draw"
+    assert outcome.winner_id is None
+
+
+def test_game_session_winner_detection_unchanged_with_outcome_api():
+    state = GameState(
+        board_size=9,
+        current_player=1,
+        player_positions={1: 67, 2: 21},
+        remaining_walls={1: 20, 2: 20},
+    )
+    session = GameSession(state=state, player_types={1: "human", 2: "human"})
+
+    session.play_pawn_move(1, 76)
+    outcome = session.game_outcome()
+
+    assert outcome.status == "winner"
+    assert outcome.winner_id == 1
+    assert outcome.scores[1] > outcome.scores[2]

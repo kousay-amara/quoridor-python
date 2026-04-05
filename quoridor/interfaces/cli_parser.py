@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import argparse
-import gettext
 import sys
+from pathlib import Path
 
 from .cli_constants import (
     AI_MINIMAX_DEPTH_DEFAULT,
@@ -24,9 +24,12 @@ from .cli_constants import (
     PLAYER_ID_MIN,
     WALLS_DEFAULT,
 )
+from ..i18n import runtime_gettext
 from ..network import DEFAULT_SERVER_PORT
 
-_ = gettext.gettext
+
+def _(message: str) -> str:
+    return runtime_gettext(message)
 
 
 class QuoridorArgumentParser(argparse.ArgumentParser):
@@ -156,7 +159,7 @@ def _build_parser(
             depth_default = AI_MINIMAX_DEPTH_DEFAULT
 
     parser = QuoridorArgumentParser(
-        prog="quoridor",
+        prog=_cli_prog_name(),
         description=_("Quoridor game command-line interface."),
         add_help=True,
     )
@@ -288,7 +291,7 @@ def _build_parser(
 
 def _build_contest_parser() -> argparse.ArgumentParser:
     parser = QuoridorArgumentParser(
-        prog="quoridor",
+        prog=_cli_prog_name(),
         description="Quoridor contest mode.",
         add_help=True,
     )
@@ -300,6 +303,24 @@ def _build_contest_parser() -> argparse.ArgumentParser:
         "--contest",
         action="store_true",
         help="enable contest mode (read position file and output a move)",
+    )
+    parser.add_argument(
+        "-V",
+        "--version",
+        action="store_true",
+        help="show program version and exit",
+    )
+    parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="increase program verbosity",
+    )
+    parser.add_argument(
+        "-d",
+        "--debug",
+        action="store_true",
+        help="show debug messages",
     )
     return parser
 
@@ -320,3 +341,10 @@ def _is_ai_time_passed_on_cli(argv: list[str]) -> bool:
         token == "--ai-time" or token.startswith("--ai-time=")
         for token in argv
     )
+
+
+def _cli_prog_name() -> str:
+    """Use the invoked executable name so help/errors match the command."""
+    raw = sys.argv[0] if sys.argv and sys.argv[0] else "quoridor"
+    name = Path(raw).name.strip()
+    return name or "quoridor"

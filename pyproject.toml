@@ -27,6 +27,7 @@ dependencies = [
 
 [project.scripts]
 quoridor = "quoridor.__main__:main"
+qoridor = "quoridor.__main__:main"
 
 [project.optional-dependencies]
 gui = [

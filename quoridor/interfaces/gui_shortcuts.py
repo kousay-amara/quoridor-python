@@ -14,6 +14,9 @@ class ActionType(Enum):
     LOAD_GAME = "load_game"
     SAVE_GAME = "save_game"
     SHOW_CONFIG = "show_config"
+    SHOW_SHORTCUTS = "show_shortcuts"
+    SHOW_HISTORY = "show_history"
+    SHOW_TIME = "show_time"
     SHOW_INFO = "show_info"
     QUIT_APP = "quit_app"
     UNDO = "undo"
@@ -27,6 +30,9 @@ DEFAULT_SHORTCUTS: dict[ActionType, str] = {
     ActionType.LOAD_GAME: "<Primary>l",
     ActionType.SAVE_GAME: "<Primary>s",
     ActionType.SHOW_CONFIG: "<Primary>comma",
+    ActionType.SHOW_SHORTCUTS: "<Primary><Shift>comma",
+    ActionType.SHOW_HISTORY: "<Primary><Shift>h",
+    ActionType.SHOW_TIME: "<Primary>t",
     ActionType.SHOW_INFO: "<Primary>i",
     ActionType.QUIT_APP: "<Primary>q",
     ActionType.UNDO: "<Primary>u",
@@ -40,7 +46,10 @@ ACTION_LABELS: dict[ActionType, str] = {
     ActionType.NEW_GAME: "New game",
     ActionType.LOAD_GAME: "Load game",
     ActionType.SAVE_GAME: "Save game",
-    ActionType.SHOW_CONFIG: "Show configuration",
+    ActionType.SHOW_CONFIG: "Game configuration",
+    ActionType.SHOW_SHORTCUTS: "Keyboard shortcuts",
+    ActionType.SHOW_HISTORY: "Show history",
+    ActionType.SHOW_TIME: "Show time",
     ActionType.SHOW_INFO: "Show information",
     ActionType.QUIT_APP: "Quit",
     ActionType.UNDO: "Undo",

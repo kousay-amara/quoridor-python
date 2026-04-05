@@ -25,9 +25,6 @@ def initialize_shell_state(
     unbalanced_players_count: int,
     translate: Callable[[str], str],
 ) -> tuple[Any | None, bool]:
-    if save_file:
-        print(translate("Loading game from {path}").format(path=save_file))
-
     loaded_blitz_snapshot = None
     if save_file:
         session = load_session_from_file(
@@ -35,6 +32,7 @@ def initialize_shell_state(
             fallback_player_types=fallback_player_types(config),
             fallback_walls_per_player=fallback_remaining_walls(config),
         )
+        print(translate("Loading game from {path}").format(path=save_file))
         try:
             loaded_blitz_snapshot = load_blitz_snapshot_from_file(save_file)
         except (OSError, ValueError):

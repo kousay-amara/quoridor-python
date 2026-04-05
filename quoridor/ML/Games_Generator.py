@@ -228,7 +228,6 @@ class GameGenerator:
         )
         game_path.write_text(text, encoding="utf-8")
 
-
     def _serialize_move(self, move: tuple) -> dict:
         """Transform a game move into a json move"""
         move_type = move[0]

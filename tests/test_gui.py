@@ -162,6 +162,8 @@ def _make_window(gui_mod):
     win._init_walls = 10
     win._init_blitz = False
     win._init_time_limit = 0
+    win._text_window = None
+    win._config_window = None
     win._drag_pid = None
     win._drag_start = None
     win._drag_offset = (0, 0)
@@ -182,10 +184,16 @@ def _make_window(gui_mod):
             horizontal_walls=[],
         ),
         player_types={1: "human", 2: "human"},
+        history=types.SimpleNamespace(records=[], cursor=-1),
         _build_player_target_funcs=lambda: [],
         place_wall=lambda *_args, **_kwargs: None,
         play_pawn_move=lambda *_args, **_kwargs: None,
         winner_id=lambda: None,
+        game_outcome=lambda: types.SimpleNamespace(
+            status="ongoing",
+            winner_id=None,
+            scores={1: 0, 2: 0},
+        ),
     )
     return win
 
@@ -258,6 +266,102 @@ def test_action_pause_and_hint(gui_mod):
     win.service = types.SimpleNamespace(hint=lambda **_kwargs: ("pawn", 13))
     win._action_hint()
     assert win.status.text == "Hint for player 1: ('pawn', 13)"
+
+
+def test_action_show_time(gui_mod):
+    win = _make_window(gui_mod)
+
+    win._action_show_time()
+    assert win.status.text == "Blitz mode is not enabled."
+
+    shown = {"title": None, "text": None}
+    win._show_text_window = lambda title, text: shown.update(
+        {"title": title, "text": text}
+    )
+    win.blitz = types.SimpleNamespace(
+        is_enabled=lambda: True,
+        remaining_times=lambda: {1: 60.0, 2: 45.0},
+    )
+    win._action_show_time()
+    assert "Blitz time -> Player 1: 01:00, Player 2: 00:45" in win.status.text
+    assert shown["title"] == "Remaining Time"
+
+
+def test_history_text_and_action(gui_mod, monkeypatch):
+    win = _make_window(gui_mod)
+    rec1 = types.SimpleNamespace(
+        action="move_pawn",
+        before_state={"board_size": 9, "player_positions": {1: 4}},
+        after_state={"board_size": 9, "player_positions": {1: 13}},
+        player_id=1,
+    )
+    rec2 = types.SimpleNamespace(
+        action="move_pawn",
+        before_state={"board_size": 9, "player_positions": {2: 76}},
+        after_state={"board_size": 9, "player_positions": {2: 67}},
+        player_id=2,
+    )
+    win.session.history = types.SimpleNamespace(records=[rec1, rec2], cursor=1)
+
+    monkeypatch.setattr(gui_mod, "record_to_notation", lambda rec: "e1-e2" if rec.player_id == 1 else "e9-e8")
+
+    shown = {"title": None, "text": None}
+    win._show_text_window = lambda title, text: shown.update(
+        {"title": title, "text": text}
+    )
+    win._action_show_history()
+    assert shown["title"] == "Move History"
+    assert "[history]" in shown["text"]
+    assert "1 e1-e2; 2 e9-e8;" in shown["text"]
+
+
+def test_apply_game_config_updates_runtime_and_restarts(gui_mod):
+    win = _make_window(gui_mod)
+    called = {"new_game": 0}
+    win._action_new_game = lambda: called.__setitem__(
+        "new_game", called["new_game"] + 1
+    )
+
+    win._apply_game_config(
+        {
+            "players": "4",
+            "board_size": "11",
+            "walls_per_player": "8",
+            "blitz": "true",
+            "time_limit": "1.5",
+            "ai_players": "2,4",
+            "ai_mode": "iterative",
+            "ai_time": "3",
+            "ai_minimax_depth": "5",
+        }
+    )
+
+    assert win._num_players == 4
+    assert win._init_board_size == 11
+    assert win._init_walls == 8
+    assert win._init_blitz is True
+    assert win._init_time_limit == 1.5
+    assert win._ai_players == [2, 4]
+    assert win._ai_mode == "iterative"
+    assert win._ai_time == 3
+    assert win._ai_minimax_depth == 5
+    assert called["new_game"] == 1
+    assert win.status.text == "Configuration applied to a new game."
+
+
+def test_action_show_config_routes_to_game_configuration(gui_mod):
+    win = _make_window(gui_mod)
+    called = {"config": 0, "shortcuts": 0}
+    win._show_game_configuration = lambda: called.__setitem__(
+        "config", called["config"] + 1
+    )
+    win._show_shortcut_configuration = lambda: called.__setitem__(
+        "shortcuts", called["shortcuts"] + 1
+    )
+
+    win._action_show_config()
+    win._action_show_shortcuts()
+    assert called == {"config": 1, "shortcuts": 1}
 
 
 def test_undo_redo_actions(gui_mod):
@@ -562,6 +666,22 @@ def test_drag_handlers(gui_mod, monkeypatch):
     win._drag_start = (x + 1, y + 1)
     monkeypatch.setattr(gui_mod, "validate_pawn_move", lambda *_a, **_k: (True, ""))
     win.session.play_pawn_move = lambda *_a, **_k: None
-    win.session.winner_id = lambda: 1
+    win.session.game_outcome = lambda: types.SimpleNamespace(
+        status="winner",
+        winner_id=1,
+        scores={1: 1, 2: 0},
+    )
     win._on_drag_end(None, 0, gui_mod.GAP + win._cell_size())
     assert win.status.text == "Player 1 wins!"
+
+    # Successful pawn move and draw branch.
+    win._game_over = False
+    win._drag_pid = 1
+    win._drag_start = (x + 1, y + 1)
+    win.session.game_outcome = lambda: types.SimpleNamespace(
+        status="draw",
+        winner_id=None,
+        scores={1: 0, 2: 0},
+    )
+    win._on_drag_end(None, 0, gui_mod.GAP + win._cell_size())
+    assert win.status.text == "Draw game."
