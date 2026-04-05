@@ -14,6 +14,7 @@ from quoridor.utils.graph import get_shortest_path_length
 from quoridor.rules.pawn_rules import get_all_legal_pawn_moves
 from quoridor.ML.ml_selector import ml_select_child
 
+
 def _make_goal_checker(player_id, board_size):
     if player_id == 1:
         return lambda node: node // board_size == board_size - 1
@@ -59,8 +60,6 @@ def get_tree_moves(state):
 
     current_pos = state.player_positions[current_id]
     all_pos = list(state.player_positions.values())
-
-    
 
     pawn_targets = get_all_legal_pawn_moves(
         state.graph,
@@ -168,7 +167,12 @@ def mcts_search(
             player_who_moved = node.state.current_player
             new_state = clone_state(node.state)
             apply_move(new_state, move)
-            child_node = MCTSNode(state=new_state, parent=node, move=move, move_by=player_who_moved)
+            child_node = MCTSNode(
+                state=new_state,
+                parent=node,
+                move=move,
+                move_by=player_who_moved,
+            )
             node.childrens.append(child_node)
             node = child_node
 
@@ -181,8 +185,6 @@ def mcts_search(
             board_size = rollout_state.board_size
             current_pos = rollout_state.player_positions[player_id]
             all_pos = list(rollout_state.player_positions.values())
-
-
             pawn_targets = get_all_legal_pawn_moves(
                 rollout_state.graph,
                 current_pos,

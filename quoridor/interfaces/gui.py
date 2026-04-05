@@ -43,9 +43,11 @@ if __package__ in {None, ""}:
         SIZE,
     )
     from quoridor.application.blitz import Blitz
+    from quoridor.application.persistence_service import record_to_notation
 else:
     from ..application.game_application_service import GameApplicationService
     from ..application.blitz import Blitz
+    from ..application.persistence_service import record_to_notation
     from ..application.game_session import (
         GameSession,
         initial_player_positions,
@@ -108,6 +110,8 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         self._init_time_limit = time_limit
         self._pause_elapsed: float = 0.0
         self._shortcut_window: Gtk.Window | None = None
+        self._text_window: Gtk.Window | None = None
+        self._config_window: Gtk.Window | None = None
         self._shortcut_entries: dict[ActionType, Gtk.Entry] = {}
 
         self.config_manager = ConfigManager.default()
@@ -202,12 +206,9 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         remaining = self.blitz.remaining_time(player_id) - elapsed
         if remaining <= 0:
             self._stop_blitz_turn(player_id)
-            record, winner = self.session.timeout_player(player_id)
-            if winner is not None:
-                self._game_over = True
-                self._set_status(f"Player {winner} wins!")
-            else:
-                self._set_status(f"Player {player_id} ran out of time!")
+            self.session.timeout_player(player_id)
+            self._set_status(f"Player {player_id} ran out of time!")
+            if not self._apply_game_outcome():
                 self._start_blitz_turn()
             return False
         mins = int(remaining) // 60
@@ -220,7 +221,8 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         file_menu.append("New Game", "win.new_game")
         file_menu.append("Load Game", "win.load_game")
         file_menu.append("Save Game", "win.save_game")
-        file_menu.append("Configuration", "win.show_config")
+        file_menu.append("Game Configuration", "win.show_config")
+        file_menu.append("Keyboard Shortcuts", "win.show_shortcuts")
         file_menu.append("Info", "win.show_info")
         file_menu.append("Quit", "win.quit_app")
 
@@ -229,6 +231,8 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         game_menu.append("Redo", "win.redo")
         game_menu.append("Pause", "win.pause")
         game_menu.append("Hint", "win.hint")
+        game_menu.append("Show History", "win.show_history")
+        game_menu.append("Show Time", "win.show_time")
 
         menu_model = Gio.Menu()
         menu_model.append_submenu("File", file_menu)
@@ -289,20 +293,14 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         if self.blitz.is_enabled():
             timed_out = self.blitz.consume_time(current, elapsed)
             if timed_out:
-                _record, winner = self.session.timeout_player(current)
-                if winner is not None:
-                    self._game_over = True
-                    self._set_status(f"Player {winner} wins!")
-                else:
-                    self._set_status(f"Player {current} ran out of time!")
+                self.session.timeout_player(current)
+                self._set_status(f"Player {current} ran out of time!")
+                self._apply_game_outcome()
                 self.area.queue_draw()
                 self._ai_thinking = False
                 return
         self.session.apply_ai_move(move, player_id=current)
-        winner = self.session.winner_id()
-        if winner is not None:
-            self._set_status(f"Player {winner} wins!")
-            self._game_over = True
+        if self._apply_game_outcome():
             self.area.queue_draw()
             self._ai_thinking = False
             return
@@ -328,6 +326,9 @@ class QuoridorWindow(Gtk.ApplicationWindow):
             ActionType.LOAD_GAME: self._action_load_game,
             ActionType.SAVE_GAME: self._action_save_game,
             ActionType.SHOW_CONFIG: self._action_show_config,
+            ActionType.SHOW_SHORTCUTS: self._action_show_shortcuts,
+            ActionType.SHOW_HISTORY: self._action_show_history,
+            ActionType.SHOW_TIME: self._action_show_time,
             ActionType.SHOW_INFO: self._action_show_info,
             ActionType.QUIT_APP: self._action_quit,
             ActionType.UNDO: self._action_undo,
@@ -472,10 +473,8 @@ class QuoridorWindow(Gtk.ApplicationWindow):
                 self._stop_blitz_turn(self._drag_pid)
                 self.session.play_pawn_move(self._drag_pid, to_node)
                 self.area.queue_draw()
-                winner = self.session.winner_id()
-                if winner is not None:
-                    self._set_status(f"Player {winner} wins!")
-                    self._game_over = True
+                if self._apply_game_outcome():
+                    pass
                 else:
                     self._set_status(
                         f"Player {self._drag_pid} moved " f"to ({row}, {col})."
@@ -567,6 +566,9 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         self._on_save_clicked(None)
 
     def _action_show_config(self) -> None:
+        self._show_game_configuration()
+
+    def _action_show_shortcuts(self) -> None:
         self._show_shortcut_configuration()
 
     def _action_show_info(self) -> None:
@@ -616,14 +618,23 @@ class QuoridorWindow(Gtk.ApplicationWindow):
             self._set_status("Nothing to redo.")
             return
 
-        winner = self.session.winner_id()
-        if winner is not None:
-            self._game_over = True
-            self._set_status(f"Player {winner} wins!")
-        else:
+        if not self._apply_game_outcome():
             self._schedule_ai_turn()
             self._set_status(f"Redid {total} move(s).")
         self.area.queue_draw()
+
+    def _apply_game_outcome(self) -> bool:
+        outcome = self.session.game_outcome()
+        if outcome.status == "winner" and outcome.winner_id is not None:
+            self._set_status(f"Player {outcome.winner_id} wins!")
+            self._game_over = True
+            return True
+        if outcome.status == "draw":
+            self._set_status("Draw game.")
+            self._game_over = True
+            return True
+        self._game_over = False
+        return False
 
     def _action_pause(self) -> None:
         self._paused = not self._paused
@@ -655,6 +666,244 @@ class QuoridorWindow(Gtk.ApplicationWindow):
             return
 
         self._set_status(f"Hint for player {current}: {move}")
+
+    def _history_text(self) -> str:
+        records = self.session.history.records[: self.session.history.cursor + 1]
+        if not records:
+            return "No moves played yet."
+
+        player_count = max(1, len(self.session.state.player_positions))
+        lines = []
+        for idx in range(0, len(records), player_count):
+            turn = records[idx: idx + player_count]
+            text = " ".join(
+                f"{record.player_id} {record_to_notation(record)};"
+                for record in turn
+            )
+            lines.append(text)
+        return "[history]\n" + "\n".join(lines)
+
+    def _action_show_history(self) -> None:
+        self._show_text_window("Move History", self._history_text())
+
+    def _action_show_time(self) -> None:
+        if not self.blitz.is_enabled():
+            self._set_status("Blitz mode is not enabled.")
+            return
+        remaining = self.blitz.remaining_times()
+        text = ", ".join(
+            f"Player {pid}: {int(sec)//60:02d}:{int(sec)%60:02d}"
+            for pid, sec in sorted(remaining.items())
+        )
+        message = f"Blitz time -> {text}"
+        self._set_status(message)
+        self._show_text_window("Remaining Time", message)
+
+    def _runtime_config_text(self) -> str:
+        walls_text = (
+            "unlimited" if self._init_walls < 0 else str(self._init_walls)
+        )
+        return (
+            "Current game configuration:\n"
+            f"players={self._num_players}\n"
+            f"walls_per_player={walls_text}\n"
+            f"board_size={self._init_board_size}\n"
+            f"blitz={self._init_blitz}\n"
+            f"time_limit={self._init_time_limit}\n"
+            f"ai_players={sorted(set(self._ai_players))}\n"
+            f"ai_mode={self._ai_mode}\n"
+            f"ai_time={self._ai_time}\n"
+            f"ai_minimax_depth={self._ai_minimax_depth}"
+        )
+
+    def _parse_bool(self, raw: str, *, label: str) -> bool:
+        value = raw.strip().lower()
+        if value in {"true", "1", "yes", "y", "on"}:
+            return True
+        if value in {"false", "0", "no", "n", "off"}:
+            return False
+        raise ValueError(f"{label} must be true/false")
+
+    def _parse_ai_players(self, raw: str, *, players: int) -> list[int]:
+        text = raw.strip()
+        if not text:
+            return []
+        values = text.replace(",", " ").split()
+        parsed: list[int] = []
+        seen: set[int] = set()
+        for token in values:
+            pid = int(token)
+            if pid < 1 or pid > players:
+                raise ValueError("ai_players ids must be between 1 and players")
+            if pid not in seen:
+                seen.add(pid)
+                parsed.append(pid)
+        return parsed
+
+    def _apply_game_config(self, values: dict[str, str]) -> None:
+        players = int(values["players"])
+        size = int(values["board_size"])
+        walls = int(values["walls_per_player"])
+        blitz = self._parse_bool(values["blitz"], label="blitz")
+        time_limit = float(values["time_limit"])
+        ai_mode = values["ai_mode"].strip().lower()
+        ai_time = int(values["ai_time"])
+        depth_raw = values["ai_minimax_depth"].strip().lower()
+        ai_depth = None if depth_raw in {"", "none", "null"} else int(depth_raw)
+        ai_players = self._parse_ai_players(values["ai_players"], players=players)
+
+        if players not in {2, 3, 4}:
+            raise ValueError("players must be one of: 2, 3, 4")
+        if size < 3 or size > 15 or size % 2 == 0:
+            raise ValueError("board_size must be odd and between 3 and 15")
+        if time_limit <= 0:
+            raise ValueError("time_limit must be > 0")
+        if ai_mode not in {"minimax", "iterative", "mcts"}:
+            raise ValueError("ai_mode must be one of: minimax, iterative, mcts")
+        if ai_time <= 0:
+            raise ValueError("ai_time must be > 0")
+        if ai_depth is not None and ai_depth <= 0:
+            raise ValueError("ai_minimax_depth must be > 0 when set")
+        if ai_mode == "minimax" and ai_depth is None:
+            raise ValueError("ai_minimax_depth is required for minimax mode")
+
+        self._num_players = players
+        self._init_board_size = size
+        self._init_walls = walls
+        self._init_blitz = blitz
+        self._init_time_limit = time_limit
+        self._ai_players = sorted(set(ai_players))
+        self._ai_mode = ai_mode
+        self._ai_time = ai_time
+        self._ai_minimax_depth = ai_depth
+        self._action_new_game()
+        self._set_status("Configuration applied to a new game.")
+
+    def _show_text_window(self, title: str, text: str) -> None:
+        if self._text_window is not None:
+            self._text_window.destroy()
+            self._text_window = None
+        window = Gtk.Window(transient_for=self, title=title)
+        window.set_modal(True)
+        window.set_default_size(560, 420)
+
+        root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        root.set_margin_top(12)
+        root.set_margin_bottom(12)
+        root.set_margin_start(12)
+        root.set_margin_end(12)
+
+        label = Gtk.Label(label=text)
+        label.set_xalign(0.0)
+        label.set_wrap(True)
+        root.append(label)
+
+        close_button = Gtk.Button(label="Close")
+        close_button.connect("clicked", lambda _btn: window.close())
+        root.append(close_button)
+
+        window.connect(
+            "close-request",
+            lambda win: (setattr(self, "_text_window", None), win.destroy(), False)[2],
+        )
+        window.set_child(root)
+        self._text_window = window
+        window.present()
+
+    def _show_game_configuration(self) -> None:
+        if self._config_window is not None:
+            self._config_window.present()
+            return
+
+        window = Gtk.Window(transient_for=self, title="Game configuration")
+        window.set_modal(True)
+        window.set_default_size(560, 560)
+
+        root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        root.set_margin_top(12)
+        root.set_margin_bottom(12)
+        root.set_margin_start(12)
+        root.set_margin_end(12)
+
+        info = Gtk.Label(
+            label=(
+                "Update values, then Apply. "
+                "A new game will start with this configuration."
+            )
+        )
+        info.set_wrap(True)
+        info.set_xalign(0.0)
+        root.append(info)
+
+        grid = Gtk.Grid(column_spacing=12, row_spacing=8)
+        fields: list[tuple[str, str]] = [
+            ("players", str(self._num_players)),
+            ("board_size", str(self._init_board_size)),
+            ("walls_per_player", str(self._init_walls)),
+            ("blitz", str(self._init_blitz).lower()),
+            ("time_limit", f"{self._init_time_limit:g}"),
+            ("ai_players", ",".join(str(v) for v in sorted(set(self._ai_players)))),
+            ("ai_mode", self._ai_mode),
+            ("ai_time", str(self._ai_time)),
+            (
+                "ai_minimax_depth",
+                "none"
+                if self._ai_minimax_depth is None
+                else str(self._ai_minimax_depth),
+            ),
+        ]
+
+        entries: dict[str, Gtk.Entry] = {}
+        for row, (name, default) in enumerate(fields):
+            label = Gtk.Label(label=name)
+            label.set_xalign(0.0)
+            entry = Gtk.Entry()
+            entry.set_text(default)
+            grid.attach(label, 0, row, 1, 1)
+            grid.attach(entry, 1, row, 1, 1)
+            entries[name] = entry
+        root.append(grid)
+
+        buttons = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
+        show_button = Gtk.Button(label="Show current")
+        apply_button = Gtk.Button(label="Apply")
+        close_button = Gtk.Button(label="Close")
+
+        show_button.connect(
+            "clicked",
+            lambda _btn: self._show_text_window(
+                "Current configuration", self._runtime_config_text()
+            ),
+        )
+
+        def _apply(_btn) -> None:
+            values = {
+                name: entry.get_text().strip()
+                for name, entry in entries.items()
+            }
+            try:
+                self._apply_game_config(values)
+                window.close()
+            except Exception as exc:
+                self._set_status(f"Configuration update failed: {exc}")
+
+        apply_button.connect("clicked", _apply)
+        close_button.connect("clicked", lambda _btn: window.close())
+
+        buttons.append(show_button)
+        buttons.append(apply_button)
+        buttons.append(close_button)
+        root.append(buttons)
+
+        window.connect("close-request", self._on_config_window_closed)
+        window.set_child(root)
+        self._config_window = window
+        window.present()
+
+    def _on_config_window_closed(self, window: Gtk.Window):
+        self._config_window = None
+        window.destroy()
+        return False
 
     def _show_shortcut_configuration(self) -> None:
         if self._shortcut_window is not None:

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import gettext
-
 from ..application.blitz import Blitz
 from ..application.persistence_service import (
     load_blitz_snapshot,
@@ -18,8 +16,11 @@ from ..application.persistence_service import (
 from ..application.game_session import GameSession
 from ..core.game_state import GameState
 from ..core.move_record import BlitzSnapshot
+from ..i18n import runtime_gettext
 
-_ = gettext.gettext
+
+def _(message: str) -> str:
+    return runtime_gettext(message)
 
 
 def _record_to_notation(session: GameSession, record) -> str:

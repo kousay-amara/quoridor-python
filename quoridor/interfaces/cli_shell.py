@@ -5,7 +5,6 @@
 from __future__ import annotations
 
 import argparse
-import gettext
 import importlib
 import shlex
 import sys
@@ -23,7 +22,6 @@ from ..core.game_state import GameState
 from ..core.move_record import GameSnapshot
 from ..core.notation import get_edges_for_wall, get_node_from_notation
 from ..core.validators import validate_pawn_move, validate_wall
-from ..rules.win_rules import has_player_won
 from .cli_constants import (
     AI_MODE_ITERATIVE,
     AI_MODE_MINIMAX,
@@ -49,8 +47,12 @@ from .shell import input as shell_input
 from .shell import network_handlers as shell_network_handlers
 from .shell import runtime as shell_runtime
 from .shell.state import _SavedLocalShellState, _ShellConfig, _ShellState
+from ..i18n import runtime_gettext
 
-_ = gettext.gettext
+
+def _(message: str) -> str:
+    return runtime_gettext(message)
+
 
 MAX_HISTORY_SIZE = 1000
 
@@ -95,18 +97,20 @@ def _play_pawn_move_from_token(session: GameSession, move_token: str) -> bool:
         raise ValueError(error_msg)
 
     session.play_pawn_move_from_to(current, from_node, to_node)
-    new_pos = session.state.player_positions[current]
+    return _print_outcome_and_state(session)
 
-    if has_player_won(current, new_pos, session.state.board_size):
-        print(f"Player {current} wins!")
-        _print_state(session)
-        return True
 
+def _print_outcome_and_state(session: GameSession) -> bool:
+    outcome = session.game_outcome()
+    if outcome.status == "winner" and outcome.winner_id is not None:
+        print(f"Player {outcome.winner_id} wins!")
+    elif outcome.status == "draw":
+        print("Draw game.")
     _print_state(session)
-    return False
+    return outcome.status != "ongoing"
 
 
-def _place_wall_from_token(session: GameSession, wall_token: str) -> None:
+def _place_wall_from_token(session: GameSession, wall_token: str) -> bool:
     token = wall_token.strip().lower()
     if len(token) < WALL_TOKEN_MIN_LENGTH:
         raise ValueError("Invalid format. Use: e2h or e2v")
@@ -136,7 +140,7 @@ def _place_wall_from_token(session: GameSession, wall_token: str) -> None:
     if not ok:
         raise ValueError(error_msg)
     session.place_wall(current, wall_edges, orientation)
-    _print_state(session)
+    return _print_outcome_and_state(session)
 
 
 def _config_from_state(state: "_ShellState") -> _ShellConfig:
@@ -605,7 +609,6 @@ def _auto_play_ai_until_human_or_end(
         ai_minimax_depth,
         blitz=blitz,
         print_state=_print_state,
-        has_player_won=has_player_won,
         timeout_handler=_handle_timeout,
         now_fn=time.time,
         event_bus=event_bus,
@@ -825,7 +828,8 @@ def _handle_wall(
     blitz: Blitz,
     ai_mcts_selection: str = "UCT",
 ) -> tuple[bool, bool]:
-    _place_wall_from_token(session, wall_token)
+    if _place_wall_from_token(session, wall_token):
+        return True, True
     return _apply_and_maybe_auto_play(
         session,
         ai_mode,

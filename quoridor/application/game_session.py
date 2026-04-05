@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import Any, Literal
 
 from ..core.game_state import GameState
@@ -9,6 +10,7 @@ from ..core.move_record import MoveRecord, PlayerType
 from ..rules.pawn_rules import get_all_legal_pawn_moves
 from ..rules.wall_rules import get_player_target_funcs, is_wall_legal
 from ..rules.win_rules import has_player_won
+from ..utils.graph import get_shortest_path_length
 from .blitz import Blitz
 from .history_manager import HistoryManager
 from .mcts_engine import mcts_search
@@ -19,6 +21,16 @@ from .minimax_engine import (
 
 WallOrientation = Literal["vertical", "horizontal"]
 AIMove = tuple[Any, ...]
+OutcomeStatus = Literal["ongoing", "winner", "draw"]
+
+
+@dataclass(frozen=True)
+class GameOutcome:
+    """Result state for a running or finished game."""
+
+    status: OutcomeStatus
+    winner_id: int | None
+    scores: dict[int, int]
 
 
 def initial_player_positions(board_size: int, players: int) -> dict[int, int]:
@@ -40,12 +52,15 @@ class GameSession:
         self,
         state: GameState,
         player_types: dict[int, PlayerType],
+        *,
+        draw_turn_limit: int = 300,
     ) -> None:
         self.state = state
         self.player_types = dict(player_types)
         self.history = HistoryManager()
         self._turn_order = sorted(self.state.player_positions.keys())
         self._blitz: Blitz | None = None
+        self.draw_turn_limit = draw_turn_limit if draw_turn_limit > 0 else 0
 
     def attach_blitz(self, blitz: Blitz | None) -> None:
         self._blitz = blitz
@@ -63,6 +78,67 @@ class GameSession:
             if has_player_won(player_id, player_node, self.state.board_size):
                 return player_id
         return None
+
+    def move_count(self) -> int:
+        return self.history.cursor + 1
+
+    def is_draw(self) -> bool:
+        if self.winner_id() is not None:
+            return False
+        if len(self.active_player_ids()) == 0:
+            return True
+        return (
+            self.draw_turn_limit > 0
+            and self.move_count() >= self.draw_turn_limit
+        )
+
+    def compute_scores(self) -> dict[int, int]:
+        """Return deterministic per-player scores derived from game state."""
+        scores: dict[int, int] = {}
+        player_ids = sorted(self.state.player_positions)
+        board_area = self.state.board_size * self.state.board_size
+        winner = self.winner_id()
+
+        for player_id in player_ids:
+            if not self.state.is_player_active(player_id):
+                scores[player_id] = -10_000
+                continue
+
+            target = get_player_target_funcs(
+                self.state.board_size, [player_id]
+            )[0]
+            position = self.state.player_positions[player_id]
+            distance = get_shortest_path_length(
+                self.state.graph,
+                position,
+                target,
+            )
+            scores[player_id] = board_area - distance
+
+        if winner is not None:
+            scores[winner] = scores.get(winner, 0) + 10_000
+
+        return scores
+
+    def game_outcome(self) -> GameOutcome:
+        winner = self.winner_id()
+        if winner is not None:
+            return GameOutcome(
+                status="winner",
+                winner_id=winner,
+                scores=self.compute_scores(),
+            )
+        if self.is_draw():
+            return GameOutcome(
+                status="draw",
+                winner_id=None,
+                scores=self.compute_scores(),
+            )
+        return GameOutcome(
+            status="ongoing",
+            winner_id=None,
+            scores=self.compute_scores(),
+        )
 
     def play_pawn_move(self, player_id: int, to_node: int) -> MoveRecord:
         self._ensure_current_player(player_id)

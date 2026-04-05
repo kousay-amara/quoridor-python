@@ -29,9 +29,37 @@ def test_setup_i18n_warns_and_falls_back_for_unsupported_language(capsys):
     assert "warning: unsupported language 'es'" in captured.err
 
 
-def test_setup_i18n_accepts_supported_language_without_warning(capsys):
+def test_setup_i18n_supports_french_without_warning(capsys):
     translation = i18n.setup_i18n("fr_FR.UTF-8")
     captured = capsys.readouterr()
 
     assert isinstance(translation, gettext.NullTranslations)
     assert captured.err == ""
+    assert translation.gettext("error") == "erreur"
+
+
+def test_setup_i18n_uses_default_english_when_language_is_not_provided(
+    monkeypatch, capsys
+):
+    monkeypatch.delenv("LC_ALL", raising=False)
+    monkeypatch.delenv("LANG", raising=False)
+
+    translation = i18n.setup_i18n()
+    captured = capsys.readouterr()
+
+    assert isinstance(translation, gettext.NullTranslations)
+    assert captured.err == ""
+
+
+def test_setup_i18n_uses_lang_for_french_when_lc_all_missing(
+    monkeypatch, capsys
+):
+    monkeypatch.delenv("LC_ALL", raising=False)
+    monkeypatch.setenv("LANG", "fr_FR.UTF-8")
+
+    translation = i18n.setup_i18n()
+    captured = capsys.readouterr()
+
+    assert isinstance(translation, gettext.NullTranslations)
+    assert captured.err == ""
+    assert translation.gettext("Game saved to {path}") != "Game saved to {path}"

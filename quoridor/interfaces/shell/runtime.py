@@ -86,8 +86,11 @@ def handle_timeout(
         before_blitz_snapshot=before_blitz_snapshot,
     )
     print_fn(f"Player {loser_id} ran out of time and loses.")
-    if winner is not None:
-        print_fn(f"Player {winner} wins!")
+    outcome = session.game_outcome()
+    if outcome.status == "winner" and outcome.winner_id is not None:
+        print_fn(f"Player {outcome.winner_id} wins!")
+    elif outcome.status == "draw":
+        print_fn("Draw game.")
     print_state(session)
     _emit(
         event_bus,
@@ -95,7 +98,7 @@ def handle_timeout(
         loser_id=loser_id,
         winner_id=winner,
     )
-    return winner is not None
+    return outcome.status != "ongoing"
 
 
 def auto_play_ai_until_human_or_end(
@@ -106,7 +109,6 @@ def auto_play_ai_until_human_or_end(
     *,
     blitz: Any,
     print_state: Callable[..., None],
-    has_player_won: Callable[[int, int, int], bool],
     timeout_handler: Callable[..., bool],
     now_fn: Callable[[], float] = time.time,
     event_bus: Any | None = None,
@@ -152,11 +154,16 @@ def auto_play_ai_until_human_or_end(
             move=move,
         )
 
-        new_pos = session.state.player_positions[current_ai]
-        if has_player_won(current_ai, new_pos, session.state.board_size):
-            print_fn(f"Player {current_ai} wins!")
+        outcome = session.game_outcome()
+        if outcome.status == "winner" and outcome.winner_id is not None:
+            print_fn(f"Player {outcome.winner_id} wins!")
             print_state(session)
-            _emit(event_bus, "game.winner", player_id=current_ai)
+            _emit(event_bus, "game.winner", player_id=outcome.winner_id)
+            return True
+        if outcome.status == "draw":
+            print_fn("Draw game.")
+            print_state(session)
+            _emit(event_bus, "game.draw")
             return True
 
         print_state(session)

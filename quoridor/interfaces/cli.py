@@ -124,13 +124,18 @@ def _get_version() -> str:
 
 
 def _main_contest(argv: list[str]) -> int:
+    setup_i18n()
     parser = _build_contest_parser()
     args = parser.parse_args(argv)
+    if args.version:
+        print(_get_version())
+        return 0
+    _configure_logging(args.verbose, args.debug)
     if not args.save_file:
         parser.error("contest mode requires a game file argument")
     try:
         move = run_contest(args.save_file)
-    except ContestError as exc:
+    except (ContestError, OSError) as exc:
         sys.stderr.write(f"error: {exc}\n")
         return 1
     print(move)
@@ -269,22 +274,30 @@ def _main_interactive(argv: list[str]) -> int:
             "warning: --ai-minimax-scoring is ignored in MCTS mode\n"
         )
 
-    _run_interactive_shell(
-        blitz=args.blitz,
-        time_limit=time_limit,
-        save_file=args.save_file,
-        players=args.players,
-        walls_per_player=args.walls,
-        board_size=args.size,
-        ai_players=ai_ids,
-        ai_mode=args.ai_mode,
-        ai_time=args.ai_time,
-        ai_minimax_depth=args.ai_minimax_depth,
-        ai_mcts_selection=args.ai_mcts_selection,
-        startup_server_port=args.server,
-        verbose=args.verbose,
-        debug=args.debug,
-    )
+    try:
+        _run_interactive_shell(
+            blitz=args.blitz,
+            time_limit=time_limit,
+            save_file=args.save_file,
+            players=args.players,
+            walls_per_player=args.walls,
+            board_size=args.size,
+            ai_players=ai_ids,
+            ai_mode=args.ai_mode,
+            ai_time=args.ai_time,
+            ai_minimax_depth=args.ai_minimax_depth,
+            ai_mcts_selection=args.ai_mcts_selection,
+            startup_server_port=args.server,
+            verbose=args.verbose,
+            debug=args.debug,
+        )
+    except (OSError, ValueError, ContestError) as exc:
+        if args.save_file is None:
+            raise
+        sys.stderr.write(
+            f"error: cannot load save file '{args.save_file}': {exc}\n"
+        )
+        return 1
     return 0
 
 

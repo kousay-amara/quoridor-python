@@ -601,6 +601,34 @@ def test_blitz_timeout_causes_an_immediate_loss(monkeypatch, capsys):
     assert "Player 2 wins!" in out
 
 
+def test_cli_reports_draw_when_draw_condition_is_met(monkeypatch, capsys):
+    def fake_new_session(_config):
+        state = GameState(
+            board_size=9,
+            current_player=1,
+            player_positions={1: 4, 2: 76},
+            remaining_walls={1: 20, 2: 20},
+            vertical_walls=[],
+            horizontal_walls=[],
+        )
+        return GameSession(
+            state=state,
+            player_types={1: "human", 2: "human"},
+            draw_turn_limit=1,
+        )
+
+    monkeypatch.setattr(cli_shell, "_create_new_session", fake_new_session)
+
+    captured = run_shell(
+        monkeypatch,
+        capsys,
+        ["move e1-e2", "quit", "n"],
+        blitz=False,
+    )
+
+    assert "Draw game." in captured.out
+
+
 def test_format_hint_move_formats_wall_and_unknown_moves():
     wall_move = ("wall", [(10, 11), (19, 20)], "horizontal")
 
@@ -670,7 +698,144 @@ def test_main_dispatches_to_contest_or_interactive(monkeypatch):
     assert cli_mod.main(["--version"]) == 9
 
 
+def test_help_option_prints_help_to_stdout_and_exits_zero(
+    monkeypatch, capsys
+):
+    patch_main_defaults(monkeypatch)
+
+    with pytest.raises(SystemExit) as exc:
+        cli_mod.main(["--help"])
+
+    assert exc.value.code == 0
+    captured = capsys.readouterr()
+    assert "usage:" in captured.out.lower()
+    assert "--version" in captured.out
+    assert captured.err == ""
+
+
+def test_qoridor_help_uses_qoridor_prog_and_exits_zero(
+    monkeypatch, capsys
+):
+    patch_main_defaults(monkeypatch)
+    monkeypatch.setattr(sys, "argv", ["qoridor"])
+
+    with pytest.raises(SystemExit) as exc:
+        cli_mod._main_interactive(["--help"])
+
+    assert exc.value.code == 0
+    captured = capsys.readouterr()
+    assert "usage: qoridor " in captured.out
+    assert captured.err == ""
+
+
+def test_invalid_option_prints_error_and_help_to_stderr(monkeypatch, capsys):
+    patch_main_defaults(monkeypatch)
+
+    with pytest.raises(SystemExit) as exc:
+        cli_mod._main_interactive(["--definitely-invalid-option"])
+
+    assert exc.value.code == 1
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "error" in captured.err.lower()
+    assert "usage:" in captured.err.lower()
+
+
+def test_qoridor_invalid_option_uses_qoridor_prog_and_exits_one(
+    monkeypatch, capsys
+):
+    patch_main_defaults(monkeypatch)
+    monkeypatch.setattr(sys, "argv", ["qoridor"])
+
+    with pytest.raises(SystemExit) as exc:
+        cli_mod._main_interactive(["--definitely-invalid-option"])
+
+    assert exc.value.code == 1
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "qoridor: error:" in captured.err
+    assert "usage: qoridor " in captured.err
+
+
+def test_version_option_prints_to_stdout_only(monkeypatch, capsys):
+    patch_main_defaults(monkeypatch)
+    monkeypatch.setattr(cli_mod, "_get_version", lambda: "9.9.9")
+    monkeypatch.setattr(
+        cli_mod,
+        "_run_interactive_shell",
+        lambda **_kwargs: pytest.fail("shell should not start"),
+    )
+
+    assert cli_mod._main_interactive(["--version"]) == 0
+    captured = capsys.readouterr()
+    assert "9.9.9" in captured.out
+    assert captured.err == ""
+
+
+def test_qoridor_version_prints_to_stdout_only(monkeypatch, capsys):
+    patch_main_defaults(monkeypatch)
+    monkeypatch.setattr(sys, "argv", ["qoridor"])
+    monkeypatch.setattr(cli_mod, "_get_version", lambda: "9.9.9")
+    monkeypatch.setattr(
+        cli_mod,
+        "_run_interactive_shell",
+        lambda **_kwargs: pytest.fail("shell should not start"),
+    )
+
+    assert cli_mod._main_interactive(["--version"]) == 0
+    captured = capsys.readouterr()
+    assert captured.out == "9.9.9\n"
+    assert captured.err == ""
+
+
+def test_main_interactive_starts_with_save_file_argument(monkeypatch):
+    patch_main_defaults(monkeypatch)
+    captured: dict[str, object] = {}
+
+    def fake_run_interactive_shell(**kwargs):
+        captured.update(kwargs)
+
+    monkeypatch.setattr(
+        cli_mod,
+        "_run_interactive_shell",
+        fake_run_interactive_shell,
+    )
+
+    assert cli_mod._main_interactive(["save.txt"]) == 0
+    assert captured["save_file"] == "save.txt"
+
+
+def test_main_interactive_handles_missing_save_file_cleanly(
+    monkeypatch, capsys
+):
+    patch_main_defaults(monkeypatch)
+    missing = "path/to/missing_save.txt"
+
+    assert cli_mod._main_interactive([missing]) == 1
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "error: cannot load save file" in captured.err.lower()
+    assert missing in captured.err
+    assert "traceback" not in captured.err.lower()
+
+
+def test_main_interactive_handles_invalid_save_file_cleanly(
+    monkeypatch, capsys, tmp_path: Path
+):
+    patch_main_defaults(monkeypatch)
+    bad_save = tmp_path / "bad_save.txt"
+    bad_save.write_text("not a valid save file", encoding="utf-8")
+
+    assert cli_mod._main_interactive([str(bad_save)]) == 1
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "error: cannot load save file" in captured.err.lower()
+    assert str(bad_save) in captured.err
+    assert "traceback" not in captured.err.lower()
+
+
 def test_main_contest_prints_move_and_reports_errors(monkeypatch, capsys):
+    monkeypatch.setattr(cli_mod, "setup_i18n", lambda: None)
     monkeypatch.setattr(cli_mod, "run_contest", lambda _path: "e2-e3")
     assert cli_mod._main_contest(["-c", "state.txt"]) == 0
     assert "e2-e3" in capsys.readouterr().out
@@ -684,6 +849,70 @@ def test_main_contest_prints_move_and_reports_errors(monkeypatch, capsys):
 
     with pytest.raises(SystemExit):
         cli_mod._main_contest(["-c"])
+
+
+def test_main_contest_success_writes_only_move_to_stdout(monkeypatch, capsys):
+    monkeypatch.setattr(cli_mod, "setup_i18n", lambda: None)
+    monkeypatch.setattr(cli_mod, "run_contest", lambda _path: "b2-a2")
+
+    assert cli_mod._main_contest(["-c", "state.txt"]) == 0
+    captured = capsys.readouterr()
+    assert captured.out == "b2-a2\n"
+    assert captured.err == ""
+
+
+def test_main_contest_handles_missing_file_without_traceback(capsys):
+    missing = "path/to/contest_state.txt"
+    assert cli_mod._main_contest(["-c", missing]) == 1
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "error:" in captured.err
+    assert missing in captured.err
+
+
+def test_main_contest_accepts_f1_options(monkeypatch, capsys):
+    monkeypatch.setattr(cli_mod, "setup_i18n", lambda: None)
+    calls = []
+    monkeypatch.setattr(
+        cli_mod,
+        "_configure_logging",
+        lambda verbose, debug: calls.append((verbose, debug)),
+    )
+    monkeypatch.setattr(cli_mod, "run_contest", lambda _path: "e2-e3")
+    monkeypatch.setattr(cli_mod, "_get_version", lambda: "1.2.3")
+
+    assert cli_mod._main_contest(["-c", "--version"]) == 0
+    assert "1.2.3" in capsys.readouterr().out
+
+    assert cli_mod._main_contest(["-c", "-v", "-d", "state.txt"]) == 0
+    assert calls[-1] == (True, True)
+
+
+def test_main_contest_initializes_i18n_like_interactive_mode(
+    monkeypatch, capsys
+):
+    monkeypatch.setenv("LANG", "C")
+    monkeypatch.delenv("LC_ALL", raising=False)
+    monkeypatch.setattr(cli_mod, "_get_version", lambda: "1.2.3")
+
+    assert cli_mod._main_contest(["-c", "--version"]) == 0
+    captured = capsys.readouterr()
+    assert "1.2.3" in captured.out
+    assert "warning: unsupported language 'c'" in captured.err.lower()
+
+
+def test_main_contest_uses_french_locale_when_supported(
+    monkeypatch, capsys
+):
+    monkeypatch.setenv("LANG", "fr_FR.UTF-8")
+    monkeypatch.delenv("LC_ALL", raising=False)
+
+    with pytest.raises(SystemExit):
+        cli_mod._main_contest(["-c"])
+
+    captured = capsys.readouterr()
+    assert "erreur" in captured.err.lower()
+    assert "unsupported language" not in captured.err.lower()
 
 
 def test_main_interactive_shows_version_and_validates_arguments(

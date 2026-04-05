@@ -8,7 +8,7 @@ from ..core.notation import get_edges_for_wall, get_node_from_notation
 from ..core.validators import validate_pawn_move, validate_wall
 from ..rules.win_rules import has_player_won
 from .blitz import Blitz
-from .game_session import GameSession, initial_player_positions
+from .game_session import GameOutcome, GameSession, initial_player_positions
 from .mcts_engine import mcts_search
 from .minimax_engine import (
     find_best_move_iterative,
@@ -106,6 +106,12 @@ class GameApplicationService:
             )
 
         raise ValueError(f"unsupported AI mode: {ai_mode}")
+
+    def scores(self) -> dict[int, int]:
+        return self.session.compute_scores()
+
+    def game_outcome(self) -> GameOutcome:
+        return self.session.game_outcome()
 
     def undo_groups(self, *, requester_id: int, count: int) -> tuple[int, int]:
         if count <= 0:
