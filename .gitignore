@@ -90,3 +90,6 @@ quoridor/ML/data/raw_games/
 # ML datasets (trop volumineux)
 quoridor/ML/data/ml_moves_dataset.csv
 quoridor/ML/data/ml_dataset.csv
+err.txt
+out.txt
+tmp.txt
