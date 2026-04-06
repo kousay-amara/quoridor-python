@@ -1032,6 +1032,14 @@ def _command_hint(state: _ShellState, _line: str) -> bool:
             state.current_ai_minimax_depth,
             blitz=state.blitz,
         )
+    except KeyboardInterrupt:
+        print("Hint interrupted.")
+    except ValueError as exc:
+        message = str(exc)
+        if message == "Game is over. No hint available.":
+            print(message)
+        else:
+            print(f"No hint available: {exc}")
     except Exception as exc:
         print(f"No hint available: {exc}")
     return False

@@ -90,10 +90,10 @@ class NetworkClient:
                     )
                 try:
                     self.client_id = int(hello_response.split(maxsplit=1)[1])
-                except (IndexError, ValueError):
+                except (IndexError, ValueError) as exc:
                     raise OSError(
                         f"unexpected server response: {hello_response}"
-                    )
+                    ) from exc
                 self._sock = sock
                 self._buffer = hello_buffer
                 self._response_queue.clear()
@@ -157,7 +157,8 @@ class NetworkClient:
                 if callback is not None:
                     try:
                         callback(move_notation)
-                    except Exception:
+                    except Exception:  # pylint: disable=broad-exception-caught
+                        # Callback errors must not break the reader thread.
                         with self._response_condition:
                             self._pending_opponent_moves.append(move_notation)
                     continue
@@ -177,7 +178,8 @@ class NetworkClient:
                 if callback is not None:
                     try:
                         callback(game_state_update)
-                    except Exception:
+                    except Exception:  # pylint: disable=broad-exception-caught
+                        # Callback errors must not break the reader thread.
                         with self._response_condition:
                             self._pending_game_state_updates.append(
                                 game_state_update
@@ -201,7 +203,8 @@ class NetworkClient:
                 if callback is not None:
                     try:
                         callback(line)
-                    except Exception:
+                    except Exception:  # pylint: disable=broad-exception-caught
+                        # Callback errors must not break the reader thread.
                         with self._response_condition:
                             self._pending_notifications.append(line)
                     continue
@@ -258,7 +261,8 @@ class NetworkClient:
         if callback is not None and reader_error is not None:
             try:
                 callback(reader_error)
-            except Exception:
+            except Exception:  # pylint: disable=broad-exception-caught
+                # The connection-lost hook is user-provided and best-effort.
                 pass
 
     def set_opponent_move_callback(
@@ -383,8 +387,8 @@ class NetworkClient:
                 raise OSError(f"unexpected players response: {response}")
             try:
                 client_id = int(parts[0])
-            except ValueError:
-                raise OSError(f"unexpected players response: {response}")
+            except ValueError as exc:
+                raise OSError(f"unexpected players response: {response}") from exc
             players.append((client_id, parts[1], parts[2]))
         return players
 
@@ -412,8 +416,8 @@ class NetworkClient:
             wins = int(parts[3])
             losses = int(parts[4])
             played = int(parts[5])
-        except ValueError:
-            raise OSError(f"unexpected players response: {response}")
+        except ValueError as exc:
+            raise OSError(f"unexpected players response: {response}") from exc
 
         return (
             detail_client_id,
@@ -442,8 +446,10 @@ class NetworkClient:
                 wins = int(parts[2])
                 losses = int(parts[3])
                 played = int(parts[4])
-            except ValueError:
-                raise OSError(f"unexpected scoreboard response: {response}")
+            except ValueError as exc:
+                raise OSError(
+                    f"unexpected scoreboard response: {response}"
+                ) from exc
             scores.append((client_id, parts[1], wins, losses, played))
         return scores
 

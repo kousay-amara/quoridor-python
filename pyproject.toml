@@ -72,6 +72,8 @@ source = ["quoridor"]
 omit = [
     "*/tests/*",
     "*/__pycache__/*",
+    "quoridor/interfaces/gui.py",
+    "*/quoridor/interfaces/gui.py",
 ]
 
 [tool.coverage.report]

@@ -1,6 +1,7 @@
 """Tests for ai_logic"""
 
-import pytest
+import random
+
 from quoridor.core.game_state import GameState
 from quoridor.application.ai_logic import (
     evaluate_state,
@@ -40,9 +41,6 @@ def test_get_all_legal_moves_count():
 
     assert len(pawn_moves) == 4
     assert len(wall_moves) == 128
-
-
-import random
 
 
 def test_state_integrity_after_simulation():

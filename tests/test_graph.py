@@ -1,4 +1,3 @@
-import pytest
 from quoridor.utils.graph import Graph
 from quoridor.utils.graph import bfs_has_path
 from quoridor.core.board import QuoridorBoard
@@ -9,8 +8,14 @@ from quoridor.core.notation import get_edges_for_wall
 from quoridor.core.notation import get_notation_from_node
 
 # --- Définition des lambdas de victoire pour les tests ---
-TARGET_L8 = lambda n: (n // 9) == 8
-TARGET_L0 = lambda n: (n // 9) == 0
+
+
+def TARGET_L8(n):
+    return (n // 9) == 8
+
+
+def TARGET_L0(n):
+    return (n // 9) == 0
 
 
 def test_initialization():

@@ -265,7 +265,15 @@ def test_action_pause_and_hint(gui_mod):
 
     win.service = types.SimpleNamespace(hint=lambda **_kwargs: ("pawn", 13))
     win._action_hint()
-    assert win.status.text == "Hint for player 1: ('pawn', 13)"
+    assert win.status.text == "Hint for player 1: e1-e2"
+
+    win.service = types.SimpleNamespace(
+        hint=lambda **_kwargs: (_ for _ in ()).throw(
+            ValueError("Game is over. No hint available.")
+        )
+    )
+    win._action_hint()
+    assert win.status.text == "Game is over. No hint available."
 
 
 def test_action_show_time(gui_mod):
@@ -303,7 +311,11 @@ def test_history_text_and_action(gui_mod, monkeypatch):
     )
     win.session.history = types.SimpleNamespace(records=[rec1, rec2], cursor=1)
 
-    monkeypatch.setattr(gui_mod, "record_to_notation", lambda rec: "e1-e2" if rec.player_id == 1 else "e9-e8")
+    monkeypatch.setattr(
+        gui_mod,
+        "record_to_notation",
+        lambda rec: "e1-e2" if rec.player_id == 1 else "e9-e8",
+    )
 
     shown = {"title": None, "text": None}
     win._show_text_window = lambda title, text: shown.update(
@@ -512,8 +524,12 @@ def test_action_routing_new_game_show_info_quit(gui_mod, monkeypatch):
 def test_action_load_save_routing(gui_mod):
     win = _make_window(gui_mod)
     called = {"load": 0, "save": 0}
-    win._on_load_clicked = lambda _btn: called.__setitem__("load", called["load"] + 1)
-    win._on_save_clicked = lambda _btn: called.__setitem__("save", called["save"] + 1)
+    win._on_load_clicked = lambda _btn: called.__setitem__(
+        "load", called["load"] + 1
+    )
+    win._on_save_clicked = lambda _btn: called.__setitem__(
+        "save", called["save"] + 1
+    )
     win._action_load_game()
     win._action_save_game()
     assert called == {"load": 1, "save": 1}
@@ -533,7 +549,9 @@ def test_shortcut_helpers(gui_mod):
         save_shortcuts=lambda _manager: save_called.__setitem__("ok", True)
     )
     win._bind_shortcuts = lambda: save_called.__setitem__("bind", True)
-    window = types.SimpleNamespace(close=lambda: save_called.__setitem__("closed", True))
+    window = types.SimpleNamespace(
+        close=lambda: save_called.__setitem__("closed", True)
+    )
     win._save_shortcut_entries(window, entries)
     assert save_called["ok"] is True
     assert save_called["bind"] is True
@@ -579,7 +597,11 @@ def test_dialog_openers_attach_handlers(gui_mod, monkeypatch):
 
     def factory(**kwargs):
         obj = _Chooser(**kwargs)
-        key = "save" if kwargs["action"] == gui_mod.Gtk.FileChooserAction.SAVE else "load"
+        key = (
+            "save"
+            if kwargs["action"] == gui_mod.Gtk.FileChooserAction.SAVE
+            else "load"
+        )
         seen[key] = obj
         return obj
 
@@ -620,9 +642,18 @@ def test_draw_helpers(gui_mod):
 
     calls = {"bg": 0, "cells": 0, "walls": 0, "players": 0}
     win._draw_background = lambda _cr: calls.__setitem__("bg", calls["bg"] + 1)
-    win._draw_cells = lambda _cr, _cs, _size: calls.__setitem__("cells", calls["cells"] + 1)
-    win._draw_walls = lambda _cr, _cs, _size: calls.__setitem__("walls", calls["walls"] + 1)
-    win._draw_players = lambda _cr, _cs, _size: calls.__setitem__("players", calls["players"] + 1)
+    win._draw_cells = lambda _cr, _cs, _size: calls.__setitem__(
+        "cells",
+        calls["cells"] + 1,
+    )
+    win._draw_walls = lambda _cr, _cs, _size: calls.__setitem__(
+        "walls",
+        calls["walls"] + 1,
+    )
+    win._draw_players = lambda _cr, _cs, _size: calls.__setitem__(
+        "players",
+        calls["players"] + 1,
+    )
     win._draw(None, object(), 0, 0)
     assert calls == {"bg": 1, "cells": 1, "walls": 1, "players": 1}
 
@@ -648,14 +679,21 @@ def test_drag_handlers(gui_mod, monkeypatch):
     assert win._drag_offset == (5, 7)
     assert win.area.draw_queued is True
 
-    monkeypatch.setattr(gui_mod, "validate_pawn_move", lambda *_a, **_k: (False, "blocked"))
+    monkeypatch.setattr(
+        gui_mod,
+        "validate_pawn_move",
+        lambda *_a, **_k: (False, "blocked"),
+    )
     win._on_drag_end(None, 0, gui_mod.GAP + win._cell_size())
     assert win.status.text == "blocked"
     assert win._drag_pid is None
 
     # Wall placement path from gap.
     called = {"wall": 0}
-    win.session.place_wall = lambda *_a, **_k: called.__setitem__("wall", called["wall"] + 1)
+    win.session.place_wall = lambda *_a, **_k: called.__setitem__(
+        "wall",
+        called["wall"] + 1,
+    )
     monkeypatch.setattr(gui_mod, "validate_wall", lambda *_a, **_k: (True, ""))
     cs = win._cell_size()
     win._on_drag_begin(None, win._ox + cs + 0.1, win._oy + 0.1)
@@ -664,7 +702,11 @@ def test_drag_handlers(gui_mod, monkeypatch):
     # Successful pawn move and winner branch.
     win._drag_pid = 1
     win._drag_start = (x + 1, y + 1)
-    monkeypatch.setattr(gui_mod, "validate_pawn_move", lambda *_a, **_k: (True, ""))
+    monkeypatch.setattr(
+        gui_mod,
+        "validate_pawn_move",
+        lambda *_a, **_k: (True, ""),
+    )
     win.session.play_pawn_move = lambda *_a, **_k: None
     win.session.game_outcome = lambda: types.SimpleNamespace(
         status="winner",

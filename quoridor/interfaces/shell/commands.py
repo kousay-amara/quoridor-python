@@ -128,12 +128,12 @@ def build_command_registry(
                 runner=command_history,
             ),
             CommandSpec(
-                matcher=lambda line: line.lower().startswith("load "),
+                matcher=lambda line: _is_prefix_command(line, "load"),
                 runner=command_load,
                 error_policy=ERROR_POLICY_INVALID,
             ),
             CommandSpec(
-                matcher=lambda line: line.lower().startswith("save "),
+                matcher=lambda line: _is_prefix_command(line, "save"),
                 runner=command_save,
                 error_policy=ERROR_POLICY_INVALID,
             ),

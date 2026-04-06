@@ -94,8 +94,15 @@ def test_cli_io_load_missing_file_raises(tmp_path: Path):
 
 
 def test_prompt_save_before_quit_no_save(monkeypatch):
-    monkeypatch.setattr("builtins.input", lambda _prompt: "n")
+    prompts: list[str] = []
+
+    def fake_input(prompt: str) -> str:
+        prompts.append(prompt)
+        return "n"
+
+    monkeypatch.setattr("builtins.input", fake_input)
     assert cli_io._prompt_save_before_quit(_make_session()) is True
+    assert prompts == ["Save the game before quitting? [y/N] "]
 
 
 def test_prompt_save_before_quit_save_success_after_empty_path(monkeypatch, capsys):
@@ -108,8 +115,17 @@ def test_prompt_save_before_quit_save_success_after_empty_path(monkeypatch, caps
         del session
         calls.append((path, blitz is not None))
 
-    monkeypatch.setattr("quoridor.interfaces.cli_io._save_session_to_file", fake_save)
-    assert cli_io._prompt_save_before_quit(_make_session(), blitz=Blitz(time_limit_minutes=0)) is True
+    monkeypatch.setattr(
+        "quoridor.interfaces.cli_io._save_session_to_file",
+        fake_save,
+    )
+    assert (
+        cli_io._prompt_save_before_quit(
+            _make_session(),
+            blitz=Blitz(time_limit_minutes=0),
+        )
+        is True
+    )
     out = capsys.readouterr().out
     assert "Invalid path." in out
     assert "Game saved to game.txt" in out
@@ -118,7 +134,13 @@ def test_prompt_save_before_quit_save_success_after_empty_path(monkeypatch, caps
 
 def test_prompt_save_before_quit_save_fails_then_abort(monkeypatch, capsys):
     answers = iter(["y", "bad.txt", "n"])
-    monkeypatch.setattr("builtins.input", lambda _prompt: next(answers))
+    prompts: list[str] = []
+
+    def fake_input(prompt: str) -> str:
+        prompts.append(prompt)
+        return next(answers)
+
+    monkeypatch.setattr("builtins.input", fake_input)
 
     def fake_save(_path, _session, blitz=None):
         del blitz
@@ -128,4 +150,9 @@ def test_prompt_save_before_quit_save_fails_then_abort(monkeypatch, capsys):
     assert cli_io._prompt_save_before_quit(_make_session()) is True
     out = capsys.readouterr().out
     assert "Cannot save file: disk full" in out
-    assert "Saving failed. Try again? [Y/N]" not in out
+    assert "Saving failed. Try again?" not in out
+    assert prompts == [
+        "Save the game before quitting? [y/N] ",
+        "Save file path: ",
+        "Saving failed. Try again? [y/N] ",
+    ]

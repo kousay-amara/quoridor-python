@@ -51,7 +51,7 @@ def _render_ascii_board(state) -> str:
             if c < size - 1:
                 right = _node(r, c + 1, size)
                 has_vwall = (n, right) in vwalls or (right, n) in vwalls
-                row_tokens.append("X" if has_vwall else " ")
+                row_tokens.append("X" if has_vwall else ".")
 
         lines.append(f"{r + 1:>2}  " + " ".join(row_tokens))
 
@@ -61,9 +61,9 @@ def _render_ascii_board(state) -> str:
                 top = _node(r, c, size)
                 bottom = _node(r + 1, c, size)
                 has_hwall = (top, bottom) in hwalls or (bottom, top) in hwalls
-                sep_tokens.append("X" if has_hwall else " ")
+                sep_tokens.append("X" if has_hwall else ".")
                 if c < size - 1:
-                    sep_tokens.append(" ")
+                    sep_tokens.append(".")
             lines.append("    " + " ".join(sep_tokens))
 
     return "\n".join(lines)

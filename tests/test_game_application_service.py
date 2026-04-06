@@ -152,6 +152,22 @@ def test_service_hint_modes_and_errors():
         service.hint(ai_mode="unknown", ai_time=1, ai_minimax_depth=None)
 
 
+def test_service_hint_rejects_terminal_state():
+    state = GameState(
+        board_size=9,
+        current_player=1,
+        player_positions={1: 76, 2: 67},
+        remaining_walls={1: 20, 2: 20},
+        vertical_walls=[],
+        horizontal_walls=[],
+    )
+    session = GameSession(state=state, player_types={1: "human", 2: "human"})
+    service = GameApplicationService(session=session, blitz=None)
+
+    with pytest.raises(ValueError, match="Game is over. No hint available."):
+        service.hint(ai_mode="minimax", ai_time=1, ai_minimax_depth=1)
+
+
 def test_service_undo_redo_count_validation_and_empty_history():
     session = _make_session()
     service = GameApplicationService(session=session, blitz=None)

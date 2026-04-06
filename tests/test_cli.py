@@ -13,6 +13,7 @@ from quoridor.application.game_session import GameSession
 from quoridor.core.game_state import GameState
 from quoridor.interfaces import cli as cli_mod
 from quoridor.interfaces import cli_shell
+from quoridor.interfaces.cli_render import _render_ascii_board
 
 MAIN_DEFAULTS = {
     "time": 30,
@@ -161,11 +162,35 @@ def test_hint_uses_mcts_time_limit_when_requested(monkeypatch, capsys):
     assert called["time_limit"] == 7
 
 
+def test_hint_keyboard_interrupt_is_handled_cleanly(monkeypatch, capsys):
+    def fake_handle_hint(*_args, **_kwargs):
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(cli_shell, "_handle_hint", fake_handle_hint)
+
+    captured = run_shell(monkeypatch, capsys, ["hint", "quit"])
+
+    assert "Hint interrupted." in captured.out
+    assert "Traceback" not in captured.err
+
+
+def test_hint_reports_game_over_message_without_prefix(monkeypatch, capsys):
+    def fake_handle_hint(*_args, **_kwargs):
+        raise ValueError("Game is over. No hint available.")
+
+    monkeypatch.setattr(cli_shell, "_handle_hint", fake_handle_hint)
+
+    captured = run_shell(monkeypatch, capsys, ["hint", "quit"])
+
+    assert "Game is over. No hint available." in captured.out
+    assert "No hint available: Game is over. No hint available." not in captured.out
+
+
 def test_shorthand_pawn_move_is_case_insensitive(monkeypatch, capsys):
     captured = run_shell(monkeypatch, capsys, ["E1-E2", "quit", "n"])
 
     assert "Player 1: e2, Player 2: e9" in captured.out
-    assert "Save the game before quitting? [Y/N]" in captured.out
+    assert "Save the game before quitting? [y/N]" in captured.out
 
 
 def test_shorthand_wall_move_is_case_insensitive(monkeypatch, capsys):
@@ -178,6 +203,36 @@ def test_show_board_does_not_repeat_the_state_summary(monkeypatch, capsys):
     captured = run_shell(monkeypatch, capsys, ["show board", "quit"])
 
     assert captured.out.count("Current player:") == 1
+
+
+def test_ascii_board_uses_dot_separators_in_empty_spaces():
+    state = GameState(
+        board_size=9,
+        current_player=1,
+        player_positions={1: 4, 2: 76},
+        remaining_walls={1: 20, 2: 20},
+        vertical_walls=[],
+        horizontal_walls=[],
+    )
+
+    board = _render_ascii_board(state)
+    assert "1 . _" in board
+    assert "\n    . . ." in board
+
+
+def test_ascii_board_keeps_walls_as_x_and_dots_elsewhere():
+    state = GameState(
+        board_size=9,
+        current_player=1,
+        player_positions={1: 4, 2: 76},
+        remaining_walls={1: 20, 2: 20},
+        vertical_walls=[(33, 34), (42, 43)],
+        horizontal_walls=[(33, 42), (34, 43)],
+    )
+
+    board = _render_ascii_board(state)
+    assert "X" in board
+    assert "." in board
 
 
 def test_commands_are_case_insensitive(monkeypatch, capsys):
@@ -235,7 +290,7 @@ def test_quit_without_changes_skips_the_save_prompt(monkeypatch, capsys):
 def test_quit_after_changes_prompts_for_save(monkeypatch, capsys):
     captured = run_shell(monkeypatch, capsys, ["e1-e2", "quit", "n"])
 
-    assert "Save the game before quitting? [Y/N]" in captured.out
+    assert "Save the game before quitting? [y/N]" in captured.out
 
 
 def test_undo_and_redo_restore_the_previous_state(monkeypatch, capsys):
@@ -450,6 +505,17 @@ def test_set_rejects_invalid_format_and_values(monkeypatch, capsys):
 
     captured = run_shell(monkeypatch, capsys, ["set blitz=maybe", "quit"])
     assert "boolean value expected (true/false)" in captured.out
+
+
+def test_load_and_save_without_file_show_explicit_usage_errors(
+    monkeypatch, capsys
+):
+    captured = run_shell(monkeypatch, capsys, ["load", "save", "quit"])
+
+    out = captured.out
+    assert "Invalid format. Use: load FILE" in out
+    assert "Invalid format. Use: save FILE" in out
+    assert "Bye." in out
 
 
 def test_show_configuration_prints_runtime_settings(monkeypatch, capsys):

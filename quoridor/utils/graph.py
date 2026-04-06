@@ -55,7 +55,7 @@ class Graph:
             self.adj[node2].append(node1)
 
 
-"""Simple generic BFS"""
+# Simple generic BFS
 
 
 def bfs_has_path(graph, start_node, is_target_func) -> bool:
