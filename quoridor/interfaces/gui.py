@@ -44,15 +44,18 @@ if __package__ in {None, ""}:
     )
     from quoridor.application.blitz import Blitz
     from quoridor.application.persistence_service import record_to_notation
+    from quoridor.core.notation import get_notation_from_node
     from quoridor.interfaces.cli_render import _format_hint_move
 else:
     from ..application.game_application_service import GameApplicationService
     from ..application.blitz import Blitz
     from ..application.persistence_service import record_to_notation
+    from ..network import NetworkClient
     from ..application.game_session import (
         GameSession,
         initial_player_positions,
     )
+    from ..core.notation import get_notation_from_node
     from ..core.validators import validate_pawn_move, validate_wall
     from .gui_shortcuts import (
         ACTION_LABELS,
@@ -115,6 +118,9 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         self._text_window: Gtk.Window | None = None
         self._config_window: Gtk.Window | None = None
         self._shortcut_entries: dict[ActionType, Gtk.Entry] = {}
+        self._network_mode = False
+        self._network_client = None
+        self._network_player_id = None
 
         self.config_manager = ConfigManager.default()
         self.shortcut_manager = self.config_manager.load_shortcuts()
@@ -236,12 +242,18 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         game_menu.append("Show History", "win.show_history")
         game_menu.append("Show Time", "win.show_time")
 
+        network_menu = Gio.Menu()
+        network_menu.append("Join Server", "win.network_join")
+        network_menu.append("Disconnect", "win.network_disconnect")
+        network_menu.append("Players", "win.network_players")
+        network_menu.append("New Game (invite)", "win.network_new_game")
+
         menu_model = Gio.Menu()
         menu_model.append_submenu("File", file_menu)
         menu_model.append_submenu("Game", game_menu)
+        menu_model.append_submenu("Network", network_menu)
 
         menubar = Gtk.PopoverMenuBar(menu_model=menu_model)
-
         menubar.set_hexpand(True)
 
         self.blitz_label = Gtk.Label(label="")
@@ -337,6 +349,10 @@ class QuoridorWindow(Gtk.ApplicationWindow):
             ActionType.REDO: self._action_redo,
             ActionType.PAUSE: self._action_pause,
             ActionType.HINT: self._action_hint,
+            ActionType.NETWORK_NEW_GAME: self._action_network_new_game,
+            ActionType.PLAYERS: self._action_network_players,
+            ActionType.JOIN_SERVER: self._action_network_join,
+            ActionType.DISCONNECT: self._action_network_disconnect,
         }
 
         for action_type, callback in handlers.items():
@@ -401,6 +417,9 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         if self._ai_thinking:
             self._set_status("ai is thinking")
             return
+        if self._network_mode and self.session.state.current_player != self._network_player_id:
+            self._set_status("Ce n'est pas ton tour.")
+            return
         cell = self._xy_to_cell(start_x, start_y)
         if cell is not None:
             row, col = cell
@@ -434,19 +453,24 @@ class QuoridorWindow(Gtk.ApplicationWindow):
             current,
         )
         if valid:
-            self._stop_blitz_turn(current)
-            self.session.place_wall(current, edges, orient)
-            self._set_status(
-                f"Player {current} placed {orient} wall " f"at ({row}, {col})."
-            )
-            self._schedule_ai_turn()
-            if (
-                self.session.player_types.get(
-                    self.session.state.current_player
+            if self._network_mode:
+                col_char = chr(ord("a") + col)
+                wall_notation = f"{col_char}{row + 1}{orient[0]}"
+                self._network_client.move(wall_notation)
+            else:
+                self._stop_blitz_turn(current)
+                self.session.place_wall(current, edges, orient)
+                self._set_status(
+                    f"Player {current} placed {orient} wall at ({row}, {col})."
                 )
-                != "ai"
-            ):
-                self._start_blitz_turn()
+                self._schedule_ai_turn()
+                if (
+                    self.session.player_types.get(
+                        self.session.state.current_player
+                    )
+                    != "ai"
+                ):
+                    self._start_blitz_turn()
         else:
             self._set_status(error)
         self.area.queue_draw()
@@ -472,23 +496,31 @@ class QuoridorWindow(Gtk.ApplicationWindow):
                 self.session.state.graph, from_node, to_node, all_pos, size
             )
             if valid:
-                self._stop_blitz_turn(self._drag_pid)
-                self.session.play_pawn_move(self._drag_pid, to_node)
-                self.area.queue_draw()
-                if self._apply_game_outcome():
-                    pass
+                if self._network_mode:
+                    from_notation = get_notation_from_node(from_node, self._board_size())
+                    to_notation = get_notation_from_node(to_node, self._board_size())
+                    notation = f"{from_notation}-{to_notation}"
+                    print(f"Envoi coup réseau : {notation}")
+                    result = self._network_client.move(notation)
+                    print(f"Réponse serveur : {result}")
                 else:
-                    self._set_status(
-                        f"Player {self._drag_pid} moved " f"to ({row}, {col})."
-                    )
-                    self._schedule_ai_turn()
-                    if (
-                        self.session.player_types.get(
-                            self.session.state.current_player
+                    self._stop_blitz_turn(self._drag_pid)
+                    self.session.play_pawn_move(self._drag_pid, to_node)
+                    self.area.queue_draw()
+                    if self._apply_game_outcome():
+                        pass
+                    else:
+                        self._set_status(
+                            f"Player {self._drag_pid} moved to ({row}, {col})."
                         )
-                        != "ai"
-                    ):
-                        self._start_blitz_turn()
+                        self._schedule_ai_turn()
+                        if (
+                            self.session.player_types.get(
+                                self.session.state.current_player
+                            )
+                            != "ai"
+                        ):
+                            self._start_blitz_turn()
             else:
                 self._set_status(error)
         self._drag_pid = None
@@ -584,9 +616,14 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         about.present()
 
     def _action_quit(self) -> None:
+        if self._network_client is not None:
+            self._network_client.disconnect()
         self.close()
 
     def _action_undo(self) -> None:
+        if self._network_mode:
+            self._set_status("Non disponible en mode réseau.")
+            return
         current = self.session.state.current_player
         try:
             _groups, total = self.service.undo_groups(
@@ -606,6 +643,9 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         self._set_status(f"Undid {total} move(s).")
 
     def _action_redo(self) -> None:
+        if self._network_mode:
+            self._set_status("Non disponible en mode réseau.")
+            return
         current = self.session.state.current_player
         try:
             _groups, total = self.service.redo_groups(
@@ -639,6 +679,9 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         return False
 
     def _action_pause(self) -> None:
+        if self._network_mode:
+            self._set_status("Non disponible en mode réseau.")
+            return
         self._paused = not self._paused
         if self.blitz.is_enabled():
             self.blitz.toggle_pause()
@@ -687,7 +730,7 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         player_count = max(1, len(self.session.state.player_positions))
         lines = []
         for idx in range(0, len(records), player_count):
-            turn = records[idx: idx + player_count]
+            turn = records[idx : idx + player_count]
             text = " ".join(
                 f"{record.player_id} {record_to_notation(record)};"
                 for record in turn
@@ -710,6 +753,190 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         message = f"Blitz time -> {text}"
         self._set_status(message)
         self._show_text_window("Remaining Time", message)
+
+    def _action_network_join(self) -> None:
+        dialog = Gtk.Dialog(title="Join Server", transient_for=self)
+        dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
+        dialog.add_button("Connect", Gtk.ResponseType.ACCEPT)
+
+        host_entry = Gtk.Entry()
+        host_entry.set_text("localhost")
+
+        port_entry = Gtk.Entry()
+        port_entry.set_text("9000")
+
+        name_entry = Gtk.Entry()
+        name_entry.set_text("player")
+
+        content = dialog.get_content_area()
+        content.set_spacing(6)
+        content.set_margin_top(10)
+        content.set_margin_bottom(10)
+        content.set_margin_start(10)
+        content.set_margin_end(10)
+
+        for label_text, entry in [
+            ("Host:", host_entry),
+            ("Port:", port_entry),
+            ("Pseudo:", name_entry),
+        ]:
+            row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+            row.append(Gtk.Label(label=label_text))
+            row.append(entry)
+            content.append(row)
+
+        dialog.connect(
+            "response", self._on_join_response, host_entry, port_entry, name_entry
+        )
+        dialog.present()
+
+    def _on_join_response(
+        self, dialog, response, host_entry, port_entry, name_entry
+    ) -> None:
+        if response == Gtk.ResponseType.ACCEPT:
+            host = host_entry.get_text()
+            port = int(port_entry.get_text())
+            name = name_entry.get_text()
+            self._set_status(f"Connecting to {host}:{port} as {name}...")
+            client = NetworkClient(host=host, port=port, name=name)
+            dialog.destroy()
+            try:
+                client.connect()
+                self._network_client = client
+                self._network_mode = True
+                print(f"Mon client_id : {client.client_id}")
+                self._network_client.set_opponent_move_callback(
+                    lambda notation: GLib.idle_add(
+                        self._handle_opponent_move, notation
+                    )
+                )
+                self._network_client.set_game_state_callback(
+                    lambda update: GLib.idle_add(
+                        self._apply_game_state_update, update
+                    )
+                )
+                self._network_client.set_notification_callback(
+                    lambda msg: GLib.idle_add(self._handle_notification, msg)
+                )
+                self._network_client.set_connection_lost_callback(
+                    lambda err: GLib.idle_add(self._handle_disconnect, err)
+                )
+                self._set_status(f"Connecté à {host}:{port} !")
+            except Exception as e:
+                self._set_status(f"Erreur de connexion : {e}")
+        else:
+            dialog.destroy()
+
+    def _action_network_disconnect(self) -> None:
+        if self._network_client is not None:
+            self._network_client.disconnect()
+            self._network_mode = False
+            self._network_client = None
+            self._set_status("player deconnecte")
+        else:
+            self._set_status("vous etes deja deconnecté")
+
+    def _action_network_players(self) -> None:
+        if self._network_client is None:
+            self._set_status("vous n'etes pas connecte")
+        else:
+            players = self._network_client.players()
+            if not players:
+                self._set_status("Aucun joueur connecté.")
+            else:
+                text = ""
+                for player_id, name, status in players:
+                    text = text + f"{name}({status}) "
+                self._set_status(f"Joueurs : {text}")
+
+    def _action_network_new_game(self) -> None:
+        if self._network_client is None:
+            self._set_status("Vous n'êtes pas connecté.")
+            return
+        dialog = Gtk.Dialog(title="Invite Player", transient_for=self)
+        dialog.add_button("Cancel", Gtk.ResponseType.CANCEL)
+        dialog.add_button("Invite", Gtk.ResponseType.ACCEPT)
+
+        id_label = Gtk.Label(label="ID du joueur:")
+        id_entry = Gtk.Entry()
+        id_entry.set_text("1")
+
+        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=6)
+        row.append(id_label)
+        row.append(id_entry)
+
+        content = dialog.get_content_area()
+        content.set_spacing(6)
+        content.set_margin_top(10)
+        content.set_margin_bottom(10)
+        content.set_margin_start(10)
+        content.set_margin_end(10)
+        content.append(row)
+
+        dialog.connect("response", self._on_new_game_response, id_entry)
+        dialog.present()
+
+    def _on_new_game_response(self, dialog, response, id_entry) -> None:
+        if response == Gtk.ResponseType.ACCEPT:
+            player_id = id_entry.get_text()
+            dialog.destroy()
+            try:
+                self._network_client.send_command(f"NEW {player_id}")
+                self._set_status(f"Invitation envoyée au joueur {player_id} !")
+            except Exception as e:
+                self._set_status(f"Erreur : {e}")
+        else:
+            dialog.destroy()
+
+    def _handle_opponent_move(self, notation) -> None:
+        print(f"Coup adversaire reçu : {notation}")
+
+    def _apply_game_state_update(self, update) -> None:
+        print(
+            f"GAME_STATE reçu : player_id={update['player_id']}, "
+            f"winner={update['winner_id']}"
+        )
+        if self._network_player_id is None:
+            self._network_player_id = update["player_id"]
+        self.session.state.restore(update["state"])
+        self.area.queue_draw()
+        if update["winner_id"]:
+            self._game_over = True
+            self._set_status(f"Player {update['winner_id']} has won!")
+
+    def _handle_notification(self, message) -> None:
+        if message.startswith("INVITATION_RECEIVED"):
+            parts = message.split()
+            opponent = parts[1].split("=")[1]
+
+            dialog = Gtk.MessageDialog(
+                transient_for=self,
+                modal=True,
+                message_type=Gtk.MessageType.QUESTION,
+                buttons=Gtk.ButtonsType.NONE,
+                text=f"{opponent} vous invite à jouer. Accepter ?",
+            )
+            dialog.add_button("Decline", Gtk.ResponseType.NO)
+            dialog.add_button("Accept", Gtk.ResponseType.YES)
+            dialog.connect("response", self._on_invitation_response)
+            dialog.present()
+
+    def _on_invitation_response(self, dialog, response) -> None:
+        if response == Gtk.ResponseType.YES:
+            self._network_client.accept()
+            self._set_status("Invitation acceptée !")
+        else:
+            self._network_client.decline()
+            self._set_status("Invitation refusée.")
+        dialog.destroy()
+
+    def _handle_disconnect(self, error) -> None:
+        self._network_mode = False
+        self._network_client = None
+        if error:
+            self._set_status(f"Déconnecté : {error}")
+        else:
+            self._set_status("Déconnecté du serveur.")
 
     def _runtime_config_text(self) -> str:
         walls_text = (
@@ -816,7 +1043,11 @@ class QuoridorWindow(Gtk.ApplicationWindow):
 
         window.connect(
             "close-request",
-            lambda win: (setattr(self, "_text_window", None), win.destroy(), False)[2],
+            lambda win: (
+                setattr(self, "_text_window", None),
+                win.destroy(),
+                False,
+            )[2],
         )
         window.set_child(root)
         self._text_window = window
@@ -854,7 +1085,10 @@ class QuoridorWindow(Gtk.ApplicationWindow):
             ("walls_per_player", str(self._init_walls)),
             ("blitz", str(self._init_blitz).lower()),
             ("time_limit", f"{self._init_time_limit:g}"),
-            ("ai_players", ",".join(str(v) for v in sorted(set(self._ai_players)))),
+            (
+                "ai_players",
+                ",".join(str(v) for v in sorted(set(self._ai_players))),
+            ),
             ("ai_mode", self._ai_mode),
             ("ai_time", str(self._ai_time)),
             (

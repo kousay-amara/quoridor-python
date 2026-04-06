@@ -23,6 +23,10 @@ class ActionType(Enum):
     REDO = "redo"
     PAUSE = "pause"
     HINT = "hint"
+    JOIN_SERVER = "network_join"
+    DISCONNECT = "network_disconnect"
+    PLAYERS = "network_players"
+    NETWORK_NEW_GAME = "network_new_game"
 
 
 DEFAULT_SHORTCUTS: dict[ActionType, str] = {
@@ -39,6 +43,10 @@ DEFAULT_SHORTCUTS: dict[ActionType, str] = {
     ActionType.REDO: "<Primary>r",
     ActionType.PAUSE: "<Primary>p",
     ActionType.HINT: "<Primary>h",
+    ActionType.JOIN_SERVER: "<Primary>j",
+    ActionType.DISCONNECT: "<Primary>d",
+    ActionType.PLAYERS: "<Primary>w",
+    ActionType.NETWORK_NEW_GAME: "<Primary>numbersign",
 }
 
 
@@ -56,6 +64,10 @@ ACTION_LABELS: dict[ActionType, str] = {
     ActionType.REDO: "Redo",
     ActionType.PAUSE: "Pause",
     ActionType.HINT: "Hint",
+    ActionType.JOIN_SERVER: "Join Server",
+    ActionType.DISCONNECT: "Disconnect",
+    ActionType.PLAYERS: "Players",
+    ActionType.NETWORK_NEW_GAME: "New Game (invite)",
 }
 
 
