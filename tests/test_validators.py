@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
-
 from quoridor.utils.graph import Graph
 from quoridor.core.validators import validate_pawn_move, validate_wall
 

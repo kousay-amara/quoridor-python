@@ -90,18 +90,15 @@ def evaluate_state(
 
     if scoring_type == SCORING_MATERIAL:
         return evaluate_state_material(state, ai_player_id)
-
-    elif scoring_type == SCORING_HYBRID:
+    if scoring_type == SCORING_HYBRID:
         return evaluate_state_hybrid(state, ai_player_id)
 
     return evaluate_state_default(state, ai_player_id)
 
 
-"""
-The next three functions are AI heuristics.
-They return a score for a given state from the AI point of view.
-The higher the score, the better the position.
-"""
+# The next three functions are AI heuristics.
+# They return a score for a given state from the AI point of view.
+# The higher the score, the better the position.
 
 
 def evaluate_state_default(state: GameState, ai_player_id: int) -> float:

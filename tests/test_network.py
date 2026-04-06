@@ -206,6 +206,7 @@ def test_discovery_message_round_trip_and_invalid_prefix():
     assert parse_discovery_message(message) == ("alpha", 23456)
     assert parse_discovery_message("WRONG alpha 23456") is None
 
+
 def test_discovery_listener_updates_cache_in_background():
     server_port = _unused_port()
     discovery_port = _unused_port()

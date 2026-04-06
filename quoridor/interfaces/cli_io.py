@@ -76,7 +76,7 @@ def _prompt_save_before_quit(
 ) -> bool:
     """Return True when the caller should quit."""
     try:
-        choice = input("Save the game before quitting? [Y/N] ").strip()
+        choice = input("Save the game before quitting? [y/N] ").strip()
     except (EOFError, KeyboardInterrupt):
         print()
         return True
@@ -107,7 +107,7 @@ def _prompt_save_before_quit(
                 print(f"Cannot save game: {exc}")
 
         try:
-            retry = input("Saving failed. Try again? [Y/N] ").strip()
+            retry = input("Saving failed. Try again? [y/N] ").strip()
         except (EOFError, KeyboardInterrupt):
             print()
             return True

@@ -44,6 +44,7 @@ if __package__ in {None, ""}:
     )
     from quoridor.application.blitz import Blitz
     from quoridor.application.persistence_service import record_to_notation
+    from quoridor.interfaces.cli_render import _format_hint_move
 else:
     from ..application.game_application_service import GameApplicationService
     from ..application.blitz import Blitz
@@ -72,6 +73,7 @@ else:
         PLAYER_COLORS,
         SIZE,
     )
+    from .cli_render import _format_hint_move
 
 
 class QuoridorWindow(Gtk.ApplicationWindow):
@@ -662,10 +664,20 @@ class QuoridorWindow(Gtk.ApplicationWindow):
                 ai_minimax_depth=1,
             )
         except Exception as exc:
-            self._set_status(f"Hint unavailable: {exc}")
+            message = str(exc)
+            if message == "Game is over. No hint available.":
+                self._set_status(message)
+            else:
+                self._set_status(f"Hint unavailable: {exc}")
             return
 
-        self._set_status(f"Hint for player {current}: {move}")
+        from_node = self.session.state.player_positions[current]
+        best_hint = _format_hint_move(
+            move,
+            from_node=from_node,
+            size=self.session.state.board_size,
+        )
+        self._set_status(f"Hint for player {current}: {best_hint}")
 
     def _history_text(self) -> str:
         records = self.session.history.records[: self.session.history.cursor + 1]

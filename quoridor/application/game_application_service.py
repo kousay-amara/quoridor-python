@@ -75,6 +75,10 @@ class GameApplicationService:
         iterative_fn=None,
         minimax_fn=None,
     ):
+        outcome = self.session.game_outcome()
+        if outcome.status != "ongoing":
+            raise ValueError("Game is over. No hint available.")
+
         current = self.session.state.current_player
         if mcts_fn is None:
             mcts_fn = mcts_search

@@ -139,12 +139,12 @@ def test_find_best_move_minimax_passes_deadline_into_move_generation(monkeypatch
     monkeypatch.setattr(engine, "get_all_legal_moves", fake_get_all_legal_moves)
 
     move = engine.find_best_move_minimax(
-    state=state,
-    ai_player_id=1,
-    depth=1,
-    deadline_ts=0.0,
-)
-    assert move == ("pawn", 13) 
+        state=state,
+        ai_player_id=1,
+        depth=1,
+        deadline_ts=0.0,
+    )
+    assert move == ("pawn", 13)
     assert captured["used"] is True
 
     assert captured["used"] is True

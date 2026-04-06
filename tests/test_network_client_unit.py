@@ -97,7 +97,11 @@ def test_connect_rejects_unexpected_welcome_line(monkeypatch):
         "create_connection",
         lambda *_args, **_kwargs: sock,
     )
-    monkeypatch.setattr(client_mod, "_recv_line", lambda *_a, **_k: ("ERROR BUSY", "", False))
+    monkeypatch.setattr(
+        client_mod,
+        "_recv_line",
+        lambda *_a, **_k: ("ERROR BUSY", "", False),
+    )
 
     with pytest.raises(OSError, match="unexpected server response"):
         client.connect()
@@ -115,6 +119,7 @@ def test_send_command_returns_line_from_reader_queue(monkeypatch):
     client._sock = sock
 
     sent: list[str] = []
+
     def fake_send_line(_sock, cmd):
         sent.append(cmd)
         with client._response_condition:
@@ -169,7 +174,9 @@ def test_quit_branches(monkeypatch):
 
     # Connected + send_command OSError: should close and return.
     client._sock = _FakeSock()
-    client.send_command = lambda _cmd: (_ for _ in ()).throw(OSError("x"))  # type: ignore[method-assign]
+    client.send_command = (  # type: ignore[method-assign]
+        lambda _cmd: (_ for _ in ()).throw(OSError("x"))
+    )
     client.quit()
     assert client._sock is None
 

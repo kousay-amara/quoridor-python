@@ -1,3 +1,5 @@
+"""Monte Carlo Tree Search engine for Quoridor."""
+
 import math
 import random
 import time
@@ -18,11 +20,11 @@ from quoridor.ML.ml_selector import ml_select_child
 def _make_goal_checker(player_id, board_size):
     if player_id == 1:
         return lambda node: node // board_size == board_size - 1
-    elif player_id == 2:
+    if player_id == 2:
         return lambda node: node // board_size == 0
-    elif player_id == 3:
+    if player_id == 3:
         return lambda node: node % board_size == board_size - 1
-    elif player_id == 4:
+    if player_id == 4:
         return lambda node: node % board_size == 0
     return None
 
@@ -111,13 +113,13 @@ def get_dist_to_goal(player_id, pos_index, board_size):
     if player_id == 1:
         y = pos_index // board_size
         return (board_size - 1) - y
-    elif player_id == 2:
+    if player_id == 2:
         y = pos_index // board_size
         return y
-    elif player_id == 3:
+    if player_id == 3:
         x = pos_index % board_size
         return (board_size - 1) - x
-    elif player_id == 4:
+    if player_id == 4:
         x = pos_index % board_size
         return x
     raise ValueError(f"player_id {player_id} non supporté (1-4 attendu)")
