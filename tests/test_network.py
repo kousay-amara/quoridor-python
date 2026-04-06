@@ -532,16 +532,64 @@ def test_network_new_supports_multiple_target_players():
         third_client.connect()
 
         response = first_client.send_command("NEW 2 3")
-        assert response == "ERROR INVALID_NEW_FORMAT"
+        assert response == "INVITATION_SENT PLAYERS=bob,charlie TIMEOUT=300s"
+
+        assert _wait_for_notification_prefix(
+            second_client,
+            "INVITATION_RECEIVED ",
+        ) == "INVITATION_RECEIVED FROM=alice EXPIRES=300s"
+        assert _wait_for_notification_prefix(
+            third_client,
+            "INVITATION_RECEIVED ",
+        ) == "INVITATION_RECEIVED FROM=alice EXPIRES=300s"
+
+        players = first_client.players()
+        assert players == [
+            (1, "alice", "waitgame"),
+            (2, "bob", "waitgame"),
+            (3, "charlie", "waitgame"),
+        ]
 
         status = server.server_status_snapshot()
         assert status["active_games"] == 0
 
+        assert second_client.accept() == "ACCEPT_OK WAITING_FOR_OTHERS=1"
+        accepted = _wait_for_notification_prefix(
+            first_client,
+            "INVITATION_ACCEPTED ",
+        )
+        assert accepted == "INVITATION_ACCEPTED PLAYER=bob WAITING=1/2"
+
+        status = server.server_status_snapshot()
+        assert status["active_games"] == 0
+
+        assert (
+            third_client.accept()
+            == "GAME_START PLAYERS=alice,bob,charlie"
+        )
+        accepted = _wait_for_notification_prefix(
+            first_client,
+            "INVITATION_ACCEPTED ",
+        )
+        assert accepted == "INVITATION_ACCEPTED PLAYER=charlie STARTING_GAME"
+        accepted = _wait_for_notification_prefix(
+            second_client,
+            "INVITATION_ACCEPTED ",
+        )
+        assert accepted == "INVITATION_ACCEPTED PLAYER=charlie STARTING_GAME"
+
+        assert _wait_for_game_state_update(first_client) is not None
+        assert _wait_for_game_state_update(second_client) is not None
+        assert _wait_for_game_state_update(third_client) is not None
+
+        status = server.server_status_snapshot()
+        assert status["active_games"] == 1
+
         players = first_client.players()
         assert players == [
-            (1, "alice", "idle"),
-            (2, "bob", "idle"),
-            (3, "charlie", "idle"),
+            (1, "alice", "ingame"),
+            (2, "bob", "ingame"),
+            (3, "charlie", "ingame"),
         ]
     finally:
         first_client.close()
@@ -961,10 +1009,25 @@ def test_cli_new_player_accepts_multiple_ids(monkeypatch, capsys):
             server.stop()
 
     out = capsys.readouterr().out
-    assert "Invalid command: Invalid format. Use: new PLAYER_ID" in out
-    assert "- 1: bob (idle)" in out
-    assert "- 2: charlie (idle)" in out
-    assert "- 3: alice (idle)" in out
+    assert "INVITATION_SENT PLAYERS=bob,charlie TIMEOUT=300s" in out
+    assert "- 1: bob (waitgame)" in out
+    assert "- 2: charlie (waitgame)" in out
+    assert "- 3: alice (waitgame)" in out
+
+
+def test_cli_network_accept_waiting_feedback_is_rendered(capsys):
+    state = _FakeNetworkState()
+
+    class FakeClient:
+        def accept(self):
+            return "ACCEPT_OK WAITING_FOR_OTHERS=1"
+
+    state.network_client = FakeClient()
+
+    assert cli_network_mod.command_accept(state, "accept") is False
+
+    out = capsys.readouterr().out
+    assert "ACCEPT_OK WAITING_FOR_OTHERS=1" in out
 
 
 def test_cli_join_accepts_custom_name(monkeypatch, capsys):
@@ -1255,12 +1318,22 @@ def test_server_state_helpers_validate_names_players_and_status_changes():
         )
         assert server._handle_players_command("PLAYERS 2") == "PLAYER 2|bob|away|0|0|0"
 
-        assert server._handle_away_command(1) == "AWAY_OK"
-        assert server._handle_away_command(1) == "ERROR ALREADY_AWAY"
-        assert server._handle_back_command(1) == "BACK_OK"
-        assert server._handle_back_command(1) == "ERROR NOT_AWAY"
-        assert server._handle_away_command(2) == "ERROR ALREADY_AWAY"
-        assert server._handle_away_command(3) == "ERROR CANNOT_GO_AWAY"
+        response, notifications = server._handle_away_command(1)
+        assert response == "AWAY_OK"
+        assert (
+            "PLAYER_STATUS PLAYER=alice STATUS=away"
+            in [message for _id, _sock, message in notifications]
+        )
+        assert server._handle_away_command(1) == ("ERROR ALREADY_AWAY", [])
+        response, notifications = server._handle_back_command(1)
+        assert response == "BACK_OK"
+        assert (
+            "PLAYER_STATUS PLAYER=alice STATUS=idle"
+            in [message for _id, _sock, message in notifications]
+        )
+        assert server._handle_back_command(1) == ("ERROR NOT_AWAY", [])
+        assert server._handle_away_command(2) == ("ERROR ALREADY_AWAY", [])
+        assert server._handle_away_command(3) == ("ERROR CANNOT_GO_AWAY", [])
     finally:
         first_sock.close()
         second_sock.close()
@@ -1311,6 +1384,8 @@ def test_server_expire_invitations_resets_waiting_players_and_notifies(
         assert sorted(message for _sock, message in sent_messages) == [
             "INVITATION_EXPIRED PLAYER=alice",
             "INVITATION_EXPIRED PLAYER=bob",
+            "PLAYER_STATUS PLAYER=alice STATUS=idle",
+            "PLAYER_STATUS PLAYER=bob STATUS=idle",
         ]
     finally:
         first_sock.close()

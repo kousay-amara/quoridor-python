@@ -355,22 +355,33 @@ def command_scoreboard(state: NetworkState, line: str) -> bool:
 
 def command_new_player(state: NetworkState, line: str) -> bool:
     parts = line.split()
-    if len(parts) != 2:
-        raise ValueError("Invalid format. Use: new PLAYER_ID")
+    if len(parts) < 2:
+        raise ValueError("Invalid format. Use: new PLAYER_ID [PLAYER_ID ...]")
 
     if state.network_client is None:
         print("Not connected to any server.")
         return False
 
-    try:
-        target_player_id = int(parts[1])
-    except ValueError as exc:
-        raise ValueError("Invalid format. Use: new PLAYER_ID") from exc
-    if target_player_id <= 0:
-        raise ValueError("Invalid format. Use: new PLAYER_ID")
+    target_player_ids = []
+    seen_target_ids = set()
+    for value in parts[1:]:
+        try:
+            target_player_id = int(value)
+        except ValueError as exc:
+            raise ValueError(
+                "Invalid format. Use: new PLAYER_ID [PLAYER_ID ...]"
+            ) from exc
+        if target_player_id <= 0 or target_player_id in seen_target_ids:
+            raise ValueError(
+                "Invalid format. Use: new PLAYER_ID [PLAYER_ID ...]"
+            )
+        seen_target_ids.add(target_player_id)
+        target_player_ids.append(target_player_id)
 
     try:
-        response = state.network_client.send_command(f"NEW {target_player_id}")
+        response = state.network_client.send_command(
+            "NEW " + " ".join(str(player_id) for player_id in target_player_ids)
+        )
     except OSError as exc:
         _handle_connection_lost(state, exc)
         return False
@@ -380,7 +391,7 @@ def command_new_player(state: NetworkState, line: str) -> bool:
         return False
 
     if response == "ERROR INVALID_NEW_FORMAT":
-        raise ValueError("Invalid format. Use: new PLAYER_ID")
+        raise ValueError("Invalid format. Use: new PLAYER_ID [PLAYER_ID ...]")
     if response in _NEW_GAME_ERRORS:
         print(_NEW_GAME_ERRORS[response])
         return False
@@ -403,7 +414,7 @@ def command_accept(state: NetworkState, line: str) -> bool:
         _handle_connection_lost(state, exc)
         return False
 
-    if response.startswith("GAME_START "):
+    if response.startswith("GAME_START ") or response.startswith("ACCEPT_OK "):
         print(response)
         return False
 

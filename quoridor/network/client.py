@@ -197,6 +197,8 @@ class NetworkClient:
                     "INVITATION_DECLINED ",
                     "INVITATION_CANCELLED ",
                     "INVITATION_EXPIRED ",
+                    "OPPONENT_DISCONNECTED ",
+                    "PLAYER_STATUS ",
                 )
             ):
                 callback = self._notification_callback

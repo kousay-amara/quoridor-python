@@ -22,12 +22,12 @@ _HISTORY_DESCRIPTION = (
 COMMAND_CATALOG: tuple[CommandHelp, ...] = (
     CommandHelp(
         "new",
-        "new [ARGS] | new PLAYER_ID",
+        "new [ARGS] | new PLAYER_ID [PLAYER_ID ...]",
         (
             "Start a new game. Without ARGS, reuse the current "
             "configuration. With ARGS, override it for the new game. "
-            "When connected to a server, new PLAYER_ID sends a game "
-            "invitation to an idle player."
+            "When connected to a server, new PLAYER_ID [PLAYER_ID ...] "
+            "sends a game invitation to one or more idle players."
         ),
     ),
     CommandHelp("help", "help [CMD]", "Show shell help, or help for CMD."),

@@ -88,12 +88,19 @@ class _Invitation:
         self,
         *,
         inviter_id: int,
-        invitee_id: int,
+        invitee_ids: tuple[int, ...] | None = None,
+        invitee_id: int | None = None,
         created_at: float,
         expires_at: float,
     ) -> None:
+        if invitee_ids is None:
+            if invitee_id is None:
+                raise ValueError("invitee_ids or invitee_id is required")
+            invitee_ids = (invitee_id,)
         self.inviter_id = inviter_id
-        self.invitee_id = invitee_id
+        self.invitee_ids = tuple(invitee_ids)
+        self.pending_invitee_ids = set(self.invitee_ids)
+        self.accepted_invitee_ids: set[int] = set()
         self.created_at = created_at
         self.expires_at = expires_at
 
@@ -405,22 +412,30 @@ class NetworkServer:
 
                 if command_upper == "AWAY":
                     try:
+                        response, notifications = self._handle_away_command(
+                            client_id
+                        )
                         _send_line(
                             client_sock,
-                            self._handle_away_command(client_id),
+                            response,
                         )
                     except OSError:
                         break
+                    self._send_notifications(notifications)
                     continue
 
                 if command_upper == "BACK":
                     try:
+                        response, notifications = self._handle_back_command(
+                            client_id
+                        )
                         _send_line(
                             client_sock,
-                            self._handle_back_command(client_id),
+                            response,
                         )
                     except OSError:
                         break
+                    self._send_notifications(notifications)
                     continue
 
                 if command_upper == "MOVE" or command_upper.startswith(
@@ -434,6 +449,7 @@ class NetworkServer:
                         ) = self._handle_move_command(client_id, command)
                     except OSError:
                         break
+                    notifications = []
                     if room is not None and winner_player_id is not None:
                         winner_client_id = room.player_to_client_id.get(
                             winner_player_id
@@ -444,7 +460,14 @@ class NetworkServer:
                                 winner_client_id=winner_client_id,
                             )
                         with self._lock:
-                            self._close_game_room_locked(room.game_id)
+                            changed_client_ids = self._close_game_room_locked(
+                                room.game_id
+                            )
+                            notifications = (
+                                self._build_status_notifications_locked(
+                                    changed_client_ids
+                                )
+                            )
                     try:
                         _send_line(
                             client_sock,
@@ -457,6 +480,8 @@ class NetworkServer:
                             room,
                             winner_player_id=winner_player_id,
                         )
+                    if notifications:
+                        self._send_notifications(notifications)
                     continue
 
                 if command_upper == "QUIT":
@@ -477,20 +502,96 @@ class NetworkServer:
         self,
         client_id: int,
         client_sock: socket.socket,
-    ) -> None:
+    ) -> list[tuple[int, socket.socket, str]]:
+        notifications = []
         session = self._client_sessions.get(client_id)
         if session is not None and session.sock is client_sock:
-            game_id = session.game_id
-            del self._client_sessions[client_id]
-            if game_id is not None:
-                self._close_game_room_locked(game_id)
+            if session.game_id is not None:
+                room = self._game_rooms.get(session.game_id)
+                if room is not None:
+                    for participant_client_id in room.player_ids:
+                        if participant_client_id == client_id:
+                            continue
+                        participant_session = self._client_sessions.get(
+                            participant_client_id
+                        )
+                        if participant_session is None:
+                            continue
+                        notifications.append(
+                            (
+                                participant_client_id,
+                                participant_session.sock,
+                                (
+                                    "OPPONENT_DISCONNECTED "
+                                    f"PLAYER={session.name}"
+                                ),
+                            )
+                        )
+
             invitation = self._pending_invitations_by_inviter.get(client_id)
             if invitation is None:
                 invitation = self._pending_invitations_by_invitee.get(
                     client_id
                 )
             if invitation is not None:
-                self._clear_invitation_locked(invitation)
+                if invitation.inviter_id == client_id:
+                    for invitee_id in invitation.invitee_ids:
+                        invitee_session = self._client_sessions.get(invitee_id)
+                        if invitee_session is None:
+                            continue
+                        notifications.append(
+                            (
+                                invitee_id,
+                                invitee_session.sock,
+                                (
+                                    "INVITATION_CANCELLED "
+                                    f"PLAYER={session.name}"
+                                ),
+                            )
+                        )
+                else:
+                    recipient_ids = [invitation.inviter_id]
+                    recipient_ids.extend(
+                        invitee_id
+                        for invitee_id in invitation.invitee_ids
+                        if invitee_id != client_id
+                    )
+                    for recipient_id in recipient_ids:
+                        recipient_session = self._client_sessions.get(
+                            recipient_id
+                        )
+                        if recipient_session is None:
+                            continue
+                        notifications.append(
+                            (
+                                recipient_id,
+                                recipient_session.sock,
+                                (
+                                    "INVITATION_DECLINED "
+                                    f"PLAYER={session.name}"
+                                ),
+                            )
+                        )
+
+            game_id = session.game_id
+            del self._client_sessions[client_id]
+            if game_id is not None:
+                changed_client_ids = self._close_game_room_locked(game_id)
+                notifications.extend(
+                    self._build_status_notifications_locked(
+                        changed_client_ids
+                    )
+                )
+            if invitation is not None:
+                changed_client_ids = self._clear_invitation_locked(
+                    invitation
+                )
+                notifications.extend(
+                    self._build_status_notifications_locked(
+                        changed_client_ids
+                    )
+                )
+        return notifications
 
     def _close_client(
         self,
@@ -503,7 +604,9 @@ class NetworkServer:
             pass
 
         with self._lock:
-            self._close_client_locked(client_id, client_sock)
+            notifications = self._close_client_locked(client_id, client_sock)
+
+        self._send_notifications(notifications)
 
     def _send_notifications(
         self,
@@ -515,12 +618,48 @@ class NetworkServer:
             except OSError:
                 self._close_client(recipient_client_id, recipient_sock)
 
-    def _clear_invitation_locked(self, invitation: _Invitation) -> None:
-        self._pending_invitations_by_inviter.pop(invitation.inviter_id, None)
-        self._pending_invitations_by_invitee.pop(invitation.invitee_id, None)
-        now = time.time()
+    def _build_status_notifications_locked(
+        self,
+        changed_client_ids: list[int] | tuple[int, ...],
+    ) -> list[tuple[int, socket.socket, str]]:
+        notifications = []
+        seen_client_ids = set()
+        for changed_client_id in changed_client_ids:
+            if changed_client_id in seen_client_ids:
+                continue
+            seen_client_ids.add(changed_client_id)
+            changed_session = self._client_sessions.get(changed_client_id)
+            if changed_session is None:
+                continue
+            message = (
+                "PLAYER_STATUS "
+                f"PLAYER={changed_session.name} STATUS={changed_session.status}"
+            )
+            for recipient_client_id, recipient_session in (
+                self._client_sessions.items()
+            ):
+                if recipient_client_id == changed_client_id:
+                    continue
+                notifications.append(
+                    (
+                        recipient_client_id,
+                        recipient_session.sock,
+                        message,
+                    )
+                )
+        return notifications
 
-        for client_id in (invitation.inviter_id, invitation.invitee_id):
+    def _clear_invitation_locked(
+        self,
+        invitation: _Invitation,
+    ) -> list[int]:
+        self._pending_invitations_by_inviter.pop(invitation.inviter_id, None)
+        for invitee_id in invitation.invitee_ids:
+            self._pending_invitations_by_invitee.pop(invitee_id, None)
+        now = time.time()
+        changed_client_ids = []
+
+        for client_id in (invitation.inviter_id, *invitation.invitee_ids):
             session = self._client_sessions.get(client_id)
             if session is None:
                 continue
@@ -530,6 +669,8 @@ class NetworkServer:
             ):
                 session.status = _PLAYER_STATUS_IDLE
                 session.last_activity_time = now
+                changed_client_ids.append(client_id)
+        return changed_client_ids
 
     def _expire_invitations(self) -> None:
         notifications = []
@@ -544,43 +685,62 @@ class NetworkServer:
                 inviter_session = self._client_sessions.get(
                     invitation.inviter_id
                 )
-                invitee_session = self._client_sessions.get(
-                    invitation.invitee_id
-                )
                 inviter_name = (
                     inviter_session.name
                     if inviter_session is not None
                     else f"client-{invitation.inviter_id}"
-                )
-                invitee_name = (
-                    invitee_session.name
-                    if invitee_session is not None
-                    else f"client-{invitation.invitee_id}"
                 )
                 inviter_sock = (
                     inviter_session.sock
                     if inviter_session is not None
                     else None
                 )
-                invitee_sock = (
-                    invitee_session.sock
-                    if invitee_session is not None
-                    else None
+                invitee_details = []
+                invitee_names = []
+                for invitee_id in invitation.invitee_ids:
+                    invitee_session = self._client_sessions.get(invitee_id)
+                    invitee_name = (
+                        invitee_session.name
+                        if invitee_session is not None
+                        else f"client-{invitee_id}"
+                    )
+                    invitee_sock = (
+                        invitee_session.sock
+                        if invitee_session is not None
+                        else None
+                    )
+                    invitee_names.append(invitee_name)
+                    invitee_details.append(
+                        (invitee_id, invitee_name, invitee_sock)
+                    )
+                changed_client_ids = self._clear_invitation_locked(
+                    invitation
                 )
-                self._clear_invitation_locked(invitation)
+                notifications.extend(
+                    self._build_status_notifications_locked(
+                        changed_client_ids
+                    )
+                )
 
                 if inviter_sock is not None:
+                    target_field = (
+                        f"PLAYER={invitee_names[0]}"
+                        if len(invitee_names) == 1
+                        else f"PLAYERS={','.join(invitee_names)}"
+                    )
                     notifications.append(
                         (
                             invitation.inviter_id,
                             inviter_sock,
-                            f"INVITATION_EXPIRED PLAYER={invitee_name}",
+                            f"INVITATION_EXPIRED {target_field}",
                         )
                     )
-                if invitee_sock is not None:
+                for invitee_id, _invitee_name, invitee_sock in invitee_details:
+                    if invitee_sock is None:
+                        continue
                     notifications.append(
                         (
-                            invitation.invitee_id,
+                            invitee_id,
                             invitee_sock,
                             f"INVITATION_EXPIRED PLAYER={inviter_name}",
                         )
@@ -786,17 +946,28 @@ class NetworkServer:
         command: str,
     ) -> tuple[str, list[tuple[int, socket.socket, str]]]:
         parts = command.split()
-        if len(parts) != 2:
+        if len(parts) < 2:
             return "ERROR INVALID_NEW_FORMAT", []
 
-        try:
-            target_client_id = int(parts[1])
-        except ValueError:
+        target_client_ids = []
+        seen_target_ids = set()
+        for value in parts[1:]:
+            try:
+                target_client_id = int(value)
+            except ValueError:
+                return "ERROR INVALID_NEW_FORMAT", []
+            if target_client_id <= 0:
+                return "ERROR INVALID_NEW_FORMAT", []
+            if target_client_id == client_id:
+                return "ERROR SELF_INVITE", []
+            if target_client_id in seen_target_ids:
+                return "ERROR INVALID_NEW_FORMAT", []
+            seen_target_ids.add(target_client_id)
+            target_client_ids.append(target_client_id)
+
+        participant_count = 1 + len(target_client_ids)
+        if participant_count < 2 or participant_count > 4:
             return "ERROR INVALID_NEW_FORMAT", []
-        if target_client_id <= 0:
-            return "ERROR INVALID_NEW_FORMAT", []
-        if target_client_id == client_id:
-            return "ERROR SELF_INVITE", []
 
         with self._lock:
             requester = self._client_sessions.get(client_id)
@@ -809,44 +980,67 @@ class NetworkServer:
             if client_id in self._pending_invitations_by_invitee:
                 return "ERROR REQUESTER_NOT_IDLE", []
 
-            target = self._client_sessions.get(target_client_id)
-            if target is None:
-                return "ERROR PLAYER_NOT_FOUND", []
-            if target.status != _PLAYER_STATUS_IDLE:
-                return "ERROR PLAYER_NOT_AVAILABLE", []
-            if target_client_id in self._pending_invitations_by_inviter:
-                return "ERROR PLAYER_NOT_AVAILABLE", []
-            if target_client_id in self._pending_invitations_by_invitee:
-                return "ERROR PLAYER_NOT_AVAILABLE", []
+            targets = []
+            for target_client_id in target_client_ids:
+                target = self._client_sessions.get(target_client_id)
+                if target is None:
+                    return "ERROR PLAYER_NOT_FOUND", []
+                if target.status != _PLAYER_STATUS_IDLE:
+                    return "ERROR PLAYER_NOT_AVAILABLE", []
+                if target_client_id in self._pending_invitations_by_inviter:
+                    return "ERROR PLAYER_NOT_AVAILABLE", []
+                if target_client_id in self._pending_invitations_by_invitee:
+                    return "ERROR PLAYER_NOT_AVAILABLE", []
+                targets.append(target)
 
             created_at = time.time()
             invitation = _Invitation(
                 inviter_id=client_id,
-                invitee_id=target_client_id,
+                invitee_ids=tuple(target_client_ids),
                 created_at=created_at,
                 expires_at=created_at + self.invitation_timeout_sec,
             )
             self._pending_invitations_by_inviter[client_id] = invitation
-            self._pending_invitations_by_invitee[target_client_id] = invitation
+            for target_client_id in target_client_ids:
+                self._pending_invitations_by_invitee[target_client_id] = (
+                    invitation
+                )
             requester.status = _PLAYER_STATUS_WAITGAME
-            target.status = _PLAYER_STATUS_WAITGAME
+            for target in targets:
+                target.status = _PLAYER_STATUS_WAITGAME
 
             timeout_sec = round(self.invitation_timeout_sec)
-            notifications = [
-                (
-                    target_client_id,
-                    target.sock,
-                    (
-                        "INVITATION_RECEIVED "
-                        f"FROM={requester.name} EXPIRES={timeout_sec}s"
-                    ),
+            notifications = []
+            notifications.extend(
+                self._build_status_notifications_locked(
+                    [client_id, *target_client_ids]
                 )
-            ]
+            )
+            target_names = []
+            for target_client_id, target in zip(target_client_ids, targets):
+                target_names.append(target.name)
+                notifications.append(
+                    (
+                        target_client_id,
+                        target.sock,
+                        (
+                            "INVITATION_RECEIVED "
+                            f"FROM={requester.name} EXPIRES={timeout_sec}s"
+                        ),
+                    )
+                )
 
-        return (
-            "INVITATION_SENT " f"PLAYER={target.name} TIMEOUT={timeout_sec}s",
-            notifications,
-        )
+        if len(target_names) == 1:
+            response = (
+                "INVITATION_SENT "
+                f"PLAYER={target_names[0]} TIMEOUT={timeout_sec}s"
+            )
+        else:
+            response = (
+                "INVITATION_SENT "
+                f"PLAYERS={','.join(target_names)} TIMEOUT={timeout_sec}s"
+            )
+        return response, notifications
 
     def _handle_accept_command(
         self,
@@ -858,33 +1052,114 @@ class NetworkServer:
                 return "ERROR NO_INVITATION", [], None
 
             inviter_session = self._client_sessions.get(invitation.inviter_id)
-            invitee_session = self._client_sessions.get(invitation.invitee_id)
-            if inviter_session is None or invitee_session is None:
-                self._clear_invitation_locked(invitation)
-                return "ERROR PLAYER_NOT_FOUND", [], None
+            invitee_sessions = {
+                invitee_id: self._client_sessions.get(invitee_id)
+                for invitee_id in invitation.invitee_ids
+            }
+            if inviter_session is None or any(
+                session is None for session in invitee_sessions.values()
+            ):
+                changed_client_ids = self._clear_invitation_locked(invitation)
+                notifications = self._build_status_notifications_locked(
+                    changed_client_ids
+                )
+                return "ERROR PLAYER_NOT_FOUND", notifications, None
 
             inviter_name = inviter_session.name
-            invitee_name = invitee_session.name
-            inviter_sock = inviter_session.sock
-            self._clear_invitation_locked(invitation)
-            room = self._create_room_locked(
-                [invitation.inviter_id, invitation.invitee_id]
-            )
+            accepter_session = invitee_sessions[client_id]
+            assert accepter_session is not None
+            accepter_name = accepter_session.name
 
-        return (
-            f"GAME_START OPPONENT={inviter_name}",
-            [
+            if client_id not in invitation.pending_invitee_ids:
+                remaining = len(invitation.pending_invitee_ids)
+                return (
+                    f"ACCEPT_OK WAITING_FOR_OTHERS={remaining}",
+                    [],
+                    None,
+                )
+
+            invitation.pending_invitee_ids.remove(client_id)
+            invitation.accepted_invitee_ids.add(client_id)
+
+            if invitation.pending_invitee_ids:
+                accepted_count = len(invitation.accepted_invitee_ids)
+                total_invitees = len(invitation.invitee_ids)
+                notification_message = (
+                    "INVITATION_ACCEPTED "
+                    f"PLAYER={accepter_name} "
+                    f"WAITING={accepted_count}/{total_invitees}"
+                )
+                notifications = [
+                    (
+                        invitation.inviter_id,
+                        inviter_session.sock,
+                        notification_message,
+                    )
+                ]
+                for invitee_id, invitee_session in invitee_sessions.items():
+                    if invitee_id == client_id or invitee_session is None:
+                        continue
+                    notifications.append(
+                        (
+                            invitee_id,
+                            invitee_session.sock,
+                            notification_message,
+                        )
+                    )
+                return (
+                    (
+                        "ACCEPT_OK "
+                        f"WAITING_FOR_OTHERS={len(invitation.pending_invitee_ids)}"
+                    ),
+                    notifications,
+                    None,
+                )
+
+            participant_client_ids = [
+                invitation.inviter_id,
+                *invitation.invitee_ids,
+            ]
+            participant_names = [inviter_name]
+            for invitee_id in invitation.invitee_ids:
+                invitee_session = invitee_sessions[invitee_id]
+                assert invitee_session is not None
+                participant_names.append(invitee_session.name)
+
+            notifications = [
                 (
                     invitation.inviter_id,
-                    inviter_sock,
+                    inviter_session.sock,
                     (
                         "INVITATION_ACCEPTED "
-                        f"PLAYER={invitee_name} STARTING_GAME"
+                        f"PLAYER={accepter_name} STARTING_GAME"
                     ),
                 )
-            ],
-            room,
-        )
+            ]
+            for invitee_id, invitee_session in invitee_sessions.items():
+                if invitee_id == client_id or invitee_session is None:
+                    continue
+                notifications.append(
+                    (
+                        invitee_id,
+                        invitee_session.sock,
+                        (
+                            "INVITATION_ACCEPTED "
+                            f"PLAYER={accepter_name} STARTING_GAME"
+                        ),
+                    )
+                )
+
+            self._clear_invitation_locked(invitation)
+            room = self._create_room_locked(participant_client_ids)
+            notifications.extend(
+                self._build_status_notifications_locked(room.player_ids)
+            )
+
+        if len(participant_names) == 2:
+            response = f"GAME_START OPPONENT={inviter_name}"
+        else:
+            response = f"GAME_START PLAYERS={','.join(participant_names)}"
+        return response, notifications, room
 
     def _handle_decline_command(
         self,
@@ -896,28 +1171,47 @@ class NetworkServer:
                 return "ERROR NO_INVITATION", []
 
             inviter_session = self._client_sessions.get(invitation.inviter_id)
-            invitee_session = self._client_sessions.get(invitation.invitee_id)
             inviter_name = (
                 inviter_session.name
                 if inviter_session is not None
                 else f"client-{invitation.inviter_id}"
             )
+            invitee_session = self._client_sessions.get(client_id)
             invitee_name = (
                 invitee_session.name
                 if invitee_session is not None
-                else f"client-{invitation.invitee_id}"
+                else f"client-{client_id}"
             )
             inviter_sock = (
                 inviter_session.sock if inviter_session is not None else None
             )
-            self._clear_invitation_locked(invitation)
+            invitee_socks = []
+            for invitee_id in invitation.invitee_ids:
+                if invitee_id == client_id:
+                    continue
+                invitee_session_other = self._client_sessions.get(invitee_id)
+                if invitee_session_other is None:
+                    continue
+                invitee_socks.append((invitee_id, invitee_session_other.sock))
+            changed_client_ids = self._clear_invitation_locked(invitation)
 
             notifications = []
+            notifications.extend(
+                self._build_status_notifications_locked(changed_client_ids)
+            )
             if inviter_sock is not None:
                 notifications.append(
                     (
                         invitation.inviter_id,
                         inviter_sock,
+                        f"INVITATION_DECLINED PLAYER={invitee_name}",
+                        )
+                    )
+            for invitee_id, invitee_sock in invitee_socks:
+                notifications.append(
+                    (
+                        invitee_id,
+                        invitee_sock,
                         f"INVITATION_DECLINED PLAYER={invitee_name}",
                     )
                 )
@@ -934,60 +1228,81 @@ class NetworkServer:
                 return "ERROR NO_INVITATION", []
 
             inviter_session = self._client_sessions.get(invitation.inviter_id)
-            invitee_session = self._client_sessions.get(invitation.invitee_id)
             inviter_name = (
                 inviter_session.name
                 if inviter_session is not None
                 else f"client-{invitation.inviter_id}"
             )
-            invitee_name = (
-                invitee_session.name
-                if invitee_session is not None
-                else f"client-{invitation.invitee_id}"
-            )
-            invitee_sock = (
-                invitee_session.sock if invitee_session is not None else None
-            )
-            self._clear_invitation_locked(invitation)
+            invitee_names = []
+            invitee_socks = []
+            for invitee_id in invitation.invitee_ids:
+                invitee_session = self._client_sessions.get(invitee_id)
+                invitee_names.append(
+                    invitee_session.name
+                    if invitee_session is not None
+                    else f"client-{invitee_id}"
+                )
+                if invitee_session is not None:
+                    invitee_socks.append((invitee_id, invitee_session.sock))
+            changed_client_ids = self._clear_invitation_locked(invitation)
 
             notifications = []
-            if invitee_sock is not None:
+            notifications.extend(
+                self._build_status_notifications_locked(changed_client_ids)
+            )
+            for invitee_id, invitee_sock in invitee_socks:
                 notifications.append(
                     (
-                        invitation.invitee_id,
+                        invitee_id,
                         invitee_sock,
                         f"INVITATION_CANCELLED PLAYER={inviter_name}",
                     )
                 )
 
-        return f"CANCEL_OK PLAYER={invitee_name}", notifications
+        if len(invitee_names) == 1:
+            response = f"CANCEL_OK PLAYER={invitee_names[0]}"
+        else:
+            response = f"CANCEL_OK PLAYERS={','.join(invitee_names)}"
+        return response, notifications
 
-    def _handle_away_command(self, client_id: int) -> str:
+    def _handle_away_command(
+        self,
+        client_id: int,
+    ) -> tuple[str, list[tuple[int, socket.socket, str]]]:
         with self._lock:
             session = self._client_sessions.get(client_id)
             if session is None:
-                return "ERROR PLAYER_NOT_FOUND"
+                return "ERROR PLAYER_NOT_FOUND", []
             if session.status == _PLAYER_STATUS_AWAY:
-                return "ERROR ALREADY_AWAY"
+                return "ERROR ALREADY_AWAY", []
             if (
                 session.status != _PLAYER_STATUS_IDLE
                 or session.game_id is not None
             ):
-                return "ERROR CANNOT_GO_AWAY"
+                return "ERROR CANNOT_GO_AWAY", []
             session.status = _PLAYER_STATUS_AWAY
             session.last_activity_time = time.time()
-        return "AWAY_OK"
+            notifications = self._build_status_notifications_locked(
+                [client_id]
+            )
+        return "AWAY_OK", notifications
 
-    def _handle_back_command(self, client_id: int) -> str:
+    def _handle_back_command(
+        self,
+        client_id: int,
+    ) -> tuple[str, list[tuple[int, socket.socket, str]]]:
         with self._lock:
             session = self._client_sessions.get(client_id)
             if session is None:
-                return "ERROR PLAYER_NOT_FOUND"
+                return "ERROR PLAYER_NOT_FOUND", []
             if session.status != _PLAYER_STATUS_AWAY:
-                return "ERROR NOT_AWAY"
+                return "ERROR NOT_AWAY", []
             session.status = _PLAYER_STATUS_IDLE
             session.last_activity_time = time.time()
-        return "BACK_OK"
+            notifications = self._build_status_notifications_locked(
+                [client_id]
+            )
+        return "BACK_OK", notifications
 
     def _handle_move_command(
         self,
@@ -1121,17 +1436,21 @@ class NetworkServer:
             3,
         )
 
-    def _close_game_room_locked(self, game_id: int) -> None:
+    def _close_game_room_locked(self, game_id: int) -> list[int]:
         room = self._game_rooms.pop(game_id, None)
         if room is None:
-            return
+            return []
 
+        changed_client_ids = []
         for room_player_id in room.player_ids:
             session = self._client_sessions.get(room_player_id)
             if session is None:
                 continue
-            session.status = _PLAYER_STATUS_IDLE
+            if session.status != _PLAYER_STATUS_IDLE:
+                session.status = _PLAYER_STATUS_IDLE
+                changed_client_ids.append(room_player_id)
             session.game_id = None
+        return changed_client_ids
 
     def record_finished_game(
         self,
