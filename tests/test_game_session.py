@@ -94,7 +94,9 @@ def test_game_session_builder_requires_state_and_player_types():
         pass
 
 
-def test_play_ai_turn_rejects_minimax_without_depth():
+def test_play_ai_turn_uses_automatic_depth_for_minimax(monkeypatch):
+    from quoridor.application import game_session as game_session_mod
+
     state = GameState(
         board_size=9,
         current_player=2,
@@ -102,12 +104,35 @@ def test_play_ai_turn_rejects_minimax_without_depth():
         remaining_walls={1: 10, 2: 10},
     )
     session = GameSession(state=state, player_types={1: "human", 2: "ai"})
+    captured = {}
 
-    try:
-        session.play_ai_turn(mode="minimax", depth=None, time_limit_sec=1.0)
-        assert False, "ValueError expected"
-    except ValueError as exc:
-        assert "requires a fixed depth" in str(exc)
+    monkeypatch.setattr(
+        game_session_mod,
+        "resolve_auto_minimax_depth",
+        lambda time_limit_sec: 2 if time_limit_sec == 1.0 else 99,
+    )
+
+    def fake_find_best_move_minimax(state, *, ai_player_id, depth, eval_fn):
+        del state, eval_fn
+        captured["ai_player_id"] = ai_player_id
+        captured["depth"] = depth
+        return ("pawn", 71)
+
+    monkeypatch.setattr(
+        game_session_mod,
+        "find_best_move_minimax",
+        fake_find_best_move_minimax,
+    )
+
+    record = session.play_ai_turn(
+        mode="minimax",
+        depth=None,
+        time_limit_sec=1.0,
+    )
+
+    assert captured == {"ai_player_id": 2, "depth": 2}
+    assert record.action == "move_pawn"
+    assert session.state.player_positions[2] == 71
 
 
 def test_play_ai_turn_uses_mcts_when_mode_is_mcts(monkeypatch):
