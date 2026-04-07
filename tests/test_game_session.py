@@ -104,7 +104,7 @@ def test_play_ai_turn_uses_automatic_depth_for_minimax(monkeypatch):
         remaining_walls={1: 10, 2: 10},
     )
     session = GameSession(state=state, player_types={1: "human", 2: "ai"})
-    captured = {}
+    captured = {"deadline_ts": None}
 
     monkeypatch.setattr(
         game_session_mod,
@@ -112,10 +112,13 @@ def test_play_ai_turn_uses_automatic_depth_for_minimax(monkeypatch):
         lambda time_limit_sec: 2 if time_limit_sec == 1.0 else 99,
     )
 
-    def fake_find_best_move_minimax(state, *, ai_player_id, depth, eval_fn):
+    def fake_find_best_move_minimax(
+        state, *, ai_player_id, depth, eval_fn, deadline_ts
+    ):
         del state, eval_fn
         captured["ai_player_id"] = ai_player_id
         captured["depth"] = depth
+        captured["deadline_ts"] = deadline_ts
         return ("pawn", 71)
 
     monkeypatch.setattr(
@@ -130,7 +133,9 @@ def test_play_ai_turn_uses_automatic_depth_for_minimax(monkeypatch):
         time_limit_sec=1.0,
     )
 
-    assert captured == {"ai_player_id": 2, "depth": 2}
+    assert captured["ai_player_id"] == 2
+    assert captured["depth"] == 2
+    assert captured["deadline_ts"] is not None
     assert record.action == "move_pawn"
     assert session.state.player_positions[2] == 71
 

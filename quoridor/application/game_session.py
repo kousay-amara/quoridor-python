@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from functools import partial
 from dataclasses import dataclass
+from time import monotonic
 from typing import Any, Literal
 
 from ..core.game_state import GameState
@@ -325,11 +326,13 @@ class GameSession:
                 if depth is not None
                 else resolve_auto_minimax_depth(time_limit_sec)
             )
+            deadline_ts = monotonic() + time_limit_sec
             move = find_best_move_minimax(
                 self.state,
                 ai_player_id=player_id,
                 depth=resolved_depth,
                 eval_fn=eval_fn,
+                deadline_ts=deadline_ts,
             )
         else:
             raise ValueError(f"unsupported AI mode: {mode}")

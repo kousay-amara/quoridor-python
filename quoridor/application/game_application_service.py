@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import partial
+from time import monotonic
 
 from ..core.notation import get_edges_for_wall, get_node_from_notation
 from ..core.validators import validate_pawn_move, validate_wall
@@ -128,11 +129,13 @@ class GameApplicationService:
                 if ai_minimax_depth is not None
                 else resolve_auto_minimax_depth(ai_time)
             )
+            deadline_ts = monotonic() + ai_time
             return minimax_fn(
                 self.session.state,
                 ai_player_id=current,
                 depth=resolved_depth,
                 eval_fn=eval_fn,
+                deadline_ts=deadline_ts,
             )
 
         raise ValueError(f"unsupported AI mode: {ai_mode}")

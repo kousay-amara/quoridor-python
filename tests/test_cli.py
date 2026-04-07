@@ -101,11 +101,14 @@ def test_help_commands_explain_available_actions(monkeypatch, capsys):
 
 
 def test_hint_uses_minimax_depth_from_runtime_settings(monkeypatch, capsys):
-    called = {"depth": None, "score": None}
+    called = {"depth": None, "score": None, "deadline_ts": None}
 
-    def fake_minimax(state, ai_player_id, depth, eval_fn):
+    def fake_minimax(
+        state, *, ai_player_id, depth, eval_fn, deadline_ts
+    ):
         called["depth"] = depth
         called["score"] = eval_fn(state, ai_player_id)
+        called["deadline_ts"] = deadline_ts
         return (
             "pawn",
             state.player_positions[ai_player_id] + state.board_size,
@@ -118,6 +121,7 @@ def test_hint_uses_minimax_depth_from_runtime_settings(monkeypatch, capsys):
     assert "Best hint action: e1-e2" in captured.out
     assert called["depth"] == 2
     assert isinstance(called["score"], float)
+    assert called["deadline_ts"] is not None
 
 
 def test_hint_uses_iterative_time_limit_when_requested(monkeypatch, capsys):

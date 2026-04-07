@@ -105,11 +105,12 @@ def test_service_hint_modes_and_errors():
         iterative_called["ok"] = True
         return ("move_pawn", 0, 1)
 
-    def fake_minimax(state, *, ai_player_id, depth, eval_fn):
+    def fake_minimax(state, *, ai_player_id, depth, eval_fn, deadline_ts):
         assert state is service.session.state
         assert ai_player_id == 1
         assert depth == 2
         assert callable(eval_fn)
+        assert deadline_ts is not None
         minimax_called["ok"] = True
         return ("move_pawn", 0, 1)
 
@@ -166,10 +167,11 @@ def test_service_hint_passes_selected_minimax_scoring():
 
     observed = {"score": None}
 
-    def fake_minimax(state, *, ai_player_id, depth, eval_fn):
+    def fake_minimax(state, *, ai_player_id, depth, eval_fn, deadline_ts):
         assert state is service.session.state
         assert ai_player_id == 1
         assert depth == 2
+        assert deadline_ts is not None
         observed["score"] = eval_fn(state, ai_player_id)
         return ("move_pawn", 0, 1)
 
@@ -189,13 +191,14 @@ def test_service_hint_passes_selected_minimax_scoring():
 def test_service_hint_uses_automatic_depth_for_minimax():
     session = _make_session()
     service = GameApplicationService(session=session, blitz=None)
-    called = {"depth": None}
+    called = {"depth": None, "deadline_ts": None}
 
-    def fake_minimax(state, *, ai_player_id, depth, eval_fn):
+    def fake_minimax(state, *, ai_player_id, depth, eval_fn, deadline_ts):
         assert state is service.session.state
         assert ai_player_id == 1
         assert callable(eval_fn)
         called["depth"] = depth
+        called["deadline_ts"] = deadline_ts
         return ("move_pawn", 0, 1)
 
     service.hint(
@@ -206,6 +209,7 @@ def test_service_hint_uses_automatic_depth_for_minimax():
     )
 
     assert called["depth"] == resolve_auto_minimax_depth(5)
+    assert called["deadline_ts"] is not None
 
 
 def test_service_hint_rejects_terminal_state():
