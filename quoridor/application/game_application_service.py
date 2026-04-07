@@ -19,6 +19,7 @@ from .minimax_engine import (
 from .ai_logic import evaluate_state
 from .persistence_service import (
     load_blitz_snapshot,
+    load_program_settings,
     load_session,
     save_session,
 )
@@ -64,9 +65,24 @@ class GameApplicationService:
         self.set_context(session=session, blitz=blitz)
         return session, blitz
 
-    def save(self, path: str) -> None:
+    def save(
+        self,
+        path: str,
+        *,
+        program_settings: dict[str, object] | None = None,
+    ) -> None:
         snapshot = None if self.blitz is None else self.blitz.snapshot()
-        save_session(path, self.session, blitz_snapshot=snapshot)
+        save_session(
+            path,
+            self.session,
+            blitz_snapshot=snapshot,
+            program_settings=program_settings,
+        )
+
+    def load_program_settings(
+        self, path: str
+    ) -> dict[str, bool | int | None | str]:
+        return load_program_settings(path)
 
     def hint(
         self,

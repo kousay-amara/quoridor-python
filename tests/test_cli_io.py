@@ -48,6 +48,45 @@ def test_cli_io_save_load_and_blitz_roundtrip(tmp_path: Path):
     assert snapshot["remaining_times"][1] < snapshot["remaining_times"][2]
 
 
+def test_cli_io_program_settings_roundtrip(tmp_path: Path):
+    session = _make_session()
+    path = tmp_path / "settings.txt"
+
+    cli_io._save_session_to_file(
+        str(path),
+        session,
+        program_settings={
+            "verbose": True,
+            "debug": True,
+            "ai_mode": "minimax",
+            "ai_time": 6,
+            "ai_minimax_depth": 4,
+            "ai_minimax_scoring": 2,
+            "ai_mcts_selection": "ML",
+        },
+    )
+
+    raw = path.read_text(encoding="utf-8")
+    loaded = cli_io._load_program_settings_from_file(str(path))
+
+    assert "verbose=true" in raw
+    assert "debug=true" in raw
+    assert "ai-mode=minimax" in raw
+    assert "ai-time=6" in raw
+    assert "ai-minimax-depth=4" in raw
+    assert "ai-minimax-scoring=2" in raw
+    assert "ai-mcts-selection=ML" in raw
+    assert loaded == {
+        "verbose": True,
+        "debug": True,
+        "ai_mode": "minimax",
+        "ai_time": 6,
+        "ai_minimax_depth": 4,
+        "ai_minimax_scoring": 2,
+        "ai_mcts_selection": "ML",
+    }
+
+
 def test_cli_io_split_and_parse_history_with_comments():
     raw = """
     { block comment must be ignored }

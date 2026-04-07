@@ -288,6 +288,50 @@ def test_save_and_load_restore_the_game_and_history(
     assert "1 e1-e2; 2 e9-e8;" in saved
 
 
+def test_save_and_load_restore_program_settings(monkeypatch, capsys, tmp_path: Path):
+    save_path = tmp_path / "config-save.txt"
+    captured = run_shell(
+        monkeypatch,
+        capsys,
+        [
+            "set debug=true",
+            "set ai_mode=minimax",
+            "set ai_time=6",
+            "set ai_minimax_depth=4",
+            "set ai_minimax_scoring=2",
+            "set ai_mcts_selection=ML",
+            f"save {save_path}",
+            "set debug=false",
+            "set ai_mode=iterative",
+            "set ai_time=2",
+            "set ai_minimax_depth=1",
+            "set ai_minimax_scoring=1",
+            "set ai_mcts_selection=UCT",
+            f"load {save_path}",
+            "show configuration",
+            "quit",
+        ],
+    )
+
+    out = captured.out
+    load_idx = out.index(f"Game loaded from {save_path}")
+    after_load = out[load_idx:]
+
+    assert "debug=true" in save_path.read_text(encoding="utf-8")
+    assert "ai-mode=minimax" in save_path.read_text(encoding="utf-8")
+    assert "ai-time=6" in save_path.read_text(encoding="utf-8")
+    assert "ai-minimax-depth=4" in save_path.read_text(encoding="utf-8")
+    assert "ai-minimax-scoring=2" in save_path.read_text(encoding="utf-8")
+    assert "ai-mcts-selection=ML" in save_path.read_text(encoding="utf-8")
+    assert "Current configuration:" in after_load
+    assert "debug=True" in after_load
+    assert "ai_mode=minimax" in after_load
+    assert "ai_time=6" in after_load
+    assert "ai_minimax_depth=4" in after_load
+    assert "ai_minimax_scoring=2" in after_load
+    assert "ai_mcts_selection=ML" in after_load
+
+
 def test_quit_without_changes_skips_the_save_prompt(monkeypatch, capsys):
     captured = run_shell(monkeypatch, capsys, ["quit"])
 
@@ -1161,7 +1205,7 @@ def test_main_interactive_passes_explicit_ai_depth(monkeypatch):
     )
 
     assert cli_mod._main_interactive(["--ai-minimax-depth", "4"]) == 0
-    assert captured[-1]["ai_mode"] == "iterative"
+    assert captured[-1]["ai_mode"] == "minimax"
     assert captured[-1]["ai_minimax_depth"] == 4
     assert captured[-1]["ai_minimax_scoring"] == 1
 

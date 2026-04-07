@@ -5,6 +5,7 @@ from __future__ import annotations
 from ..application.blitz import Blitz
 from ..application.persistence_service import (
     load_blitz_snapshot,
+    load_program_settings,
     load_session,
     parse_history,
     record_to_notation,
@@ -57,6 +58,12 @@ def _load_blitz_snapshot_from_file(path: str) -> BlitzSnapshot | None:
     return load_blitz_snapshot(path)
 
 
+def _load_program_settings_from_file(
+    path: str,
+) -> dict[str, bool | int | None | str]:
+    return load_program_settings(path)
+
+
 def _serialize_game_section(state: GameState) -> str:
     return serialize_game(state)
 
@@ -65,9 +72,15 @@ def _save_session_to_file(
     path: str,
     session: GameSession,
     blitz: Blitz | None = None,
+    program_settings: dict[str, object] | None = None,
 ) -> None:
     snapshot = None if blitz is None else blitz.snapshot()
-    save_session(path, session, blitz_snapshot=snapshot)
+    save_session(
+        path,
+        session,
+        blitz_snapshot=snapshot,
+        program_settings=program_settings,
+    )
 
 
 def _prompt_save_before_quit(

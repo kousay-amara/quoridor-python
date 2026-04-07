@@ -18,7 +18,7 @@ def test_load_or_init_config_creates_minimal_file_when_missing(tmp_path: Path):
     assert "players = 2" in content
     assert "walls = 20" in content
     assert "size = 9" in content
-    assert "ai_mode = iterative" in content
+    assert "ai_mode = minimax" in content
     assert "ai_time = 5" in content
     assert "ai_minimax_depth = none" in content
     assert "ai_minimax_scoring = 1" in content
@@ -90,7 +90,7 @@ def test_load_or_init_config_reads_fractional_time(tmp_path: Path):
         "players": 2,
         "walls": 20,
         "size": 9,
-        "ai_mode": "iterative",
+        "ai_mode": "minimax",
         "ai_time": 5,
         "ai_minimax_depth": None,
         "ai_minimax_scoring": 1,

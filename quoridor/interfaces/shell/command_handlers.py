@@ -48,7 +48,8 @@ def command_load(
     state: Any,
     line: str,
     *,
-    handle_load: Callable[..., tuple[Any, Any, bool, bool]],
+    handle_load: Callable[..., tuple[Any, Any, bool, bool, dict[str, object]]],
+    configure_logging: Callable[[bool, bool], None],
     sync_runtime_config_from_session: Callable[[Any], None],
     sync_active_ai_settings_from_config: Callable[[Any], None],
     contest_error_type: type[Exception],
@@ -57,7 +58,13 @@ def command_load(
     if not file_path:
         raise ValueError("Invalid format. Use: load FILE")
     try:
-        session, blitz, has_unsaved_changes, should_break = handle_load(
+        (
+            session,
+            blitz,
+            has_unsaved_changes,
+            should_break,
+            loaded_program_settings,
+        ) = handle_load(
             state.session,
             file_path,
             state.current_ai_mode,
@@ -69,6 +76,9 @@ def command_load(
         state.session = session
         state.blitz = blitz
         sync_runtime_config_from_session(state)
+        for key, value in loaded_program_settings.items():
+            setattr(state, key, value)
+        configure_logging(state.verbose, state.debug)
         sync_active_ai_settings_from_config(state)
         state.has_unsaved_changes = has_unsaved_changes
         return should_break
@@ -103,6 +113,15 @@ def command_save(
             state.session,
             file_path,
             blitz=state.blitz,
+            program_settings={
+                "verbose": state.verbose,
+                "debug": state.debug,
+                "ai_mode": state.ai_mode,
+                "ai_time": state.ai_time,
+                "ai_minimax_depth": state.ai_minimax_depth,
+                "ai_minimax_scoring": state.ai_minimax_scoring,
+                "ai_mcts_selection": state.ai_mcts_selection,
+            },
         )
         return False
     except OSError as exc:

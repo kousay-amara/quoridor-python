@@ -42,6 +42,7 @@ from .cli_render import (
 )
 from .cli_io import (
     _load_blitz_snapshot_from_file,
+    _load_program_settings_from_file,
     _load_session_from_file,
     _prompt_save_before_quit,
     _save_session_to_file,
@@ -67,6 +68,7 @@ __all__ = [
     "_is_contest_on_cli",
     "_is_time_passed_on_cli",
     "_load_blitz_snapshot_from_file",
+    "_load_program_settings_from_file",
     "_load_session_from_file",
     "_main_contest",
     "_main_gui",

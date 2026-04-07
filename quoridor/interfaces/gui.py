@@ -83,6 +83,9 @@ class QuoridorWindow(Gtk.ApplicationWindow):
     _network_mode: bool = False
     _network_client = None
     _network_player_id: int | None = None
+    _ai_mode: str = "minimax"
+    _ai_time: int = 5
+    _ai_minimax_depth: int | None = None
 
     def __init__(
         self,
@@ -93,7 +96,7 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         blitz=False,
         time_limit=0,
         ai_players: list[int] | None = None,
-        ai_mode: str = "iterative",
+        ai_mode: str = "minimax",
         ai_time: int = 5,
         ai_minimax_depth: int | None = None,
     ):
@@ -1279,7 +1282,14 @@ class QuoridorWindow(Gtk.ApplicationWindow):
             return
 
         try:
-            self.service.save(path)
+            self.service.save(
+                path,
+                program_settings={
+                    "ai_mode": self._ai_mode,
+                    "ai_time": self._ai_time,
+                    "ai_minimax_depth": self._ai_minimax_depth,
+                },
+            )
             self._set_status(f"Saved to: {path}")
         except OSError as exc:
             self._set_status(f"Save failed: {exc}")
@@ -1315,6 +1325,15 @@ class QuoridorWindow(Gtk.ApplicationWindow):
                 fallback_player_types=self.session.player_types,
                 fallback_walls_per_player=self.session.state.remaining_walls,
             )
+            loaded_program_settings = self.service.load_program_settings(path)
+            if "ai_mode" in loaded_program_settings:
+                self._ai_mode = str(loaded_program_settings["ai_mode"])
+            if "ai_time" in loaded_program_settings:
+                self._ai_time = int(loaded_program_settings["ai_time"])
+            if "ai_minimax_depth" in loaded_program_settings:
+                self._ai_minimax_depth = loaded_program_settings[
+                    "ai_minimax_depth"
+                ]
             if self._blitz_timer_id is not None:
                 GLib.source_remove(self._blitz_timer_id)
                 self._blitz_timer_id = None
@@ -1415,7 +1434,7 @@ def main(
     blitz=False,
     time_limit=0,
     ai_players=None,
-    ai_mode="iterative",
+    ai_mode="minimax",
     ai_time=5,
     ai_minimax_depth=None,
 ):

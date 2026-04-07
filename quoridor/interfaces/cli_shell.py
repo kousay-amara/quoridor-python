@@ -751,13 +751,14 @@ def _handle_load(
     ai_minimax_scoring: int,
     *,
     blitz: Blitz,
-) -> tuple[GameSession, Blitz, bool, bool]:
+) -> tuple[GameSession, Blitz, bool, bool, dict[str, object]]:
     service = GameApplicationService(session=session, blitz=blitz)
     session, loaded_blitz = service.load(
         file_path,
         fallback_player_types=session.player_types,
         fallback_walls_per_player=session.state.remaining_walls,
     )
+    loaded_program_settings = service.load_program_settings(file_path)
 
     print(_("Game loaded from {path}").format(path=file_path))
     _print_state(session)
@@ -770,7 +771,13 @@ def _handle_load(
         blitz=loaded_blitz,
         base_unsaved=False,
     )
-    return session, loaded_blitz, has_unsaved_changes, should_break
+    return (
+        session,
+        loaded_blitz,
+        has_unsaved_changes,
+        should_break,
+        loaded_program_settings,
+    )
 
 
 def _handle_save(
@@ -778,9 +785,10 @@ def _handle_save(
     file_path: str,
     *,
     blitz: Blitz,
+    program_settings: dict[str, object] | None = None,
 ) -> bool:
     service = GameApplicationService(session=session, blitz=blitz)
-    service.save(file_path)
+    service.save(file_path, program_settings=program_settings)
     print(_("Game saved to {path}").format(path=file_path))
     return False
 
@@ -1015,10 +1023,12 @@ def _command_help(_state: _ShellState, line: str) -> bool:
 
 
 def _command_load(state: _ShellState, line: str) -> bool:
+    cli_mod = _get_cli_module()
     return shell_command_handlers.command_load(
         state,
         line,
         handle_load=_handle_load,
+        configure_logging=cli_mod._configure_logging,
         sync_runtime_config_from_session=_sync_runtime_config_from_session,
         sync_active_ai_settings_from_config=(
             _sync_active_ai_settings_from_config
@@ -1440,6 +1450,9 @@ def _run_interactive_shell(
         fallback_remaining_walls=_fallback_remaining_walls,
         load_session_from_file=cli_mod._load_session_from_file,
         load_blitz_snapshot_from_file=cli_mod._load_blitz_snapshot_from_file,
+        load_program_settings_from_file=(
+            cli_mod._load_program_settings_from_file
+        ),
         blitz_factory=Blitz,
         format_minutes=_format_minutes,
         print_state=_print_state,

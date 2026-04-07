@@ -15,6 +15,8 @@ def initialize_shell_state(
     fallback_remaining_walls: Callable[[Any], dict[int, int]],
     load_session_from_file: Callable[..., Any],
     load_blitz_snapshot_from_file: Callable[[str], Any],
+    load_program_settings_from_file: Callable[[str], dict[str, object]]
+    | None = None,
     blitz_factory: Callable[..., Any],
     format_minutes: Callable[[float], str],
     print_state: Callable[..., None],
@@ -25,6 +27,19 @@ def initialize_shell_state(
     unbalanced_players_count: int,
     translate: Callable[[str], str],
 ) -> tuple[Any | None, bool]:
+    def _apply_program_settings(settings: dict[str, object]) -> None:
+        for key in (
+            "verbose",
+            "debug",
+            "ai_mode",
+            "ai_time",
+            "ai_minimax_depth",
+            "ai_minimax_scoring",
+            "ai_mcts_selection",
+        ):
+            if key in settings:
+                setattr(config, key, settings[key])
+
     loaded_blitz_snapshot = None
     if save_file:
         session = load_session_from_file(
@@ -32,6 +47,13 @@ def initialize_shell_state(
             fallback_player_types=fallback_player_types(config),
             fallback_walls_per_player=fallback_remaining_walls(config),
         )
+        if load_program_settings_from_file is not None:
+            try:
+                _apply_program_settings(
+                    load_program_settings_from_file(save_file)
+                )
+            except (OSError, ValueError):
+                pass
         print(translate("Loading game from {path}").format(path=save_file))
         try:
             loaded_blitz_snapshot = load_blitz_snapshot_from_file(save_file)

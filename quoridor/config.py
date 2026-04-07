@@ -20,7 +20,7 @@ DEFAULTS: dict[str, ConfigValue] = {
     "players": 2,
     "walls": 20,
     "size": 9,
-    "ai_mode": "iterative",
+    "ai_mode": "minimax",
     "ai_time": 5,
     "ai_minimax_depth": None,
     "ai_minimax_scoring": 1,

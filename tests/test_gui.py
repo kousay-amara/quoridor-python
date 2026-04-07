@@ -439,7 +439,7 @@ def test_undo_redo_actions(gui_mod):
 
 def test_save_response_branches(gui_mod):
     win = _make_window(gui_mod)
-    win.service = types.SimpleNamespace(save=lambda _path: None)
+    win.service = types.SimpleNamespace(save=lambda _path, **_kwargs: None)
 
     dialog = _DummyDialog(path=None)
     win._on_save_response(dialog, gui_mod.Gtk.ResponseType.CANCEL)
@@ -456,7 +456,7 @@ def test_save_response_branches(gui_mod):
     assert win.status.text == "Saved to: /tmp/game.qrd"
 
     win.service = types.SimpleNamespace(
-        save=lambda _path: (_ for _ in ()).throw(OSError("disk"))
+        save=lambda _path, **_kwargs: (_ for _ in ()).throw(OSError("disk"))
     )
     dialog = _DummyDialog(path="/tmp/game.qrd")
     win._on_save_response(dialog, gui_mod.Gtk.ResponseType.ACCEPT)
@@ -496,17 +496,26 @@ def test_load_response_branches(gui_mod):
     win._paused = True
     win._game_over = True
     win.service = types.SimpleNamespace(
-        load=lambda *_args, **_kwargs: (new_session, loaded_blitz)
+        load=lambda *_args, **_kwargs: (new_session, loaded_blitz),
+        load_program_settings=lambda _path: {
+            "ai_mode": "minimax",
+            "ai_time": 6,
+            "ai_minimax_depth": 4,
+        },
     )
     dialog = _DummyDialog(path="/tmp/game.qrd")
     win._on_load_response(dialog, gui_mod.Gtk.ResponseType.ACCEPT)
     assert win.session is new_session
     assert win._paused is False
     assert win._game_over is False
+    assert win._ai_mode == "minimax"
+    assert win._ai_time == 6
+    assert win._ai_minimax_depth == 4
     assert win.status.text == "Loaded from: /tmp/game.qrd"
 
     win.service = types.SimpleNamespace(
-        load=lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("bad"))
+        load=lambda *_args, **_kwargs: (_ for _ in ()).throw(ValueError("bad")),
+        load_program_settings=lambda _path: {},
     )
     dialog = _DummyDialog(path="/tmp/game.qrd")
     win._on_load_response(dialog, gui_mod.Gtk.ResponseType.ACCEPT)

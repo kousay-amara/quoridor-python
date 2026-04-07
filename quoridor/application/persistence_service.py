@@ -18,6 +18,8 @@ from ..interfaces.contest_parser import ContestError, parse_contest_file
 
 _SECTION_RE = re.compile(r"^\[(.+)\]$")
 _BLOCK_COMMENT_RE = re.compile(r"\{.*?\}", re.DOTALL)
+_AI_MODE_VALUES = {"minimax", "iterative", "mcts"}
+_AI_MCTS_SELECTION_VALUES = {"UCT", "ML"}
 
 
 def record_to_notation(record) -> str:
@@ -164,9 +166,67 @@ def _validated_current_settings(raw_text: str) -> dict[str, str]:
     return values
 
 
+def _program_settings_values(
+    values: dict[str, str],
+) -> dict[str, bool | int | None | str]:
+    parsed: dict[str, bool | int | None | str] = {}
+
+    if "verbose" in values:
+        parsed["verbose"] = _parse_bool_value(
+            values["verbose"], label="verbose"
+        )
+    if "debug" in values:
+        parsed["debug"] = _parse_bool_value(values["debug"], label="debug")
+    if "ai-mode" in values:
+        ai_mode = values["ai-mode"].strip().lower()
+        if ai_mode not in _AI_MODE_VALUES:
+            raise ValueError("invalid ai mode")
+        parsed["ai_mode"] = ai_mode
+    if "ai-time" in values:
+        try:
+            ai_time = int(values["ai-time"])
+        except ValueError as exc:
+            raise ValueError("invalid ai time") from exc
+        if ai_time <= 0:
+            raise ValueError("invalid ai time")
+        parsed["ai_time"] = ai_time
+    if "ai-minimax-depth" in values:
+        raw_depth = values["ai-minimax-depth"].strip().lower()
+        if raw_depth in {"", "none"}:
+            parsed["ai_minimax_depth"] = None
+        else:
+            try:
+                depth = int(raw_depth)
+            except ValueError as exc:
+                raise ValueError("invalid ai minimax depth") from exc
+            if depth <= 0:
+                raise ValueError("invalid ai minimax depth")
+            parsed["ai_minimax_depth"] = depth
+    if "ai-minimax-scoring" in values:
+        try:
+            scoring = int(values["ai-minimax-scoring"])
+        except ValueError as exc:
+            raise ValueError("invalid ai minimax scoring") from exc
+        if scoring not in {1, 2, 3}:
+            raise ValueError("invalid ai minimax scoring")
+        parsed["ai_minimax_scoring"] = scoring
+    if "ai-mcts-selection" in values:
+        selection = values["ai-mcts-selection"].strip().upper()
+        if selection not in _AI_MCTS_SELECTION_VALUES:
+            raise ValueError("invalid ai mcts selection")
+        parsed["ai_mcts_selection"] = selection
+
+    return parsed
+
+
+def parse_program_settings(raw_text: str) -> dict[str, bool | int | None | str]:
+    return _program_settings_values(_settings_values(raw_text))
+
+
 def serialize_settings(
     session: GameSession,
     blitz_snapshot: BlitzSnapshot | None = None,
+    program_settings: dict[str, object] | None = None,
 ) -> str:
     players = sorted(session.state.player_positions)
     lines = ["[settings]"]
@@ -177,6 +237,49 @@ def serialize_settings(
         for player_id in players
     ]
     lines.append("player-types=" + " ".join(parts))
+    if program_settings is not None:
+        if "verbose" in program_settings:
+            lines.append(
+                "verbose="
+                + ("true" if bool(program_settings["verbose"]) else "false")
+            )
+        if "debug" in program_settings:
+            lines.append(
+                "debug="
+                + ("true" if bool(program_settings["debug"]) else "false")
+            )
+        ai_mode = program_settings.get("ai_mode", program_settings.get("ai-mode"))
+        if ai_mode is not None:
+            lines.append(f"ai-mode={str(ai_mode).strip().lower()}")
+        ai_time = program_settings.get("ai_time", program_settings.get("ai-time"))
+        if ai_time is not None:
+            lines.append(f"ai-time={int(ai_time)}")
+        ai_depth = program_settings.get(
+            "ai_minimax_depth",
+            program_settings.get("ai-minimax-depth"),
+        )
+        if ai_depth is not None:
+            lines.append(f"ai-minimax-depth={int(ai_depth)}")
+        elif any(
+            key in program_settings
+            for key in ("ai_minimax_depth", "ai-minimax-depth")
+        ):
+            lines.append("ai-minimax-depth=none")
+        ai_scoring = program_settings.get(
+            "ai_minimax_scoring",
+            program_settings.get("ai-minimax-scoring"),
+        )
+        if ai_scoring is not None:
+            lines.append(f"ai-minimax-scoring={int(ai_scoring)}")
+        ai_mcts_selection = program_settings.get(
+            "ai_mcts_selection",
+            program_settings.get("ai-mcts-selection"),
+        )
+        if ai_mcts_selection is not None:
+            lines.append(
+                "ai-mcts-selection="
+                + str(ai_mcts_selection).strip().upper()
+            )
 
     enabled = False
     time_limit = 0
@@ -368,6 +471,7 @@ def load_session(
         _validated_current_settings(raw_text)
         saved_player_types = parse_player_types(raw_text)
         parse_blitz(raw_text)
+        parse_program_settings(raw_text)
     except ValueError as exc:
         raise ContestError(f"invalid save settings in {path}: {exc}") from exc
 
@@ -413,6 +517,14 @@ def load_blitz_snapshot(path: str) -> BlitzSnapshot | None:
     raw_text = Path(path).read_text(encoding="utf-8")
     try:
         return parse_blitz(raw_text)
+    except ValueError as exc:
+        raise ContestError(f"invalid save settings in {path}: {exc}") from exc
+
+
+def load_program_settings(path: str) -> dict[str, bool | int | None | str]:
+    raw_text = Path(path).read_text(encoding="utf-8")
+    try:
+        return parse_program_settings(raw_text)
     except ValueError as exc:
         raise ContestError(f"invalid save settings in {path}: {exc}") from exc
 
@@ -463,9 +575,14 @@ def save_session(
     path: str,
     session: GameSession,
     blitz_snapshot: BlitzSnapshot | None = None,
+    program_settings: dict[str, object] | None = None,
 ) -> None:
     content = (
-        serialize_settings(session, blitz_snapshot)
+        serialize_settings(
+            session,
+            blitz_snapshot,
+            program_settings=program_settings,
+        )
         + "\n"
         + serialize_game(session.state)
         + "\n"
