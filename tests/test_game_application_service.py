@@ -8,6 +8,7 @@ from quoridor.application.ai_logic import evaluate_state
 from quoridor.application.blitz import Blitz
 from quoridor.application.game_application_service import GameApplicationService
 from quoridor.application.game_session import GameSession
+from quoridor.application.minimax_engine import resolve_auto_minimax_depth
 from quoridor.core.game_state import GameState
 
 
@@ -155,11 +156,6 @@ def test_service_hint_modes_and_errors():
             mcts_fn=lambda *_args, **_kwargs: None,
         )
 
-    with pytest.raises(
-        ValueError, match="minimax mode requires ai_minimax_depth"
-    ):
-        service.hint(ai_mode="minimax", ai_time=1, ai_minimax_depth=None)
-
     with pytest.raises(ValueError, match="unsupported AI mode"):
         service.hint(ai_mode="unknown", ai_time=1, ai_minimax_depth=None)
 
@@ -188,6 +184,28 @@ def test_service_hint_passes_selected_minimax_scoring():
     assert observed["score"] == evaluate_state(
         session.state, 1, scoring_type=2
     )
+
+
+def test_service_hint_uses_automatic_depth_for_minimax():
+    session = _make_session()
+    service = GameApplicationService(session=session, blitz=None)
+    called = {"depth": None}
+
+    def fake_minimax(state, *, ai_player_id, depth, eval_fn):
+        assert state is service.session.state
+        assert ai_player_id == 1
+        assert callable(eval_fn)
+        called["depth"] = depth
+        return ("move_pawn", 0, 1)
+
+    service.hint(
+        ai_mode="minimax",
+        ai_time=5,
+        ai_minimax_depth=None,
+        minimax_fn=fake_minimax,
+    )
+
+    assert called["depth"] == resolve_auto_minimax_depth(5)
 
 
 def test_service_hint_rejects_terminal_state():

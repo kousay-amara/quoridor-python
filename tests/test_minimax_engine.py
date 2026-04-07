@@ -66,6 +66,14 @@ def test_find_best_move_minimax_returns_current_best_on_timeout(monkeypatch):
     assert move in legal_moves
 
 
+def test_resolve_auto_minimax_depth_uses_time_thresholds():
+    assert engine.resolve_auto_minimax_depth(0.5) == 1
+    assert engine.resolve_auto_minimax_depth(2.0) == 2
+    assert engine.resolve_auto_minimax_depth(5.0) == 3
+    assert engine.resolve_auto_minimax_depth(10.0) == 4
+    assert engine.resolve_auto_minimax_depth(20.0) == 5
+
+
 def test_iterative_deepening_keeps_last_completed_result(monkeypatch):
     state = _build_state()
     depth_calls: list[int] = []

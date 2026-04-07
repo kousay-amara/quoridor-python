@@ -18,6 +18,7 @@ from .mcts_engine import mcts_search
 from .minimax_engine import (
     find_best_move_iterative,
     find_best_move_minimax,
+    resolve_auto_minimax_depth,
 )
 from .ai_logic import evaluate_state
 
@@ -319,12 +320,15 @@ class GameSession:
                 max_depth=depth,
             )
         elif mode == "minimax":
-            if depth is None:
-                raise ValueError("minimax mode requires a fixed depth")
+            resolved_depth = (
+                depth
+                if depth is not None
+                else resolve_auto_minimax_depth(time_limit_sec)
+            )
             move = find_best_move_minimax(
                 self.state,
                 ai_player_id=player_id,
-                depth=depth,
+                depth=resolved_depth,
                 eval_fn=eval_fn,
             )
         else:

@@ -395,11 +395,13 @@ def _parse_new_config(state: "_ShellState", line: str) -> _ShellConfig:
         raise ValueError("--ai-time must be > 0")
     if args.ai_minimax_depth is not None and args.ai_minimax_depth <= 0:
         raise ValueError("--ai-minimax-depth must be > 0")
-    if args.ai_mode == AI_MODE_MINIMAX and args.ai_minimax_depth is None:
-        raise ValueError("--ai-mode minimax requires --ai-minimax-depth")
     if any(pid > args.players for pid in args.ai_player):
         raise ValueError("--ai-player id must be <= --players")
-    if args.ai_mode == AI_MODE_MINIMAX and _is_ai_time_passed_on_cli(argv):
+    if (
+        args.ai_mode == AI_MODE_MINIMAX
+        and args.ai_minimax_depth is not None
+        and _is_ai_time_passed_on_cli(argv)
+    ):
         print("warning: --ai-time is ignored in minimax mode")
 
     return _ShellConfig(
@@ -557,8 +559,6 @@ def _handle_set(state: "_ShellState", line: str) -> None:
             raise ValueError(
                 "ai_mode must be one of: minimax, iterative, mcts"
             )
-        if normalized == AI_MODE_MINIMAX and state.ai_minimax_depth is None:
-            raise ValueError("ai_mode=minimax requires ai_minimax_depth")
         state.ai_mode = normalized
         parsed_value = state.ai_mode
     elif param == "ai_time":
@@ -567,10 +567,6 @@ def _handle_set(state: "_ShellState", line: str) -> None:
     elif param == "ai_minimax_depth":
         normalized = value.lower()
         if normalized in {"auto", "none"}:
-            if state.ai_mode == AI_MODE_MINIMAX:
-                raise ValueError(
-                    "ai_minimax_depth cannot be auto/none in minimax mode"
-                )
             state.ai_minimax_depth = None
         else:
             state.ai_minimax_depth = _parse_positive_int(

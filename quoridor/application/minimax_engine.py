@@ -23,6 +23,21 @@ class SearchTimeout(RuntimeError):
     """Raised when a timed search reaches its deadline."""
 
 
+def resolve_auto_minimax_depth(time_limit_sec: float) -> int:
+    """Return a fixed minimax depth chosen from the available time."""
+    if time_limit_sec <= 0:
+        raise ValueError("time_limit_sec must be > 0")
+    if time_limit_sec <= 1.0:
+        return 1
+    if time_limit_sec <= 3.0:
+        return 2
+    if time_limit_sec <= 6.0:
+        return 3
+    if time_limit_sec <= 12.0:
+        return 4
+    return 5
+
+
 def winner_id(state: GameState) -> int | None:
     """Return winner player id if any player reached their target edge."""
     player_ids = state.active_player_ids()

@@ -361,6 +361,32 @@ def test_apply_game_config_updates_runtime_and_restarts(gui_mod):
     assert win.status.text == "Configuration applied to a new game."
 
 
+def test_apply_game_config_accepts_auto_depth_for_minimax(gui_mod):
+    win = _make_window(gui_mod)
+    called = {"new_game": 0}
+    win._action_new_game = lambda: called.__setitem__(
+        "new_game", called["new_game"] + 1
+    )
+
+    win._apply_game_config(
+        {
+            "players": "2",
+            "board_size": "9",
+            "walls_per_player": "20",
+            "blitz": "false",
+            "time_limit": "1",
+            "ai_players": "2",
+            "ai_mode": "minimax",
+            "ai_time": "5",
+            "ai_minimax_depth": "none",
+        }
+    )
+
+    assert win._ai_mode == "minimax"
+    assert win._ai_minimax_depth is None
+    assert called["new_game"] == 1
+
+
 def test_action_show_config_routes_to_game_configuration(gui_mod):
     win = _make_window(gui_mod)
     called = {"config": 0, "shortcuts": 0}

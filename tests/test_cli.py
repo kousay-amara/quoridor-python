@@ -1002,12 +1002,13 @@ def test_main_interactive_shows_version_and_validates_arguments(
     monkeypatch,
     capsys,
 ):
+    captured = []
     patch_main_defaults(monkeypatch)
     monkeypatch.setattr(cli_mod, "_get_version", lambda: "9.9.9")
     monkeypatch.setattr(
         cli_mod,
         "_run_interactive_shell",
-        lambda **_kwargs: None,
+        lambda **kwargs: captured.append(kwargs),
     )
 
     assert cli_mod._main_interactive(["--version"]) == 0
@@ -1019,8 +1020,10 @@ def test_main_interactive_shows_version_and_validates_arguments(
         cli_mod._main_interactive(["--ai-time", "0"])
     with pytest.raises(SystemExit):
         cli_mod._main_interactive(["--ai-minimax-depth", "0"])
-    with pytest.raises(SystemExit):
-        cli_mod._main_interactive(["--ai-mode", "minimax"])
+
+    assert cli_mod._main_interactive(["--ai-mode", "minimax"]) == 0
+    assert captured[-1]["ai_mode"] == "minimax"
+    assert captured[-1]["ai_minimax_depth"] is None
 
 
 def test_main_interactive_routes_gui_requests_to_main_gui(monkeypatch):
@@ -1161,6 +1164,25 @@ def test_main_interactive_passes_explicit_ai_depth(monkeypatch):
     assert captured[-1]["ai_mode"] == "iterative"
     assert captured[-1]["ai_minimax_depth"] == 4
     assert captured[-1]["ai_minimax_scoring"] == 1
+
+
+def test_main_interactive_keeps_auto_depth_for_minimax_when_unspecified(
+    monkeypatch,
+):
+    captured = []
+
+    patch_main_defaults(monkeypatch, time=42)
+    monkeypatch.setattr(cli_mod, "_configure_logging", lambda *_args: None)
+    monkeypatch.setattr(
+        cli_mod,
+        "_run_interactive_shell",
+        lambda **kwargs: captured.append(kwargs),
+    )
+
+    assert cli_mod._main_interactive(["--ai-mode", "minimax", "--ai-time", "6"]) == 0
+    assert captured[-1]["ai_mode"] == "minimax"
+    assert captured[-1]["ai_time"] == 6
+    assert captured[-1]["ai_minimax_depth"] is None
 
 
 def test_main_interactive_uses_ai_defaults_from_config(monkeypatch):

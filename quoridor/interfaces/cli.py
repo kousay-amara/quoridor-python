@@ -255,8 +255,6 @@ def _main_interactive(argv: list[str]) -> int:
         parser.error("--ai-time must be > 0")
     if args.ai_minimax_depth is not None and args.ai_minimax_depth <= 0:
         parser.error("--ai-minimax-depth must be > 0")
-    if args.ai_mode == AI_MODE_MINIMAX and args.ai_minimax_depth is None:
-        parser.error("--ai-mode minimax requires --ai-minimax-depth")
 
     _configure_logging(args.verbose, args.debug)
     LOGGER.debug("Loaded defaults from .qoridorrc: %s", defaults)
@@ -268,7 +266,11 @@ def _main_interactive(argv: list[str]) -> int:
             "warning: --time is ignored unless --blitz is enabled\n"
         )
         time_limit = float(defaults.get("time", DEFAULTS["time"]))
-    if args.ai_mode == AI_MODE_MINIMAX and _is_ai_time_passed_on_cli(argv):
+    if (
+        args.ai_mode == AI_MODE_MINIMAX
+        and args.ai_minimax_depth is not None
+        and _is_ai_time_passed_on_cli(argv)
+    ):
         sys.stderr.write("warning: --ai-time is ignored in minimax mode\n")
     if args.ai_mode == "mcts" and "--ai-minimax-scoring" in sys.argv:
         sys.stderr.write(

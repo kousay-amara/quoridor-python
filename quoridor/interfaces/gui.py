@@ -1007,8 +1007,6 @@ class QuoridorWindow(Gtk.ApplicationWindow):
             raise ValueError("ai_time must be > 0")
         if ai_depth is not None and ai_depth <= 0:
             raise ValueError("ai_minimax_depth must be > 0 when set")
-        if ai_mode == "minimax" and ai_depth is None:
-            raise ValueError("ai_minimax_depth is required for minimax mode")
 
         self._num_players = players
         self._init_board_size = size
