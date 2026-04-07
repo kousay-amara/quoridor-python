@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from quoridor.application.ai_logic import evaluate_state
 from quoridor.application.blitz import Blitz
 from quoridor.application.game_application_service import GameApplicationService
 from quoridor.application.game_session import GameSession
@@ -87,18 +88,27 @@ def test_service_hint_modes_and_errors():
         mcts_called["ok"] = True
         return ("move_pawn", 0, 1)
 
-    def fake_iterative(state, *, ai_player_id, time_limit_sec, max_depth):
+    def fake_iterative(
+        state,
+        *,
+        ai_player_id,
+        eval_fn,
+        time_limit_sec,
+        max_depth,
+    ):
         assert state is service.session.state
         assert ai_player_id == 1
+        assert callable(eval_fn)
         assert time_limit_sec == 3
         assert max_depth == 4
         iterative_called["ok"] = True
         return ("move_pawn", 0, 1)
 
-    def fake_minimax(state, *, ai_player_id, depth):
+    def fake_minimax(state, *, ai_player_id, depth, eval_fn):
         assert state is service.session.state
         assert ai_player_id == 1
         assert depth == 2
+        assert callable(eval_fn)
         minimax_called["ok"] = True
         return ("move_pawn", 0, 1)
 
@@ -118,6 +128,7 @@ def test_service_hint_modes_and_errors():
             ai_mode="iterative",
             ai_time=3,
             ai_minimax_depth=4,
+            ai_minimax_scoring=1,
             iterative_fn=fake_iterative,
         )
         == ("move_pawn", 0, 1)
@@ -129,6 +140,7 @@ def test_service_hint_modes_and_errors():
             ai_mode="minimax",
             ai_time=1,
             ai_minimax_depth=2,
+            ai_minimax_scoring=1,
             minimax_fn=fake_minimax,
         )
         == ("move_pawn", 0, 1)
@@ -150,6 +162,32 @@ def test_service_hint_modes_and_errors():
 
     with pytest.raises(ValueError, match="unsupported AI mode"):
         service.hint(ai_mode="unknown", ai_time=1, ai_minimax_depth=None)
+
+
+def test_service_hint_passes_selected_minimax_scoring():
+    session = _make_session()
+    service = GameApplicationService(session=session, blitz=None)
+
+    observed = {"score": None}
+
+    def fake_minimax(state, *, ai_player_id, depth, eval_fn):
+        assert state is service.session.state
+        assert ai_player_id == 1
+        assert depth == 2
+        observed["score"] = eval_fn(state, ai_player_id)
+        return ("move_pawn", 0, 1)
+
+    service.hint(
+        ai_mode="minimax",
+        ai_time=1,
+        ai_minimax_depth=2,
+        ai_minimax_scoring=2,
+        minimax_fn=fake_minimax,
+    )
+
+    assert observed["score"] == evaluate_state(
+        session.state, 1, scoring_type=2
+    )
 
 
 def test_service_hint_rejects_terminal_state():

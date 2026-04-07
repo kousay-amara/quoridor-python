@@ -21,6 +21,7 @@ def test_load_or_init_config_creates_minimal_file_when_missing(tmp_path: Path):
     assert "ai_mode = iterative" in content
     assert "ai_time = 5" in content
     assert "ai_minimax_depth = none" in content
+    assert "ai_minimax_scoring = 1" in content
 
 
 def test_load_or_init_config_reads_valid_values(tmp_path: Path):
@@ -36,6 +37,7 @@ def test_load_or_init_config_reads_valid_values(tmp_path: Path):
         "ai_mode = mcts\n"
         "ai_time = 7\n"
         "ai_minimax_depth = 3\n"
+        "ai_minimax_scoring = 2\n"
         "ai_players = 1, 3\n",
         encoding="utf-8",
     )
@@ -52,6 +54,7 @@ def test_load_or_init_config_reads_valid_values(tmp_path: Path):
         "ai_mode": "mcts",
         "ai_time": 7,
         "ai_minimax_depth": 3,
+        "ai_minimax_scoring": 2,
         "ai_players": [1, 3],
     }
 
@@ -90,6 +93,7 @@ def test_load_or_init_config_reads_fractional_time(tmp_path: Path):
         "ai_mode": "iterative",
         "ai_time": 5,
         "ai_minimax_depth": None,
+        "ai_minimax_scoring": 1,
         "ai_players": [],
     }
 

@@ -22,6 +22,7 @@ MAIN_DEFAULTS = {
     "size": 9,
     "verbose": False,
     "blitz": False,
+    "ai_minimax_scoring": 1,
 }
 
 SHELL_DEFAULTS = {
@@ -35,6 +36,7 @@ SHELL_DEFAULTS = {
     "ai_mode": "minimax",
     "ai_time": 5,
     "ai_minimax_depth": 2,
+    "ai_minimax_scoring": 1,
     "verbose": False,
     "debug": False,
 }
@@ -99,10 +101,11 @@ def test_help_commands_explain_available_actions(monkeypatch, capsys):
 
 
 def test_hint_uses_minimax_depth_from_runtime_settings(monkeypatch, capsys):
-    called = {"depth": None}
+    called = {"depth": None, "score": None}
 
-    def fake_minimax(state, ai_player_id, depth):
+    def fake_minimax(state, ai_player_id, depth, eval_fn):
         called["depth"] = depth
+        called["score"] = eval_fn(state, ai_player_id)
         return (
             "pawn",
             state.player_positions[ai_player_id] + state.board_size,
@@ -114,14 +117,16 @@ def test_hint_uses_minimax_depth_from_runtime_settings(monkeypatch, capsys):
 
     assert "Best hint action: e1-e2" in captured.out
     assert called["depth"] == 2
+    assert isinstance(called["score"], float)
 
 
 def test_hint_uses_iterative_time_limit_when_requested(monkeypatch, capsys):
-    called = {"time_limit_sec": None, "max_depth": None}
+    called = {"time_limit_sec": None, "max_depth": None, "score": None}
 
-    def fake_iterative(state, ai_player_id, time_limit_sec, max_depth):
+    def fake_iterative(state, ai_player_id, eval_fn, time_limit_sec, max_depth):
         called["time_limit_sec"] = time_limit_sec
         called["max_depth"] = max_depth
+        called["score"] = eval_fn(state, ai_player_id)
         return (
             "pawn",
             state.player_positions[ai_player_id] + state.board_size,
@@ -138,7 +143,9 @@ def test_hint_uses_iterative_time_limit_when_requested(monkeypatch, capsys):
     )
 
     assert "Best hint action: e1-e2" in captured.out
-    assert called == {"time_limit_sec": 3, "max_depth": 2}
+    assert called["time_limit_sec"] == 3
+    assert called["max_depth"] == 2
+    assert isinstance(called["score"], float)
 
 
 def test_hint_uses_mcts_time_limit_when_requested(monkeypatch, capsys):
@@ -350,7 +357,7 @@ def test_new_accepts_cli_style_options(monkeypatch, capsys):
             (
                 "new --players 4 --walls -1 --size 11 --blitz --time 0.5 "
                 "--ai-player 2 --ai-player 4 --ai-mode iterative "
-                "--ai-time 3 --ai-minimax-depth 5"
+                "--ai-time 3 --ai-minimax-depth 5 --ai-minimax-scoring 3"
             ),
             "show configuration",
             "quit",
@@ -366,6 +373,7 @@ def test_new_accepts_cli_style_options(monkeypatch, capsys):
     assert "ai_mode=iterative" in out
     assert "ai_time=3" in out
     assert "ai_minimax_depth=5" in out
+    assert "ai_minimax_scoring=3" in out
     assert "blitz=True" in out
     assert "time_limit=0.5" in out
 
@@ -388,6 +396,7 @@ def test_set_updates_defaults_and_new_reuses_them(monkeypatch, capsys):
             "set ai_mode=iterative",
             "set ai_time=3",
             "set ai_minimax_depth=5",
+            "set ai_minimax_scoring=2",
             "show configuration",
             "new",
             "show configuration",
@@ -407,6 +416,7 @@ def test_set_updates_defaults_and_new_reuses_them(monkeypatch, capsys):
     assert "Configuration updated: ai_mode=iterative" in out
     assert "Configuration updated: ai_time=3" in out
     assert "Configuration updated: ai_minimax_depth=5" in out
+    assert "Configuration updated: ai_minimax_scoring=2" in out
     assert "New game started (blitz: 0.5 min/player)." in out
     assert "verbose=True" in out
     assert "debug=True" in out
@@ -417,6 +427,7 @@ def test_set_updates_defaults_and_new_reuses_them(monkeypatch, capsys):
     assert "ai_mode=iterative" in out
     assert "ai_time=3" in out
     assert "ai_minimax_depth=5" in out
+    assert "ai_minimax_scoring=2" in out
     assert "blitz=True" in out
     assert "time_limit=0.5" in out
 
@@ -471,6 +482,7 @@ def test_set_ai_search_settings_apply_only_after_new(monkeypatch, capsys):
             "set ai_mode=iterative",
             "set ai_time=1",
             "set ai_minimax_depth=5",
+            "set ai_minimax_scoring=3",
             "e1-e2",
             "quit",
             "n",
@@ -479,16 +491,19 @@ def test_set_ai_search_settings_apply_only_after_new(monkeypatch, capsys):
         ai_mode="minimax",
         ai_time=7,
         ai_minimax_depth=2,
+        ai_minimax_scoring=1,
     )
 
     out = captured.out
     assert "Configuration updated: ai_mode=iterative" in out
     assert "Configuration updated: ai_time=1" in out
     assert "Configuration updated: ai_minimax_depth=5" in out
+    assert "Configuration updated: ai_minimax_scoring=3" in out
     assert len(calls) == 1
     assert calls[0]["mode"] == "minimax"
     assert calls[0]["time_limit_sec"] == 7
     assert calls[0]["depth"] == 2
+    assert calls[0]["minimax_scoring"] == 1
 
 
 def test_set_rejects_invalid_format_and_values(monkeypatch, capsys):
@@ -532,6 +547,7 @@ def test_show_configuration_prints_runtime_settings(monkeypatch, capsys):
         ai_mode="minimax",
         ai_time=9,
         ai_minimax_depth=3,
+        ai_minimax_scoring=2,
     )
 
     out = captured.out
@@ -540,6 +556,7 @@ def test_show_configuration_prints_runtime_settings(monkeypatch, capsys):
     assert "walls_per_player=unlimited" in out
     assert "board_size=11" in out
     assert "ai_players=[2, 4]" in out
+    assert "ai_minimax_scoring=2" in out
     assert "blitz=True" in out
     assert "time_limit=0.5" in out
 
@@ -1126,6 +1143,7 @@ def test_main_interactive_ignores_time_without_blitz(monkeypatch, capsys):
     assert cli_mod._main_interactive(["--blitz", "--time", "0.5"]) == 0
     assert captured[-1]["time_limit"] == 0.5
     assert captured[-1]["ai_minimax_depth"] is None
+    assert captured[-1]["ai_minimax_scoring"] == 1
 
 
 def test_main_interactive_passes_explicit_ai_depth(monkeypatch):
@@ -1142,6 +1160,7 @@ def test_main_interactive_passes_explicit_ai_depth(monkeypatch):
     assert cli_mod._main_interactive(["--ai-minimax-depth", "4"]) == 0
     assert captured[-1]["ai_mode"] == "iterative"
     assert captured[-1]["ai_minimax_depth"] == 4
+    assert captured[-1]["ai_minimax_scoring"] == 1
 
 
 def test_main_interactive_uses_ai_defaults_from_config(monkeypatch):
@@ -1153,6 +1172,7 @@ def test_main_interactive_uses_ai_defaults_from_config(monkeypatch):
         ai_mode="mcts",
         ai_time=9,
         ai_minimax_depth=3,
+        ai_minimax_scoring=2,
         ai_players=[2, 4],
     )
     monkeypatch.setattr(cli_mod, "_configure_logging", lambda *_args: None)
@@ -1166,4 +1186,5 @@ def test_main_interactive_uses_ai_defaults_from_config(monkeypatch):
     assert captured[-1]["ai_mode"] == "mcts"
     assert captured[-1]["ai_time"] == 9
     assert captured[-1]["ai_minimax_depth"] == 3
+    assert captured[-1]["ai_minimax_scoring"] == 2
     assert captured[-1]["ai_players"] == [2, 4]

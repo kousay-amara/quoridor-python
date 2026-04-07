@@ -23,6 +23,7 @@ DEFAULTS: dict[str, ConfigValue] = {
     "ai_mode": "iterative",
     "ai_time": 5,
     "ai_minimax_depth": None,
+    "ai_minimax_scoring": 1,
     "ai_players": [],
 }
 
@@ -46,6 +47,7 @@ def _write_minimal_config(path: Path) -> None:
         "ai_mode": str(DEFAULTS["ai_mode"]),
         "ai_time": str(DEFAULTS["ai_time"]),
         "ai_minimax_depth": "none",
+        "ai_minimax_scoring": str(DEFAULTS["ai_minimax_scoring"]),
         "ai_players": "",
     }
     with path.open("w", encoding="utf-8") as stream:
@@ -155,6 +157,14 @@ def load_or_init_config(
             if depth <= 0:
                 raise ValueError("ai_minimax_depth must be > 0")
             values["ai_minimax_depth"] = depth
+
+        scoring = section.getint(
+            "ai_minimax_scoring",
+            fallback=int(values["ai_minimax_scoring"]),
+        )
+        if scoring not in {1, 2, 3}:
+            raise ValueError("ai_minimax_scoring must be one of: 1, 2, 3")
+        values["ai_minimax_scoring"] = scoring
 
         values["ai_players"] = _parse_ai_players(
             section.get("ai_players", fallback="")

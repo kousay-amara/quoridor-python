@@ -8,6 +8,7 @@ from pathlib import Path
 
 from .cli_constants import (
     AI_MINIMAX_DEPTH_DEFAULT,
+    AI_MINIMAX_SCORING_DEFAULT,
     AI_MODE_DEFAULT,
     AI_MODE_ITERATIVE,
     AI_MODE_MINIMAX,
@@ -158,6 +159,15 @@ def _build_parser(
         if not isinstance(depth_default, int) or depth_default <= 0:
             depth_default = AI_MINIMAX_DEPTH_DEFAULT
 
+    scoring_default = defaults.get(
+        "ai_minimax_scoring", AI_MINIMAX_SCORING_DEFAULT
+    )
+    if (
+        not isinstance(scoring_default, int)
+        or scoring_default not in {1, 2, 3}
+    ):
+        scoring_default = AI_MINIMAX_SCORING_DEFAULT
+
     parser = QuoridorArgumentParser(
         prog=_cli_prog_name(),
         description=_("Quoridor game command-line interface."),
@@ -274,7 +284,7 @@ def _build_parser(
         "--ai-minimax-scoring",
         type=int,
         choices=[1, 2, 3],
-        default=1,
+        default=scoring_default,
         help=_("AI scoring type (1: Default, 2: Material, 3: Hybrid)"),
     )
     parser.add_argument(

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from functools import partial
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -18,6 +19,7 @@ from .minimax_engine import (
     find_best_move_iterative,
     find_best_move_minimax,
 )
+from .ai_logic import evaluate_state
 
 WallOrientation = Literal["vertical", "horizontal"]
 AIMove = tuple[Any, ...]
@@ -293,12 +295,15 @@ class GameSession:
         mode: str = "iterative",
         depth: int | None = None,
         time_limit_sec: float = 5.0,
+        minimax_scoring: int = 1,
         mcts_selection: str = "UCT",
     ) -> AIMove:
         """Compute the current AI player's move without applying it."""
         player_id = self.state.current_player
         if self._player_type(player_id) != "ai":
             raise ValueError(f"player {player_id} is not an AI player")
+
+        eval_fn = partial(evaluate_state, scoring_type=minimax_scoring)
 
         if mode == "mcts":
             kwargs: dict[str, object] = {"time_limit": time_limit_sec}
@@ -309,6 +314,7 @@ class GameSession:
             move = find_best_move_iterative(
                 self.state,
                 ai_player_id=player_id,
+                eval_fn=eval_fn,
                 time_limit_sec=time_limit_sec,
                 max_depth=depth,
             )
@@ -319,6 +325,7 @@ class GameSession:
                 self.state,
                 ai_player_id=player_id,
                 depth=depth,
+                eval_fn=eval_fn,
             )
         else:
             raise ValueError(f"unsupported AI mode: {mode}")
@@ -361,12 +368,14 @@ class GameSession:
         mode: str = "iterative",
         depth: int | None = None,
         time_limit_sec: float = 5.0,
+        minimax_scoring: int = 1,
     ) -> MoveRecord:
         """Compute and play the current AI player's move."""
         move = self.compute_ai_move(
             mode=mode,
             depth=depth,
             time_limit_sec=time_limit_sec,
+            minimax_scoring=minimax_scoring,
         )
         return self.apply_ai_move(move)
 

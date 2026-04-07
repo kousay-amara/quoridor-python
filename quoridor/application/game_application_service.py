@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import partial
 
 from ..core.notation import get_edges_for_wall, get_node_from_notation
 from ..core.validators import validate_pawn_move, validate_wall
@@ -14,6 +15,7 @@ from .minimax_engine import (
     find_best_move_iterative,
     find_best_move_minimax,
 )
+from .ai_logic import evaluate_state
 from .persistence_service import (
     load_blitz_snapshot,
     load_session,
@@ -71,6 +73,7 @@ class GameApplicationService:
         ai_mode: str,
         ai_time: int,
         ai_minimax_depth: int | None,
+        ai_minimax_scoring: int = 1,
         mcts_fn=None,
         iterative_fn=None,
         minimax_fn=None,
@@ -86,6 +89,7 @@ class GameApplicationService:
             iterative_fn = find_best_move_iterative
         if minimax_fn is None:
             minimax_fn = find_best_move_minimax
+        eval_fn = partial(evaluate_state, scoring_type=ai_minimax_scoring)
         if ai_mode == "mcts":
             move = mcts_fn(self.session.state, time_limit=ai_time)
             if move is None:
@@ -96,6 +100,7 @@ class GameApplicationService:
             return iterative_fn(
                 self.session.state,
                 ai_player_id=current,
+                eval_fn=eval_fn,
                 time_limit_sec=ai_time,
                 max_depth=ai_minimax_depth,
             )
@@ -107,6 +112,7 @@ class GameApplicationService:
                 self.session.state,
                 ai_player_id=current,
                 depth=ai_minimax_depth,
+                eval_fn=eval_fn,
             )
 
         raise ValueError(f"unsupported AI mode: {ai_mode}")

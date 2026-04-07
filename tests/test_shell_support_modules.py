@@ -124,6 +124,7 @@ def test_bootstrap_initialize_state_for_load_and_new_paths(capsys):
         time_limit=15,
         blitz_enabled=False,
         ai_minimax_depth=None,
+        ai_minimax_scoring=1,
         ai_mode="iterative",
         ai_time=4,
         ai_mcts_selection="UCT",
@@ -167,6 +168,7 @@ def test_bootstrap_initialize_state_for_load_and_new_paths(capsys):
         time_limit=30,
         blitz_enabled=True,
         ai_minimax_depth=2,
+        ai_minimax_scoring=3,
         ai_mode="minimax",
         ai_time=5,
         ai_mcts_selection="PUCT",
@@ -201,6 +203,7 @@ def test_bootstrap_initialize_state_for_load_and_new_paths(capsys):
     assert state is not None
     assert state.players == 3
     assert state.ai_players == [2]
+    assert state.ai_minimax_scoring == 3
     assert state.ai_mcts_selection == "PUCT"
     out = capsys.readouterr().out
     assert "New game started (blitz: 30 min/player)." in out

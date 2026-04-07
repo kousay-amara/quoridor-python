@@ -23,6 +23,7 @@ class _ShellConfig:
     ai_mode: str
     ai_time: int
     ai_minimax_depth: int | None
+    ai_minimax_scoring: int
     ai_mcts_selection: str = "UCT"
 
 
@@ -32,10 +33,12 @@ class _SavedLocalShellState:
         *,
         session: GameSession,
         has_unsaved_changes: bool,
+        ai_minimax_scoring: int,
         ai_mcts_selection: str,
         current_ai_mode: str,
         current_ai_time: int,
         current_ai_minimax_depth: int | None,
+        current_ai_minimax_scoring: int,
         current_ai_mcts_selection: str,
         players: int,
         walls_per_player: int,
@@ -47,10 +50,12 @@ class _SavedLocalShellState:
     ) -> None:
         self.session = session
         self.has_unsaved_changes = has_unsaved_changes
+        self.ai_minimax_scoring = ai_minimax_scoring
         self.ai_mcts_selection = ai_mcts_selection
         self.current_ai_mode = current_ai_mode
         self.current_ai_time = current_ai_time
         self.current_ai_minimax_depth = current_ai_minimax_depth
+        self.current_ai_minimax_scoring = current_ai_minimax_scoring
         self.current_ai_mcts_selection = current_ai_mcts_selection
         self.players = players
         self.walls_per_player = walls_per_player
@@ -70,10 +75,12 @@ class _ShellState:
     ai_mode: str
     ai_time: int
     ai_minimax_depth: int | None
+    ai_minimax_scoring: int
     ai_mcts_selection: str
     current_ai_mode: str
     current_ai_time: int
     current_ai_minimax_depth: int | None
+    current_ai_minimax_scoring: int
     current_ai_mcts_selection: str
     players: int
     walls_per_player: int

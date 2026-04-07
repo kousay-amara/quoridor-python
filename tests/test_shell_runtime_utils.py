@@ -140,6 +140,7 @@ def test_auto_play_ai_until_human_or_end_winner_and_timeout_paths(capsys):
         ai_mode="minimax",
         ai_time=3,
         ai_minimax_depth=2,
+        ai_minimax_scoring=3,
         blitz=_FakeBlitz(enabled=False),
         print_state=lambda _s: print("STATE"),
         timeout_handler=lambda *_a, **_k: False,
@@ -164,6 +165,7 @@ def test_auto_play_ai_until_human_or_end_winner_and_timeout_paths(capsys):
         ai_mode="minimax",
         ai_time=3,
         ai_minimax_depth=2,
+        ai_minimax_scoring=2,
         blitz=_FakeBlitz(enabled=True, consume_timeout=True),
         print_state=lambda _s: None,
         timeout_handler=lambda *_a, **_k: True,
@@ -183,6 +185,7 @@ def test_run_auto_play_interrupt_handling_and_input_paths(monkeypatch, capsys):
         "minimax",
         1,
         1,
+        1,
         blitz=_FakeBlitz(),
         auto_play_fn=ok_auto_play,
     )
@@ -197,6 +200,7 @@ def test_run_auto_play_interrupt_handling_and_input_paths(monkeypatch, capsys):
     result = runtime_mod.run_auto_play_with_interrupt_handling(
         SimpleNamespace(),
         "minimax",
+        1,
         1,
         1,
         blitz=_FakeBlitz(),

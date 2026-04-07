@@ -80,6 +80,10 @@ else:
 
 
 class QuoridorWindow(Gtk.ApplicationWindow):
+    _network_mode: bool = False
+    _network_client = None
+    _network_player_id: int | None = None
+
     def __init__(
         self,
         app: Gtk.Application,

@@ -23,6 +23,7 @@ from ..core.move_record import GameSnapshot
 from ..core.notation import get_edges_for_wall, get_node_from_notation
 from ..core.validators import validate_pawn_move, validate_wall
 from .cli_constants import (
+    AI_MINIMAX_SCORING_DEFAULT,
     AI_MODE_ITERATIVE,
     AI_MODE_MINIMAX,
     AI_MODE_MCTS,
@@ -156,6 +157,7 @@ def _config_from_state(state: "_ShellState") -> _ShellConfig:
         ai_mode=state.ai_mode,
         ai_time=state.ai_time,
         ai_minimax_depth=state.ai_minimax_depth,
+        ai_minimax_scoring=state.ai_minimax_scoring,
         ai_mcts_selection=state.ai_mcts_selection,
     )
 
@@ -283,6 +285,7 @@ def _start_shell_session(
         config.ai_mode,
         config.ai_time,
         config.ai_minimax_depth,
+        config.ai_minimax_scoring,
         blitz=blitz_state,
         ai_mcts_selection=config.ai_mcts_selection,
     )
@@ -351,6 +354,12 @@ def _build_new_argument_parser(
         default=current_config.ai_minimax_depth,
     )
     parser.add_argument(
+        "--ai-minimax-scoring",
+        type=int,
+        choices=[1, 2, 3],
+        default=current_config.ai_minimax_scoring,
+    )
+    parser.add_argument(
         "--ai-mcts-selection",
         choices=[
             parser_mod.AI_MCTS_SELECTION_UCT,
@@ -405,6 +414,7 @@ def _parse_new_config(state: "_ShellState", line: str) -> _ShellConfig:
         ai_mode=args.ai_mode,
         ai_time=args.ai_time,
         ai_minimax_depth=args.ai_minimax_depth,
+        ai_minimax_scoring=args.ai_minimax_scoring,
         ai_mcts_selection=args.ai_mcts_selection,
     )
 
@@ -426,6 +436,7 @@ _SET_ALIASES = {
     "ai_mode": "ai_mode",
     "ai_time": "ai_time",
     "ai_minimax_depth": "ai_minimax_depth",
+    "ai_minimax_scoring": "ai_minimax_scoring",
     "ai_mcts_selection": "ai_mcts_selection",
 }
 
@@ -479,6 +490,7 @@ def _sync_active_ai_settings_from_config(state: "_ShellState") -> None:
     state.current_ai_mode = state.ai_mode
     state.current_ai_time = state.ai_time
     state.current_ai_minimax_depth = state.ai_minimax_depth
+    state.current_ai_minimax_scoring = state.ai_minimax_scoring
     state.current_ai_mcts_selection = state.ai_mcts_selection
 
 
@@ -565,6 +577,12 @@ def _handle_set(state: "_ShellState", line: str) -> None:
                 value, field_name="ai_minimax_depth"
             )
         parsed_value = state.ai_minimax_depth
+    elif param == "ai_minimax_scoring":
+        parsed = _parse_int(value, field_name="ai_minimax_scoring")
+        if parsed not in {1, 2, 3}:
+            raise ValueError("ai_minimax_scoring must be one of: 1, 2, 3")
+        state.ai_minimax_scoring = parsed
+        parsed_value = state.ai_minimax_scoring
     elif param == "ai_mcts_selection":
         normalized = value.upper()
         if normalized not in {"UCT", "ML"}:
@@ -595,6 +613,7 @@ def _auto_play_ai_until_human_or_end(
     ai_mode: str,
     ai_time: int,
     ai_minimax_depth: int | None,
+    ai_minimax_scoring: int = AI_MINIMAX_SCORING_DEFAULT,
     *,
     blitz: Blitz | None = None,
     event_bus: shell_events.EventBus | None = None,
@@ -607,6 +626,7 @@ def _auto_play_ai_until_human_or_end(
         ai_mode,
         ai_time,
         ai_minimax_depth,
+        ai_minimax_scoring,
         blitz=blitz,
         print_state=_print_state,
         timeout_handler=_handle_timeout,
@@ -621,6 +641,7 @@ def _run_auto_play_with_interrupt_handling(
     ai_mode: str,
     ai_time: int,
     ai_minimax_depth: int | None,
+    ai_minimax_scoring: int,
     *,
     blitz: Blitz,
     event_bus: shell_events.EventBus | None = None,
@@ -634,6 +655,7 @@ def _run_auto_play_with_interrupt_handling(
         ai_mode,
         ai_time,
         ai_minimax_depth,
+        ai_minimax_scoring,
         blitz=blitz,
         auto_play_fn=_auto_play_ai_until_human_or_end,
         event_bus=event_bus,
@@ -673,6 +695,7 @@ def _apply_and_maybe_auto_play(
     ai_mode: str,
     ai_time: int,
     ai_minimax_depth: int | None,
+    ai_minimax_scoring: int,
     *,
     blitz: Blitz,
     ai_mcts_selection: str = "UCT",
@@ -685,6 +708,7 @@ def _apply_and_maybe_auto_play(
         ai_mode,
         ai_time,
         ai_minimax_depth,
+        ai_minimax_scoring,
         blitz=blitz,
         ai_mcts_selection=ai_mcts_selection,
     )
@@ -708,6 +732,7 @@ def _auto_play_pending_ai(state: "_ShellState") -> bool:
         state.current_ai_mode,
         state.current_ai_time,
         state.current_ai_minimax_depth,
+        state.current_ai_minimax_scoring,
         blitz=state.blitz,
         event_bus=state.event_bus,
         mcts_selection=state.current_ai_mcts_selection,
@@ -727,6 +752,7 @@ def _handle_load(
     ai_mode: str,
     ai_time: int,
     ai_minimax_depth: int | None,
+    ai_minimax_scoring: int,
     *,
     blitz: Blitz,
 ) -> tuple[GameSession, Blitz, bool, bool]:
@@ -744,6 +770,7 @@ def _handle_load(
         ai_mode,
         ai_time,
         ai_minimax_depth,
+        ai_minimax_scoring,
         blitz=loaded_blitz,
         base_unsaved=False,
     )
@@ -772,6 +799,7 @@ def _handle_hint(
     ai_mode: str,
     ai_time: int,
     ai_minimax_depth: int | None,
+    ai_minimax_scoring: int,
     *,
     blitz: Blitz,
 ) -> None:
@@ -784,6 +812,7 @@ def _handle_hint(
         ai_mode=ai_mode,
         ai_time=ai_time,
         ai_minimax_depth=ai_minimax_depth,
+        ai_minimax_scoring=ai_minimax_scoring,
         mcts_fn=cli_mod.mcts_search,
         iterative_fn=cli_mod.find_best_move_iterative,
         minimax_fn=cli_mod.find_best_move_minimax,
@@ -802,6 +831,7 @@ def _handle_move(
     ai_mode: str,
     ai_time: int,
     ai_minimax_depth: int | None,
+    ai_minimax_scoring: int,
     *,
     blitz: Blitz,
     ai_mcts_selection: str = "UCT",
@@ -813,6 +843,7 @@ def _handle_move(
         ai_mode,
         ai_time,
         ai_minimax_depth,
+        ai_minimax_scoring,
         blitz=blitz,
         ai_mcts_selection=ai_mcts_selection,
     )
@@ -824,6 +855,7 @@ def _handle_wall(
     ai_mode: str,
     ai_time: int,
     ai_minimax_depth: int | None,
+    ai_minimax_scoring: int,
     *,
     blitz: Blitz,
     ai_mcts_selection: str = "UCT",
@@ -835,6 +867,7 @@ def _handle_wall(
         ai_mode,
         ai_time,
         ai_minimax_depth,
+        ai_minimax_scoring,
         blitz=blitz,
         ai_mcts_selection=ai_mcts_selection,
     )
@@ -958,6 +991,7 @@ def _print_configuration(state: "_ShellState") -> None:
     print(f"ai_mode={state.ai_mode}")
     print(f"ai_time={state.ai_time}")
     print(f"ai_minimax_depth={state.ai_minimax_depth}")
+    print(f"ai_minimax_scoring={state.ai_minimax_scoring}")
     print(f"ai_mcts_selection={state.ai_mcts_selection}")
     print(f"blitz={state.blitz_enabled}")
     print(f"time_limit={_format_minutes(state.time_limit)}")
@@ -1030,6 +1064,7 @@ def _command_hint(state: _ShellState, _line: str) -> bool:
             state.current_ai_mode,
             state.current_ai_time,
             state.current_ai_minimax_depth,
+            state.current_ai_minimax_scoring,
             blitz=state.blitz,
         )
     except KeyboardInterrupt:
@@ -1091,6 +1126,7 @@ def _command_move(state: _ShellState, line: str) -> bool:
         state.current_ai_mode,
         state.current_ai_time,
         state.current_ai_minimax_depth,
+        state.current_ai_minimax_scoring,
         blitz=state.blitz,
         ai_mcts_selection=state.current_ai_mcts_selection,
     )
@@ -1111,6 +1147,7 @@ def _command_wall(state: _ShellState, line: str) -> bool:
         state.current_ai_mode,
         state.current_ai_time,
         state.current_ai_minimax_depth,
+        state.current_ai_minimax_scoring,
         blitz=state.blitz,
         ai_mcts_selection=state.current_ai_mcts_selection,
     )
@@ -1158,9 +1195,13 @@ def _restore_saved_local_shell_state(state: "_ShellState") -> None:
         state.session = saved_state.session
         state.has_unsaved_changes = saved_state.has_unsaved_changes
         state.ai_mcts_selection = saved_state.ai_mcts_selection
+        state.ai_minimax_scoring = saved_state.ai_minimax_scoring
         state.current_ai_mode = saved_state.current_ai_mode
         state.current_ai_time = saved_state.current_ai_time
         state.current_ai_minimax_depth = saved_state.current_ai_minimax_depth
+        state.current_ai_minimax_scoring = (
+            saved_state.current_ai_minimax_scoring
+        )
         state.current_ai_mcts_selection = (
             saved_state.current_ai_mcts_selection
         )
@@ -1282,6 +1323,7 @@ def _command_shorthand_move(state: _ShellState, line: str) -> bool:
         state.current_ai_mode,
         state.current_ai_time,
         state.current_ai_minimax_depth,
+        state.current_ai_minimax_scoring,
         blitz=state.blitz,
         ai_mcts_selection=state.current_ai_mcts_selection,
     )
@@ -1302,6 +1344,7 @@ def _command_shorthand_wall(state: _ShellState, line: str) -> bool:
         state.current_ai_mode,
         state.current_ai_time,
         state.current_ai_minimax_depth,
+        state.current_ai_minimax_scoring,
         blitz=state.blitz,
         ai_mcts_selection=state.current_ai_mcts_selection,
     )
@@ -1370,6 +1413,7 @@ def _run_interactive_shell(
     ai_mode: str,
     ai_time: int,
     ai_minimax_depth: int | None,
+    ai_minimax_scoring: int = AI_MINIMAX_SCORING_DEFAULT,
     ai_mcts_selection: str = "UCT",
     startup_server_port: int | None = None,
     verbose: bool = False,
@@ -1388,6 +1432,7 @@ def _run_interactive_shell(
         ai_mode=ai_mode,
         ai_time=ai_time,
         ai_minimax_depth=ai_minimax_depth,
+        ai_minimax_scoring=ai_minimax_scoring,
         ai_mcts_selection=ai_mcts_selection,
     )
     state, should_break = shell_bootstrap.initialize_shell_state(

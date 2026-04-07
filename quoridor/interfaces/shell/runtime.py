@@ -106,6 +106,7 @@ def auto_play_ai_until_human_or_end(
     ai_mode: str,
     ai_time: int,
     ai_minimax_depth: int | None,
+    ai_minimax_scoring: int,
     *,
     blitz: Any,
     print_state: Callable[..., None],
@@ -133,6 +134,7 @@ def auto_play_ai_until_human_or_end(
             mode=ai_mode,
             depth=ai_minimax_depth,
             time_limit_sec=current_ai_time,
+            minimax_scoring=ai_minimax_scoring,
             mcts_selection=mcts_selection,
         )
         elapsed = now_fn() - started
@@ -175,6 +177,7 @@ def run_auto_play_with_interrupt_handling(
     ai_mode: str,
     ai_time: int,
     ai_minimax_depth: int | None,
+    ai_minimax_scoring: int,
     *,
     blitz: Any,
     auto_play_fn: Callable[..., bool],
@@ -189,6 +192,7 @@ def run_auto_play_with_interrupt_handling(
                 ai_mode,
                 ai_time,
                 ai_minimax_depth,
+                ai_minimax_scoring,
                 blitz=blitz,
                 event_bus=event_bus,
                 mcts_selection=mcts_selection,

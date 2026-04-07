@@ -176,6 +176,7 @@ def _main_gui(args) -> int:
         "ai_mode": getattr(args, "ai_mode", None),
         "ai_time": getattr(args, "ai_time", None),
         "ai_minimax_depth": getattr(args, "ai_minimax_depth", None),
+        "ai_minimax_scoring": getattr(args, "ai_minimax_scoring", None),
     }
     try:
         accepted = set(inspect.signature(gui_mod.main).parameters)
@@ -286,6 +287,7 @@ def _main_interactive(argv: list[str]) -> int:
             ai_mode=args.ai_mode,
             ai_time=args.ai_time,
             ai_minimax_depth=args.ai_minimax_depth,
+            ai_minimax_scoring=args.ai_minimax_scoring,
             ai_mcts_selection=args.ai_mcts_selection,
             startup_server_port=args.server,
             verbose=args.verbose,
