@@ -25,6 +25,16 @@ class ContestPosition:
     horizontal_walls: list[tuple[int, int]]
 
 
+def _expected_line_number(
+    lines: list[tuple[int, str]], cursor: int = 0
+) -> int:
+    if cursor < len(lines):
+        return lines[cursor][0]
+    if lines:
+        return lines[-1][0] + 1
+    return 1
+
+
 def _strip_block_comments(text: str) -> str:
     return _BLOCK_COMMENT_RE.sub("", text)
 
@@ -112,22 +122,24 @@ def _parse_separator_row(
 
 def _parse_board_lines(
     lines: list[tuple[int, str]],
+    *,
+    expected_line_no: int,
 ) -> tuple[int, dict[int, int], list[tuple[int, int]], list[tuple[int, int]]]:
     if not lines:
-        raise ContestError("missing board data")
+        raise ContestError(f"missing board data at line {expected_line_no}")
 
     first_tokens = _tokenize(lines[0][1])
     if not first_tokens:
-        raise ContestError("missing board data")
+        raise ContestError(f"missing board data at line {lines[0][0]}")
     size = len(first_tokens)
     if size < 3 or size > 15 or size % 2 == 0:
-        raise ContestError(f"invalid board size: {size}")
+        raise ContestError(f"invalid board size at line {lines[0][0]}: {size}")
 
     expected_lines = size * 2 - 1
     if len(lines) < expected_lines:
         raise ContestError(
-            "incomplete board data: expected "
-            f"{expected_lines} lines, got {len(lines)}"
+            "incomplete board data at line "
+            f"{lines[0][0]}: expected {expected_lines} lines, got {len(lines)}"
         )
 
     positions: dict[int, int] = {}
@@ -201,18 +213,25 @@ def parse_contest_file(path: str | Path) -> ContestPosition:
             i for i, (_, line) in enumerate(lines) if line.lower() == "[game]"
         )
     except StopIteration as exc:
-        raise ContestError("missing [game] section") from exc
+        raise ContestError(
+            f"missing [game] section before line {_expected_line_number(lines)}"
+        ) from exc
 
     cursor = game_idx + 1
     if cursor >= len(lines):
-        raise ContestError("missing current player")
+        raise ContestError(
+            "missing current player at line "
+            f"{_expected_line_number(lines, cursor)}"
+        )
+    current_player_line_no = lines[cursor][0]
     try:
         current_player = int(lines[cursor][1].split()[0])
     except ValueError as exc:
         raise ContestError(
-            f"invalid current player at line {lines[cursor][0]}"
+            f"invalid current player at line {current_player_line_no}"
         ) from exc
     cursor += 1
+    board_start_line_no = _expected_line_number(lines, cursor)
 
     board_lines: list[tuple[int, str]] = []
     while cursor < len(lines):
@@ -225,10 +244,14 @@ def parse_contest_file(path: str | Path) -> ContestPosition:
         cursor += 1
 
     size, positions, vertical_walls, horizontal_walls = _parse_board_lines(
-        board_lines
+        board_lines,
+        expected_line_no=board_start_line_no,
     )
     if current_player not in positions:
-        raise ContestError(f"current player {current_player} not on board")
+        raise ContestError(
+            f"current player {current_player} not on board "
+            f"(declared at line {current_player_line_no})"
+        )
 
     remaining_walls: dict[int, int] = {}
     if cursor < len(lines) and lines[cursor][1].lower().startswith("walls:"):

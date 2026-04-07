@@ -367,11 +367,15 @@ def load_session(
     try:
         _validated_current_settings(raw_text)
         saved_player_types = parse_player_types(raw_text)
+        parse_blitz(raw_text)
     except ValueError as exc:
         raise ContestError(f"invalid save settings in {path}: {exc}") from exc
 
     position = parse_contest_file(path)
-    history_entries = parse_history(raw_text)
+    try:
+        history_entries = parse_history(raw_text)
+    except ValueError as exc:
+        raise ContestError(f"invalid save history in {path}: {exc}") from exc
 
     players = sorted(position.positions.keys())
     player_types = {
@@ -407,7 +411,10 @@ def load_session(
 
 def load_blitz_snapshot(path: str) -> BlitzSnapshot | None:
     raw_text = Path(path).read_text(encoding="utf-8")
-    return parse_blitz(raw_text)
+    try:
+        return parse_blitz(raw_text)
+    except ValueError as exc:
+        raise ContestError(f"invalid save settings in {path}: {exc}") from exc
 
 
 def serialize_game(state: GameState) -> str:
