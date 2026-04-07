@@ -46,11 +46,13 @@ if __package__ in {None, ""}:
     from quoridor.application.persistence_service import record_to_notation
     from quoridor.core.notation import get_notation_from_node
     from quoridor.interfaces.cli_render import _format_hint_move
+    from quoridor.network.server import NetworkServer
 else:
     from ..application.game_application_service import GameApplicationService
     from ..application.blitz import Blitz
     from ..application.persistence_service import record_to_notation
     from ..network import NetworkClient
+    from ..network.server import NetworkServer
     from ..application.game_session import (
         GameSession,
         initial_player_positions,
@@ -121,6 +123,7 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         self._init_blitz = blitz
         self._init_time_limit = time_limit
         self._pause_elapsed: float = 0.0
+        self._network_server = None
         self._shortcut_window: Gtk.Window | None = None
         self._text_window: Gtk.Window | None = None
         self._config_window: Gtk.Window | None = None
@@ -254,6 +257,8 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         network_menu.append("Disconnect", "win.network_disconnect")
         network_menu.append("Players", "win.network_players")
         network_menu.append("New Game (invite)", "win.network_new_game")
+        network_menu.append("Start Server", "win.network_start_server")
+        network_menu.append("Stop Server", "win.network_stop_server")
 
         menu_model = Gio.Menu()
         menu_model.append_submenu("File", file_menu)
@@ -360,6 +365,8 @@ class QuoridorWindow(Gtk.ApplicationWindow):
             ActionType.PLAYERS: self._action_network_players,
             ActionType.JOIN_SERVER: self._action_network_join,
             ActionType.DISCONNECT: self._action_network_disconnect,
+            ActionType.START_SERVER: self._action_start_server,
+            ActionType.STOP_SERVER: self._action_stop_server,
         }
 
         for action_type, callback in handlers.items():
@@ -530,10 +537,11 @@ class QuoridorWindow(Gtk.ApplicationWindow):
                             self._start_blitz_turn()
             else:
                 self._set_status(error)
+        self.area.queue_draw()
         self._drag_pid = None
         self._drag_start = None
         self._drag_offset = (0, 0)
-        self.area.queue_draw()
+        
 
     def _xy_to_gap(self, x, y):
         cs = self._cell_size()
@@ -645,6 +653,14 @@ class QuoridorWindow(Gtk.ApplicationWindow):
             self._set_status("Nothing to undo.")
             return
         self._game_over = False
+        if self._blitz_timer_id is not None:
+            GLib.source_remove(self._blitz_timer_id)
+            self._blitz_timer_id = None
+            self._turn_start_time = None
+        if self.blitz.is_enabled():
+            new_current = self.session.state.current_player
+            if self.session.player_types.get(new_current) != "ai":
+                self._start_blitz_turn()
         self._schedule_ai_turn()
         self.area.queue_draw()
         self._set_status(f"Undid {total} move(s).")
@@ -897,6 +913,29 @@ class QuoridorWindow(Gtk.ApplicationWindow):
 
     def _handle_opponent_move(self, notation) -> None:
         print(f"Coup adversaire reçu : {notation}")
+
+    def _action_start_server(self) -> None:
+        if self._network_server is not None:
+            self._set_status("Un serveur tourne déjà.")
+            return
+        try:
+            self._network_server = NetworkServer()
+            self._network_server.start()
+            self._set_status(f"Serveur démarré sur le port {self._network_server.port}.")
+        except Exception as e:
+            self._network_server = None
+            self._set_status(f"Erreur démarrage serveur : {e}")
+
+    def _action_stop_server(self) -> None:
+        if self._network_server is None:
+            self._set_status("Aucun serveur en cours.")
+            return
+        try:
+            self._network_server.stop()
+            self._network_server = None
+            self._set_status("Serveur arrêté.")
+        except Exception as e:
+            self._set_status(f"Erreur arrêt serveur : {e}")
 
     def _apply_game_state_update(self, update) -> None:
         print(
@@ -1340,17 +1379,17 @@ class QuoridorWindow(Gtk.ApplicationWindow):
             self.blitz = loaded_blitz
             self.blitz_label.set_visible(self.blitz.is_enabled())
             self._paused = False
-            self._game_over = False
             self.area.queue_draw()
-            self._schedule_ai_turn()
-            if (
-                self.session.player_types.get(
-                    self.session.state.current_player
-                )
-                != "ai"
-            ):
-                self._start_blitz_turn()
-            self._set_status(f"Loaded from: {path}")
+            if not self._apply_game_outcome():
+                self._schedule_ai_turn()
+                if (
+                    self.session.player_types.get(
+                        self.session.state.current_player
+                    )
+                    != "ai"
+                ):
+                    self._start_blitz_turn()
+                self._set_status(f"Loaded from: {path}")
         except Exception as exc:
             self._set_status(f"Load failed: {exc}")
 

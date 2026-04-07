@@ -27,6 +27,8 @@ class ActionType(Enum):
     DISCONNECT = "network_disconnect"
     PLAYERS = "network_players"
     NETWORK_NEW_GAME = "network_new_game"
+    START_SERVER = "network_start_server"
+    STOP_SERVER = "network_stop_server"
 
 
 DEFAULT_SHORTCUTS: dict[ActionType, str] = {
@@ -47,6 +49,8 @@ DEFAULT_SHORTCUTS: dict[ActionType, str] = {
     ActionType.DISCONNECT: "<Primary>d",
     ActionType.PLAYERS: "<Primary>w",
     ActionType.NETWORK_NEW_GAME: "<Primary>numbersign",
+    ActionType.START_SERVER: "<Primary><Shift>s",
+    ActionType.STOP_SERVER: "<Primary><Shift>d",
 }
 
 
@@ -68,6 +72,8 @@ ACTION_LABELS: dict[ActionType, str] = {
     ActionType.DISCONNECT: "Disconnect",
     ActionType.PLAYERS: "Players",
     ActionType.NETWORK_NEW_GAME: "New Game (invite)",
+    ActionType.START_SERVER: "Start Server",
+    ActionType.STOP_SERVER: "Stop Server",
 }
 
 
