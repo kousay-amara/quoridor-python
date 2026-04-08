@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
+from quoridor.application.blitz import Blitz
+from quoridor.interfaces.cli_render import _goal_for_player
 from quoridor.interfaces.shell import bootstrap as bootstrap_mod
 from quoridor.interfaces.shell import events as events_mod
 from quoridor.interfaces.shell import input as input_mod
 from quoridor.interfaces.shell import play_strategy as strategy_mod
+from quoridor.interfaces.shell.state import _SavedLocalShellState
 
 
 def test_event_bus_and_emit_event_paths():
@@ -18,6 +21,12 @@ def test_event_bus_and_emit_event_paths():
     unsub_a()
     bus.emit("game.winner", player_id=2)
     unsub_a()  # second unsubscribe should be a no-op
+
+    # unsub when sole listener — triggers listeners.pop (events.py:47-48)
+    bus2 = events_mod.EventBus()
+    unsub_sole = bus2.subscribe("x", lambda e: None)
+    unsub_sole()  # list becomes empty → key removed from _listeners
+    assert "x" not in bus2._listeners
 
     assert ("game.winner", {"player_id": 1}) in events
     assert ("*:game.winner", {"player_id": 1}) in events
@@ -208,3 +217,34 @@ def test_bootstrap_initialize_state_for_load_and_new_paths(capsys):
     out = capsys.readouterr().out
     assert "New game started (blitz: 30 min/player)." in out
     assert "warning: 3-player mode can be unbalanced." in out
+
+
+def test_goal_for_players_3_and_4():
+    assert "column" in _goal_for_player(3, 9)
+    assert _goal_for_player(4, 9) == "reach column a"
+
+
+def test_saved_local_shell_state_stores_all_fields():
+    blitz = Blitz(time_limit_minutes=5.0, player_ids=[1, 2])
+    saved = _SavedLocalShellState(
+        session=None,
+        has_unsaved_changes=True,
+        ai_minimax_scoring=2,
+        ai_mcts_selection="UCT",
+        current_ai_mode="minimax",
+        current_ai_time=3,
+        current_ai_minimax_depth=4,
+        current_ai_minimax_scoring=1,
+        current_ai_mcts_selection="UCT",
+        players=2,
+        walls_per_player=10,
+        board_size=9,
+        ai_players=[1],
+        blitz_enabled=True,
+        time_limit=5.0,
+        blitz=blitz,
+    )
+    assert saved.has_unsaved_changes is True
+    assert saved.players == 2
+    assert saved.ai_players == [1]
+    assert saved.blitz is blitz

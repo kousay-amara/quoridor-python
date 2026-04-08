@@ -1,5 +1,8 @@
+import pytest
+
 from quoridor.core.game_state import GameState
 from quoridor.core.game_state_builder import GameStateBuilder
+from quoridor.core.notation import get_edges_for_wall, get_node_from_notation
 
 
 def test_to_snapshot_returns_copied_data():
@@ -82,3 +85,21 @@ def test_builder_creates_state_with_walls_and_positions():
     assert state.vertical_walls == [(0, 1)]
     assert state.horizontal_walls == [(9, 18)]
     assert 1 not in state.graph.adj[0]
+
+
+def test_builder_with_board_size_method():
+    state = GameStateBuilder().with_board_size(5).with_players({1: 0, 2: 24}).build()
+    assert state.board_size == 5
+
+
+def test_notation_errors():
+    with pytest.raises(ValueError, match="invalid cell notation"):
+        get_node_from_notation("a", 9)
+    with pytest.raises(ValueError, match="cell out of bounds"):
+        get_node_from_notation("z9", 9)
+    with pytest.raises(ValueError, match="invalid wall notation"):
+        get_edges_for_wall("a", 9)
+    with pytest.raises(ValueError, match="invalid wall orientation"):
+        get_edges_for_wall("a1x", 9)
+    with pytest.raises(ValueError, match="wall anchor out of bounds"):
+        get_edges_for_wall("i9v", 9)

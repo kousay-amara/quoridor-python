@@ -99,3 +99,16 @@ class TestValidateWall:
         )
         assert ok is False
         assert msg == "This wall would completely block a player's path."
+
+    def test_crossing_wall_rejected(self):
+        graph = _graph()
+        # Simulate a placed horizontal wall (removes vertical edges 4-13 and 5-14),
+        # then try placing a vertical wall (4-5),(13-14) which would cross it.
+        graph.remove_edge(4, 13)
+        graph.remove_edge(5, 14)
+        wall_edges = [(4, 5), (13, 14)]
+        ok, msg = validate_wall(
+            graph, [4, 76], wall_edges, _target_funcs_9x9(), {1: 10, 2: 10}, 1
+        )
+        assert ok is False
+        assert msg == "A wall already crosses this position."
