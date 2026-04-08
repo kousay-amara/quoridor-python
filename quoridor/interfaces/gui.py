@@ -3,6 +3,7 @@ from __future__ import annotations
 import time
 import math
 import sys
+import threading
 from pathlib import Path
 
 import gi
@@ -316,6 +317,15 @@ class QuoridorWindow(Gtk.ApplicationWindow):
             return
         self._ai_thinking = True
         current = self.session.state.current_player
+        self._set_status(f"AI player {current} is thinking...")
+        thread = threading.Thread(
+            target=self._compute_ai_move_thread,
+            args=(current,),
+            daemon=True,
+        )
+        thread.start()
+
+    def _compute_ai_move_thread(self, current: int) -> None:
         started = time.time()
         move = self.session.compute_ai_move(
             mode=self._ai_mode,
@@ -324,6 +334,9 @@ class QuoridorWindow(Gtk.ApplicationWindow):
             minimax_scoring=self._ai_minimax_scoring,
         )
         elapsed = time.time() - started
+        GLib.idle_add(self._apply_ai_move_gtk, current, move, elapsed)
+
+    def _apply_ai_move_gtk(self, current: int, move, elapsed: float) -> None:
         if self.blitz.is_enabled():
             timed_out = self.blitz.consume_time(current, elapsed)
             if timed_out:
