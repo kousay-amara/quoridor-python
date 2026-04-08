@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 import gi
+from quoridor.core.move_record import MoveRecord
 
 gi.require_version("Gtk", "4.0")
 from gi.repository import Gio, GLib, Gtk  # noqa: E402
@@ -47,6 +48,8 @@ if __package__ in {None, ""}:
     from quoridor.core.notation import get_notation_from_node
     from quoridor.interfaces.cli_render import _format_hint_move
     from quoridor.network.server import NetworkServer
+    from quoridor.core.move_record import MoveRecord
+
 else:
     from ..application.game_application_service import GameApplicationService
     from ..application.blitz import Blitz
@@ -88,6 +91,7 @@ class QuoridorWindow(Gtk.ApplicationWindow):
     _ai_mode: str = "minimax"
     _ai_time: int = 5
     _ai_minimax_depth: int | None = None
+    _ai_minimax_scoring: int = 1
 
     def __init__(
         self,
@@ -101,6 +105,8 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         ai_mode: str = "minimax",
         ai_time: int = 5,
         ai_minimax_depth: int | None = None,
+        ai_minimax_scoring: int = 1,
+        
     ):
         super().__init__(application=app, title="Quoridor")
         self.set_default_size(680, 760)
@@ -117,6 +123,7 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         self._ai_mode = ai_mode
         self._ai_time = ai_time
         self._ai_minimax_depth = ai_minimax_depth
+        self._ai_minimax_scoring = ai_minimax_scoring
         self._num_players = num_players
         self._init_board_size = board_size
         self._init_walls = walls
@@ -279,7 +286,7 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         return bar
 
     def _build_new_session(
-        self, *, size: int, players: int, walls: int = 20
+        self, *, size: int, players: int, walls: int = DEFAULT_WALLS
     ) -> GameSession:
         positions = initial_player_positions(size, players)
         player_types = {}
@@ -314,6 +321,7 @@ class QuoridorWindow(Gtk.ApplicationWindow):
             mode=self._ai_mode,
             depth=self._ai_minimax_depth,
             time_limit_sec=self._ai_time,
+            minimax_scoring=self._ai_minimax_scoring,
         )
         elapsed = time.time() - started
         if self.blitz.is_enabled():
@@ -944,7 +952,17 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         )
         if self._network_player_id is None:
             self._network_player_id = update["player_id"]
+        before_state = self.session.state.to_snapshot()
         self.session.state.restore(update["state"])
+        player_id = before_state["current_player"]
+        record = MoveRecord(
+            player_id=player_id,
+            player_type="human",
+            action="move_pawn",
+            before_state=before_state,
+            after_state=update["state"],
+            )
+        self.session.history.record_move(record)
         self.area.queue_draw()
         if update["winner_id"]:
             self._game_over = True
@@ -998,7 +1016,8 @@ class QuoridorWindow(Gtk.ApplicationWindow):
             f"ai_players={sorted(set(self._ai_players))}\n"
             f"ai_mode={self._ai_mode}\n"
             f"ai_time={self._ai_time}\n"
-            f"ai_minimax_depth={self._ai_minimax_depth}"
+            f"ai_minimax_depth={self._ai_minimax_depth}\n"
+            f"ai_minimax_scoring={self._ai_minimax_scoring}\n"
         )
 
     def _parse_bool(self, raw: str, *, label: str) -> bool:
@@ -1035,6 +1054,7 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         ai_time = int(values["ai_time"])
         depth_raw = values["ai_minimax_depth"].strip().lower()
         ai_depth = None if depth_raw in {"", "none", "null"} else int(depth_raw)
+        ai_scoring = int(values["ai_minimax_scoring"])
         ai_players = self._parse_ai_players(values["ai_players"], players=players)
 
         if players not in {2, 3, 4}:
@@ -1049,6 +1069,8 @@ class QuoridorWindow(Gtk.ApplicationWindow):
             raise ValueError("ai_time must be > 0")
         if ai_depth is not None and ai_depth <= 0:
             raise ValueError("ai_minimax_depth must be > 0 when set")
+        if ai_scoring not in {1, 2, 3}:
+            raise ValueError("ai_minimax_scoring must be 1, 2 or 3")
 
         self._num_players = players
         self._init_board_size = size
@@ -1059,6 +1081,7 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         self._ai_mode = ai_mode
         self._ai_time = ai_time
         self._ai_minimax_depth = ai_depth
+        self._ai_minimax_scoring = ai_scoring
         self._action_new_game()
         self._set_status("Configuration applied to a new game.")
 
@@ -1141,6 +1164,7 @@ class QuoridorWindow(Gtk.ApplicationWindow):
                 if self._ai_minimax_depth is None
                 else str(self._ai_minimax_depth),
             ),
+            ("ai_minimax_scoring", str(self._ai_minimax_scoring)),
         ]
 
         entries: dict[str, Gtk.Entry] = {}
@@ -1469,13 +1493,14 @@ class QuoridorWindow(Gtk.ApplicationWindow):
 def main(
     num_players=2,
     board_size=9,
-    walls=20,
+    walls=DEFAULT_WALLS,
     blitz=False,
     time_limit=0,
     ai_players=None,
     ai_mode="minimax",
     ai_time=5,
     ai_minimax_depth=None,
+    ai_minimax_scoring=1,
 ):
     app = Gtk.Application(application_id="fr.ubordeaux.quoridor.demo")
     app.connect(
@@ -1491,6 +1516,7 @@ def main(
             ai_mode=ai_mode,
             ai_time=ai_time,
             ai_minimax_depth=ai_minimax_depth,
+            ai_minimax_scoring=ai_minimax_scoring,
         ).present(),
     )
     return app.run([sys.argv[0]])
