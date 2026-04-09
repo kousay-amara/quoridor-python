@@ -714,9 +714,9 @@ Dans le cadre du jeu Quoridor, le passage au MCTS est motivé par deux caractér
 
 \bigskip
 
-1- L'explosion du facteur de branchement : Avec la possibilité de déplacer un pion ou de placer un mur parmi la multitude de coordonnées et orientations, le nombre de coups légaux par tour est élevé. Une exploration complète devient rapidement impossible à mesure que la complexité combinatoire augmente.
-
-2- La difficulté d’évaluation : Contrairement aux échecs, une position dite “avantageuse” au Quoridor est difficile à quantifier par une simple heuristique positionnelle et matérielle. En effet un simple mur bien placé peut totalement inverser la distance des joueurs vers leur objectif.
+\textbf{L'explosion du facteur de branchement :} Avec la possibilité de déplacer un pion ou de placer un mur parmi la multitude de coordonnées et orientations, le nombre de coups légaux par tour est élevé. Une exploration complète devient rapidement impossible à mesure que la complexité combinatoire augmente.
+\newline
+\textbf{La difficulté d’évaluation :} Contrairement aux échecs, une position dite “avantageuse” au Quoridor est difficile à quantifier par une simple heuristique positionnelle et matérielle. En effet un simple mur bien placé peut totalement inverser la distance des joueurs vers leur objectif.
 
 \bigskip
 
@@ -729,10 +729,11 @@ deux statistiques cruciales issues des simulations passées :
 
 \bigskip
 
-\begin{itemize}
-    \item \textbf{Le nombre de visites (N)} : Combien de fois un état a été exploré.
-    \item \textbf{Le nombre de victoires (W)} : Le succès cumulé des joueurs à partir de ce nœud.
-\end{itemize}
+
+\textbf{Le nombre de visites (N)} : Combien de fois un état a été exploré.
+\newline
+\textbf{Le nombre de victoires (W)} : Le succès cumulé des joueurs à partir de ce nœud.
+
 
 \bigskip
 
@@ -743,17 +744,24 @@ des milliers de tests.
 
 Un cycle de simulation est divisé en 4 phases : 
 
-\begin{enumerate}
-    \item \textbf{Sélection} : En partant de la racine (l’état actuel du jeu), l’algorithme descend dans l’arbre en choisissant à chaque niveau le nœud de l’enfant le plus pertinent. Ce choix repose sur la formule UCT, cette formule permet d’équilibrer l'exploitation des coups connus comme gagnants et l’exploration de coups encore peu visités : 
+
+\textbf{Sélection} : En partant de la racine (l’état actuel du jeu), l’algorithme descend dans l’arbre en choisissant à chaque niveau le nœud de l’enfant le plus pertinent. Ce choix repose sur la formule UCT, cette formule permet d’équilibrer l'exploitation des coups connus comme gagnants et l’exploration de coups encore peu visités : 
     \[ UCT = \frac{W_i}{N_i} + C \times \sqrt{\frac{\ln(N_{parent})}{N_i}} \]
     Où $W_i$ est le nombre de victoires du nœud, $N_i$ son nombre de visites et $C$ une constante (souvent fixée à $\sqrt{2}$, c’est le choix approximatif que nous avons fait dans notre moteur, plus précisément 1,41). Ce jonglage se fait car le premier terme (exploitation) augmente avec le taux de victoire, tandis que le second (exploration) augmente si le nœud est délaissé par rapport à ses frères.
     
-    \item \textbf{Expansion} : Lorsqu’un nœud est atteint mais qu’il possède encore des coups non explorés (\texttt{untried\_moves}), l’algorithme crée un nouveau nœud enfant pour l’un de ces coups et l’ajoute à l’arbre.
-    \item \textbf{Simulation (Rollout)} : Phase de plongée. A partir du nouveau nœud, l’IA simule une partie rapide jusqu’à la victoire d’un joueur. Cette simulation est habituellement aléatoire, afin de donner une idée rapide de si la position est gagnante ou non pour le joueur. Nous détaillons plus loin un choix technique concernant cette simulation afin d’améliorer notre moteur.
-    \item \textbf{Rétropropagation} : Une fois le vainqueur de la simulation connu, l’algorithme remonte de nœud en nœud jusqu’à la racine pour mettre à jour les statistiques (N et W) de tous les parents traversés lors de cette itération.
-\end{enumerate}
+\textbf{Expansion} : Lorsqu’un nœud est atteint mais qu’il possède encore des coups non explorés (\texttt{untried\_moves}), l’algorithme crée un nouveau nœud enfant pour l’un de ces coups et l’ajoute à l’arbre.
+\textbf{Simulation (Rollout)} : Phase de plongée. A partir du nouveau nœud, l’IA simule une partie rapide jusqu’à la victoire d’un joueur. Cette simulation est habituellement aléatoire, afin de donner une idée rapide de si la position est gagnante ou non pour le joueur. Nous détaillons plus loin un choix technique concernant cette simulation afin d’améliorer notre moteur.
+\textbf{Rétropropagation} : Une fois le vainqueur de la simulation connu, l’algorithme remonte de nœud en nœud jusqu’à la racine pour mettre à jour les statistiques (N et W) de tous les parents traversés lors de cette itération.
+
 
 \bigskip
+
+\begin{figure}[H]
+    \centering 
+    \includegraphics[width=0.8\textwidth]{mcts.png} 
+    \caption{Schéma des 4 phases d'un algorithme MCTS}
+    \label{fig:mon_image}
+\end{figure}
 
 Ces quatres étapes forment le cycle de base d’un algorithme MCTS, dont l’efficacité repose théoriquement sur la convergence statistique vers 
 les meilleurs coups au fil des simulations. Ce modèle est robuste pour des jeux à faible complexité mais présente de réelles limites lorsqu’on 
@@ -792,11 +800,13 @@ depuis cet état, nous filtrons cette liste en nous basant sur 3 points importan
 
 \bigskip
 
-\begin{itemize}
-    \item \textbf{Priorité aux déplacements} : L’algorithme inclut systématiquement tous les déplacements de pions légaux.
-    \item \textbf{Ciblage des murs} : Nous utilisons la fonction \texttt{get\_blocking\_walls}, une heuristique de filtrage qui va tester à l’aide d’un algorithme BFS tous les murs et ne garder seulement les murs dits “bloquants”. Un mur est considéré comme tel s’il augmente la distance du chemin le plus court de l’adversaire vers sa ligne d'arrivée. Nous effectuons un \texttt{clone\_state(state)} à chaque itération, c’est l’opération la plus lourde de cette fonction mais l’efficacité du filtrage justifie ce coût de clonage répété.
-    \item \textbf{Activation tardive} : L’exploration intensive des murs n’est activée que lorsque l’adversaire est à une distance inférieure à 5 de son objectif (on calcul ici la distance axiale, sans prendre en compte les murs, de la ligne / colonne du joueur jusqu’à sa ligne / colonne d’arrivée). Cela permet à l’IA de se concentrer sur sa propre progression en début de partie tout en devenant extrêmement défensive par la suite.
-\end{itemize}
+
+\textbf{Priorité aux déplacements} : L’algorithme inclut systématiquement tous les déplacements de pions légaux.
+\newline
+\textbf{Ciblage des murs} : Nous utilisons la fonction \texttt{get\_blocking\_walls}, une heuristique de filtrage qui va tester à l’aide d’un algorithme BFS tous les murs et ne garder seulement les murs dits “bloquants”. Un mur est considéré comme tel s’il augmente la distance du chemin le plus court de l’adversaire vers sa ligne d'arrivée. Nous effectuons un \texttt{clone\_state(state)} à chaque itération, c’est l’opération la plus lourde de cette fonction mais l’efficacité du filtrage justifie ce coût de clonage répété.
+\newline
+\textbf{Activation tardive} : L’exploration intensive des murs n’est activée que lorsque l’adversaire est à une distance inférieure à 5 de son objectif (on calcul ici la distance axiale, sans prendre en compte les murs, de la ligne / colonne du joueur jusqu’à sa ligne / colonne d’arrivée). Cela permet à l’IA de se concentrer sur sa propre progression en début de partie tout en devenant extrêmement défensive par la suite.
+
 
 
 \bigskip
