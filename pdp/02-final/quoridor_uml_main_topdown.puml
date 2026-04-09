@@ -1,0 +1,82 @@
+@startuml
+title Vue UML du noyau metier et de la couche applicative
+
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam dpi 200
+skinparam defaultFontName "DejaVu Sans"
+skinparam defaultFontSize 14
+skinparam classAttributeIconSize 0
+skinparam ArrowColor #34495E
+skinparam ArrowThickness 1.2
+skinparam ClassBorderColor #4A4A4A
+skinparam ClassBackgroundColor #F7F9FC
+
+top to bottom direction
+
+class GameApplicationService {
+  session: GameSession
+  blitz
+  +play_pawn_move_token()
+  +place_wall_token()
+  +save()/load()
+}
+
+class GameSession {
+  state: GameState
+  history: HistoryManager
+  +play_pawn_move()
+  +place_wall()
+}
+
+class PersistenceService
+
+class GameState {
+  board_size
+  current_player
+  player_positions
+  remaining_walls
+  ...
+}
+
+class Graph {
+  adj
+  +add_edge()
+  +remove_edge()
+}
+
+class HistoryManager {
+  records
+  cursor
+  +undo()
+  +redo()
+}
+
+class PawnRules
+class WallRules
+class WinRules
+class PathUtils {
+  +bfs_has_path()
+}
+
+GameApplicationService --> GameSession
+GameApplicationService --> PersistenceService
+
+GameSession --> GameState
+GameSession --> HistoryManager
+GameSession --> PawnRules
+GameSession --> WallRules
+GameSession --> WinRules
+GameSession --> PathUtils
+
+GameState *--> Graph
+
+' Guide de placement pour garder un flux vertical lisible
+GameSession -[hidden]down-> GameState
+GameState -[hidden]right-> HistoryManager
+HistoryManager -[hidden]right-> PawnRules
+PawnRules -[hidden]right-> WallRules
+WallRules -[hidden]right-> WinRules
+WinRules -[hidden]right-> PathUtils
+
+@enduml

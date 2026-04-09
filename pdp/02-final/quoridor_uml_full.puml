@@ -1,0 +1,62 @@
+@startuml
+' Architecture modulaire de Quoridor orientée coeur métier
+title Architecture modulaire du projet Quoridor
+
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam dpi 180
+skinparam defaultFontName "DejaVu Sans"
+skinparam defaultFontSize 15
+skinparam packageStyle rectangle
+skinparam packageBorderColor #4A4A4A
+skinparam packageFontColor #1F2D3D
+skinparam packageFontStyle bold
+skinparam ArrowColor #34495E
+skinparam ArrowThickness 1.2
+
+skinparam package<<domain>> {
+  BackgroundColor #EAF3FF
+}
+skinparam package<<service>> {
+  BackgroundColor #F5F7FA
+}
+skinparam package<<edge>> {
+  BackgroundColor #FFF4E6
+}
+skinparam package<<infra>> {
+  BackgroundColor #EEF9F1
+}
+
+left to right direction
+
+package "interfaces/" as Interfaces <<edge>>
+package "network/" as Network <<edge>>
+package "application/" as Application <<service>>
+package "rules/" as Rules <<domain>>
+package "core/" as Core <<domain>>
+package "utils/" as Utils <<infra>>
+package "ml/" as ML <<infra>>
+
+' Contraintes de dépendance
+Interfaces --> Application : utilise
+Network --> Application : communique
+ML --> Application : fournit heuristiques
+Application --> Core : orchestre
+Application --> Rules : valide
+Application --> Utils : services techniques
+Rules --> Core : applique contraintes
+Rules --> Utils : graphes / BFS
+
+' Contraintes de placement (sans dépendance sémantique)
+Interfaces -[hidden]-> Application
+Application -[hidden]-> Network
+Core -[hidden]-> Rules
+Rules -[hidden]-> Utils
+Core -[hidden]-> ML
+
+note bottom of Core
+  Noyau métier central
+  (indépendant des couches externes)
+end note
+
+@enduml
