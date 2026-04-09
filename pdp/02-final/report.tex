@@ -429,7 +429,7 @@ plus influencer le résultat. La figure~\ref{fig:alpha-beta-tree} montre ce cas
 simple : si MAX possède déjà une branche à 5, une branche adverse qui descend
 à 2 est coupée.
 
-\begin{figure}[!ht]
+\begin{figure}[H]
   \centering
   \begin{tikzpicture}[
       >=Latex,
@@ -459,8 +459,7 @@ simple : si MAX possède déjà une branche à 5, une branche adverse qui descen
         edge from parent node[right, draw=none] {$\beta{=}2 \leq \alpha$}
       };
   \end{tikzpicture}
-  \caption{Élagage alpha-beta : la branche droite est coupée car MIN a trouvé
-    2 alors que MAX dispose déjà d'une branche à 5.}
+  \caption{Exemple d'élagage alpha-beta.}
   \label{fig:alpha-beta-tree}
 \end{figure}
 
@@ -469,7 +468,7 @@ expansion de nœud. Si le temps est écoulé, elle s'arrête et renvoie le meill
 coup déjà calculé. Le pseudo-code correspondant est donné en
 figure~\ref{fig:minimax-pseudocode}.
 
-\begin{figure}[!ht]
+\begin{figure}[H]
 {\small
 \begin{minted}[frame=single,linenos]{text}
 fonction minimax(etat, profondeur, alpha, beta, maximise):
@@ -492,32 +491,58 @@ fonction minimax(etat, profondeur, alpha, beta, maximise):
 
 \subsection{Iterative Deepening}
 
-Le problème d'un Minimax à profondeur fixe est simple : on ne sait pas à
-l'avance quelle profondeur sera atteignable dans le temps imparti. Au Quoridor,
-le coût varie fortement selon le nombre de murs encore disponibles.
+Une fois le Minimax avec élagage alpha-beta en place, nous avons été confrontés
+à un problème pratique : quelle profondeur choisir~? Fixer une profondeur à
+l'avance semble raisonnable, mais au Quoridor le coût d'exploration varie
+énormément d'un tour à l'autre. En début de partie, chaque joueur dispose de
+dix murs~: le facteur de branchement est alors très élevé, car l'IA doit
+évaluer à la fois les déplacements de pion et toutes les poses de murs
+possibles. En fin de partie, quand les murs sont épuisés, seuls les déplacements
+restent, et l'arbre est beaucoup plus étroit. Avec une profondeur fixe, on
+risque donc soit de dépasser le temps alloué en début de partie, soit de
+gaspiller du temps de calcul en fin de partie.
 
-L'Iterative Deepening lance donc plusieurs recherches successives à profondeur
-croissante : 1, puis 2, puis 3, etc. Quand la deadline est atteinte, on
-conserve le meilleur coup de la dernière profondeur complètement terminée. Ce
-choix garantit qu'un coup valide est toujours disponible, même sous une
-contrainte de temps stricte.
+Pour résoudre ce problème, nous avons implémenté l'\textbf{Iterative Deepening}.
+Le principe est le suivant : plutôt que de lancer une seule recherche à
+profondeur fixe, on enchaîne plusieurs recherches successives à profondeur
+croissante — d'abord à profondeur 1, puis 2, puis 3, et ainsi de suite. Avant
+chaque itération, on vérifie qu'il reste suffisamment de temps. Dès que la
+deadline est atteinte en cours d'exploration, on interrompt proprement la
+recherche et on retourne le meilleur coup trouvé lors de la \emph{dernière
+profondeur complètement terminée}. Ce mécanisme est essentiel : il garantit
+qu'on ne retourne jamais un coup issu d'une exploration incomplète, tout en
+exploitant au mieux le temps disponible.
 
-L'IA expose deux usages :
+\bigskip
+
+En pratique, nous avons exposé deux modes d'utilisation à l'utilisateur~:
+
 \begin{itemize}
-  \item \textbf{Profondeur explicite} (\texttt{--ai-minimax-depth}) : Minimax
-    à profondeur fixe.
-  \item \textbf{Temps limité} (\texttt{--ai-time}) : recherche itérative qui
-    approfondit tant que le temps reste disponible.
+  \item \textbf{Profondeur explicite} (\texttt{--ai-minimax-depth}) : l'utilisateur
+    fixe lui-même la profondeur de recherche. Le Minimax s'exécute exactement
+    jusqu'à cette profondeur, sans mécanisme de temps. C'est utile pour
+    reproduire des comportements prévisibles ou faire des tests comparatifs.
+  \item \textbf{Temps limité} (\texttt{--ai-time}) : l'utilisateur fixe un budget
+    temps en secondes. L'Iterative Deepening approfondit la recherche tant que
+    le temps le permet, ce qui donne toujours le meilleur coup calculable dans
+    le délai imparti.
 \end{itemize}
 
-Quand l'utilisateur choisit \texttt{minimax} sans préciser de profondeur, le
-programme convertit automatiquement le temps disponible en profondeur maximale
-selon les seuils du tableau ci-dessous.
+\bigskip
 
-\begin{center}
+Nous avons également prévu un troisième cas : l'utilisateur choisit le mode
+\texttt{minimax} sans préciser de profondeur ni de temps particulier. Dans cette
+situation, le programme ne laisse pas l'IA sans repère~: il convertit
+automatiquement le temps par défaut en une profondeur maximale équivalente,
+selon les seuils définis dans le tableau ci-dessous. Ces seuils ont
+été calibrés empiriquement pour que la recherche se termine confortablement dans
+le temps imparti, quelle que soit la phase de jeu.
+
+\begin{table}[H]
+\centering
 \begin{tabular}{cc}
   \hline
-  \textbf{Temps} & \textbf{Profondeur} \\
+  \textbf{Temps alloué} & \textbf{Profondeur maximale} \\
   \hline
   $\leq 1$~s  & 1 \\
   $\leq 3$~s  & 2 \\
@@ -526,7 +551,16 @@ selon les seuils du tableau ci-dessous.
   $> 12$~s    & 5 \\
   \hline
 \end{tabular}
-\end{center}
+\caption{Temps alloué et profondeur maximale correspondante.}
+\label{tab:time-depth}
+\end{table}
+
+Le pseudo-code de la figure~\ref{fig:iterative-deepening-pseudocode} résume
+le déroulement complet~: on initialise d'abord un coup de secours (le premier
+coup légal disponible) pour ne jamais se retrouver sans réponse, puis on lance
+les itérations successives. À chaque profondeur complète, on met à jour le
+meilleur coup mémorisé. Dès qu'une itération est interrompue par la deadline,
+on s'arrête et on retourne le dernier coup valide enregistré.
 
 \begin{figure}[H]
 {\small
@@ -738,15 +772,19 @@ imparfait évidemment, mais suffisamment intelligent pour offrir au joueur une p
 
 \subsection{Pipeline d'apprentissage automatique}
 
-Nous avons ajouté une politique de sélection ML pour le MCTS. L'objectif n'est
-pas de remplacer tout le moteur de recherche, mais uniquement la sélection du
-prochain enfant à explorer.
+L'idée de départ est simple : plutôt que d'utiliser la formule UCT classique
+pour guider le MCTS vers les nœuds les plus prometteurs, pourquoi ne pas
+entraîner un modèle de machine learning à reconnaître les bons coups~? L'objectif
+n'est pas de remplacer tout le moteur de recherche, mais uniquement la politique
+de sélection : à chaque nœud, c'est le modèle qui décide quel enfant explorer
+en priorité, en lui attribuant une probabilité de victoire estimée.
 
-La figure~\ref{fig:ml-pipeline} résume le pipeline complet : génération de
-parties en self-play, extraction des features, entraînement du modèle, puis
-intégration dans le MCTS.
+Pour y arriver, nous avons suivi un pipeline en quatre étapes : générer des
+parties de référence, en extraire des données structurées, entraîner un modèle,
+puis l'intégrer dans le MCTS. La figure~\ref{fig:ml-pipeline} illustre
+ce déroulement.
 
-\begin{figure}[!ht]
+\begin{figure}[H]
   \centering
   \begin{tikzpicture}[
       >=Latex,
@@ -763,7 +801,7 @@ intégration dans le MCTS.
       },
       arrow/.style={->, thick}
     ]
-    \node[pipestep] (gen) {Self-play\\504 parties IA};
+    \node[pipestep] (gen) {Self-play\\\textasciitilde500 parties IA};
     \node[pipedata, right=0.7cm of gen] (json) {JSON};
     \node[pipestep, right=0.7cm of json] (extract) {Extraction\\20 features};
     \node[pipedata, right=0.7cm of extract] (csv) {CSV\\34\,365 lignes};
@@ -783,18 +821,60 @@ intégration dans le MCTS.
   \label{fig:ml-pipeline}
 \end{figure}
 
-\paragraph{Dataset.}
-Le dataset est construit à partir de 504 parties jouées en self-play entre
-plusieurs variantes de nos IA : Minimax à profondeurs 1, 2 et 3 avec les trois
-heuristiques, et Iterative Deepening avec trois budgets de temps distincts.
-Chaque partie est rejouée tour par tour pour extraire un vecteur de 20 features
-par coup. On obtient 34\,365 exemples au format tabulaire.
+\paragraph{Génération des données.}
+La première étape consistait à produire des parties de bonne qualité pour
+constituer notre jeu de données. Nous avons développé un fichier de génération
+dédié (\texttt{generate\_games.py}) qui contient à la fois la logique de
+lancement des parties et une classe permettant d'instancier n'importe quel
+type de bot. Grâce à cette classe, nous avons pu créer des bots couvrant
+l'ensemble de nos IA : Minimax et Iterative Deepening avec les trois
+heuristiques (défaut, matériel, hybride) et différents paramétrages de
+profondeur et de temps, ainsi que le MCTS pur. Ces bots jouent ensuite les
+uns contre les autres en self-play.
 
-Les 20 features sont réparties en trois groupes : contexte avant le coup,
-description du coup et effet du coup. La figure~\ref{fig:feature-categories}
-résume cette décomposition.
+Dans un premier temps, nous avons généré 80 parties. Le modèle entraîné sur
+ce volume était trop pauvre : il n'avait pas vu suffisamment de situations
+de jeu différentes pour apprendre à distinguer un bon coup d'un mauvais.
+Nous avons donc augmenté progressivement jusqu'à atteindre environ
+\textbf{500 parties}. Chaque partie est sauvegardée au format JSON et
+contient toutes les informations nécessaires à la reconstruction de la
+partie : les coups joués tour par tour, les états successifs du plateau,
+et le joueur vainqueur.
 
-\begin{figure}[!ht]
+\paragraph{Extraction des features.}
+Une fois les parties générées, nous avons rejoué chaque partie coup par coup
+pour en extraire un vecteur de 20 features par mouvement. Ces features sont
+organisées en trois groupes qui décrivent la situation avant, pendant et
+après chaque coup.
+
+\textbf{Contexte avant le coup (13 features).}
+Ce groupe capture la situation globale de la partie au moment où le coup
+est joué. On y trouve par exemple la phase de jeu (\texttt{game\_phase},
+qui distingue l'ouverture de la fin de partie), les distances de chaque
+joueur vers son objectif, l'avantage de distance entre l'IA et ses
+adversaires, le nombre de murs restants pour chacun, et les positions
+actuelles des pions sur le plateau. Ces informations donnent au modèle
+une vision d'ensemble du contexte stratégique.
+
+\textbf{Description du coup (5 features).}
+Ce groupe caractérise la nature du coup joué : s'agit-il d'un déplacement
+de pion ou d'un placement de mur~? Si c'est un mur, est-il horizontal ou
+vertical~? Si c'est un déplacement, quelle distance parcourt le pion~?
+Par exemple, \texttt{is\_wall\_move} vaut 1 si le coup est un mur et 0
+sinon, ce qui permet au modèle d'apprendre des stratégies différentes
+selon le type d'action.
+
+\textbf{Effet du coup (2 features).}
+Ce groupe mesure les conséquences immédiates du coup : \texttt{my\_progress}
+quantifie le gain de proximité vers l'objectif pour l'IA, et
+\texttt{opp\_slowdown} mesure le ralentissement infligé à l'adversaire.
+Ce sont les deux features les plus directement liées à la qualité d'un
+coup, et elles s'avèrent parmi les plus importantes pour le modèle.
+
+La figure~\ref{fig:feature-categories} résume la décomposition complète
+des 20 features.
+
+\begin{figure}[H]
   \centering
   \begin{tikzpicture}[
       >=Latex,
@@ -841,13 +921,27 @@ résume cette décomposition.
   \label{fig:feature-categories}
 \end{figure}
 
-\paragraph{Entraînement.}
-Les données sont séparées en 80\,\% apprentissage et 20\,\% test avec
-stratification. Nous avons comparé quatre modèles classiques de
-scikit-learn. Les résultats sont donnés dans le
-tableau~\ref{tab:ml-comparison}.
+Au terme de cette extraction, nous obtenons un fichier CSV de
+\textbf{34\,365 lignes}, où chaque ligne correspond à un coup joué lors
+d'une des 500 parties générées.
 
-\begin{table}[!ht]
+\paragraph{Entraînement et sélection du modèle.}
+L'entraînement est réalisé dans le notebook \texttt{ML/data/Training.ipynb}.
+Les données sont séparées en 80\,\% pour l'apprentissage et 20\,\% pour
+le test, avec stratification pour conserver la distribution des classes.
+Nous avons comparé quatre modèles classiques de scikit-learn, dont les
+résultats sont présentés dans le tableau~\ref{tab:ml-comparison}.
+
+\medskip
+Nous évaluons chaque modèle sur quatre métriques : \textbf{Train Acc},
+le taux de bons coups sur les données d'entraînement~; \textbf{Test Acc},
+le même taux sur des données jamais vues, qui reflète la vraie capacité du
+modèle~; \textbf{F1}, qui équilibre précision et rappel~; et \textbf{AUC},
+qui mesure à quel point le modèle sépare bien les bons coups des mauvais
+(1,0 étant parfait, 0,5 étant aléatoire).
+\medskip
+
+\begin{table}[H]
   \centering
   \begin{tabular}{lcccc}
     \hline
@@ -865,92 +959,124 @@ tableau~\ref{tab:ml-comparison}.
   \label{tab:ml-comparison}
 \end{table}
 
-Le Random Forest est le meilleur compromis sur nos données : AUC de 0,987,
-F1 de 0,939 et intégration simple dans le moteur. Nous avons aussi testé un
-MLP Keras. Le MLP atteint une AUC de 0,975, inférieure au Random Forest. Nous
-avons donc retenu le Random Forest, plus précis et plus léger à intégrer.
+La \textbf{Régression Logistique} sert de référence : avec une AUC de 0,833
+et une accuracy de 75,5\,\%, elle apprend les tendances générales mais reste
+trop linéaire pour capturer la complexité du jeu. L'\textbf{Arbre de Décision}
+progresse nettement (AUC 0,931, accuracy 83,6\,\%), mais sa profondeur limitée
+à 5 lui interdit de modéliser des interactions fines entre features. Le
+\textbf{Gradient Boosting} fait encore mieux (AUC 0,946, accuracy 86,6\,\%),
+mais au prix d'un temps d'inférence plus élevé. Le \textbf{Random Forest}
+(100 arbres) domine sur tous les critères : AUC de 0,987, accuracy de 93,8\,\%
+et F1 de 0,939. Malgré un score d'entraînement à 1,000 qui indique un
+surajustement sur les données d'entraînement, ses performances sur le jeu de
+test restent très solides, ce qui traduit une bonne capacité de généralisation.
+C'est donc ce modèle que nous avons retenu.
 
-\begin{figure}[!ht]
+\paragraph{Comparaison avec un réseau de neurones.}
+Pour vérifier que notre choix du Random Forest était le plus pertinent, nous
+avons également développé un réseau de neurones (MLP, \textit{Multilayer
+Perceptron}) avec Keras. L'idée d'un MLP est simple : les 20 features d'un
+coup traversent plusieurs couches de calcul successives, et chaque couche
+apprend à combiner les informations de la couche précédente pour en extraire
+des patterns de plus en plus abstraits, jusqu'à produire une estimation
+finale.
+
+Notre réseau est composé de trois couches denses successives de 128, 64
+puis 32 neurones — le nombre diminue progressivement pour forcer le réseau
+à condenser l'information. Après chaque couche, on applique une
+\textbf{normalisation par batch} (qui stabilise les valeurs entre couches
+pour accélérer l'apprentissage) et un \textbf{dropout} (qui désactive
+aléatoirement une partie des neurones pendant l'entraînement, forçant le
+réseau à ne pas dépendre d'un seul chemin de calcul et évitant ainsi de
+trop coller aux données d'entraînement). Une dernière couche à un neurone
+avec activation \textbf{sigmoïde} — une fonction qui écrase n'importe
+quelle valeur entre 0 et 1 — produit directement la probabilité de
+victoire estimée. La figure~\ref{fig:nn-architecture} présente
+l'architecture complète.
+
+\begin{table}[H]
   \centering
-  \begin{minipage}[t]{0.48\textwidth}
-    \vspace{0pt}
-    \centering
-    {\scriptsize
-\setlength{\tabcolsep}{3pt}
-\begin{tabular}{|>{\raggedright\arraybackslash}p{0.51\linewidth}|>{\centering\arraybackslash}p{0.24\linewidth}|>{\centering\arraybackslash}p{0.15\linewidth}|}
-\hline
-\rowcolor{LightSteelBlue!35}
-\textbf{Layer (type)} & \textbf{Output Shape} & \textbf{Param \#} \\
-\hline
-dense & (None, 128) & 2,688 \\
-\hline
-\rowcolor{AliceBlue!40}
-batch\_normalization & (None, 128) & 512 \\
-\hline
-dropout & (None, 128) & 0 \\
-\hline
-dense\_1 & (None, 64) & 8,256 \\
-\hline
-\rowcolor{AliceBlue!40}
-batch\_normalization\_1 & (None, 64) & 256 \\
-\hline
-dropout\_1 & (None, 64) & 0 \\
-\hline
-dense\_2 & (None, 32) & 2,080 \\
-\hline
-\rowcolor{AliceBlue!40}
-batch\_normalization\_2 & (None, 32) & 128 \\
-\hline
-dropout\_2 & (None, 32) & 0 \\
-\hline
-dense\_3 & (None, 1) & 33 \\
-\hline
-\end{tabular}
+  \setlength{\tabcolsep}{8pt}
+  \renewcommand{\arraystretch}{1.4}
+  \begin{tabular}{|l|c|r|}
+    \hline
+    \rowcolor{LightSteelBlue!35}
+    \textbf{Layer (type)} & \textbf{Output Shape} & \textbf{Param \#} \\
+    \hline
+    dense                   & (None, 128) & 2\,688 \\
+    \hline
+    \rowcolor{AliceBlue!40}
+    batch\_normalization     & (None, 128) & 512 \\
+    \hline
+    dropout                 & (None, 128) & 0 \\
+    \hline
+    dense\_1                 & (None, 64)  & 8\,256 \\
+    \hline
+    \rowcolor{AliceBlue!40}
+    batch\_normalization\_1  & (None, 64)  & 256 \\
+    \hline
+    dropout\_1               & (None, 64)  & 0 \\
+    \hline
+    dense\_2                 & (None, 32)  & 2\,080 \\
+    \hline
+    \rowcolor{AliceBlue!40}
+    batch\_normalization\_2  & (None, 32)  & 128 \\
+    \hline
+    dropout\_2               & (None, 32)  & 0 \\
+    \hline
+    dense\_3                 & (None, 1)   & 33 \\
+    \hline
+  \end{tabular}
+  \caption{Architecture du MLP utilisé pour comparaison}
+  \label{fig:nn-architecture}
+\end{table}
+
+La figure~\ref{fig:rf-vs-nn} compare les résultats du MLP et du Random Forest
+sur le jeu de test. Le MLP atteint une AUC de 0,975 et une accuracy de 89,9\,\%,
+ce qui reste honnête, mais le Random Forest le surpasse sur tous les indicateurs.
+La différence est particulièrement nette sur l'AUC (0,987 contre 0,975), ce qui
+signifie que le Random Forest discrimine mieux les bons coups des mauvais sur
+l'ensemble du jeu de test. Nous avons donc conservé le Random Forest : il est
+plus précis, plus rapide à l'inférence, et plus simple à intégrer dans le
+moteur de jeu sans dépendance à Keras.
+
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[
+      font=\small,
+      scale=0.85,
+      transform shape,
+      bar/.style={draw, minimum width=0.6cm},
+      rfbar/.style={bar, fill=blue!30},
+      nnbar/.style={bar, fill=orange!30},
+    ]
+    \draw[->] (0,0) -- (10,0);
+    \draw[->] (0,0) -- (0,4.5);
+    \foreach \y/\lab in {0/0.80, 1/0.85, 2/0.90, 3/0.95, 4/1.00} {
+      \draw (-0.1,\y) -- (0.1,\y) node[left=0.2cm] {\lab};
     }
-    \par\smallskip
-    \refstepcounter{figure}\label{fig:nn-architecture}
-    \small\textbf{Figure \thefigure} -- Architecture du MLP utilisé pour comparaison
-  \end{minipage}\hfill
-  \begin{minipage}[t]{0.48\textwidth}
-    \vspace{0pt}
-    \centering
-    \begin{tikzpicture}[
-        font=\small,
-        scale=0.85,
-        transform shape,
-        bar/.style={draw, minimum width=0.6cm},
-        rfbar/.style={bar, fill=blue!30},
-        nnbar/.style={bar, fill=orange!30},
-      ]
-      \draw[->] (0,0) -- (10,0);
-      \draw[->] (0,0) -- (0,4.5);
-      \foreach \y/\lab in {0/0.80, 1/0.85, 2/0.90, 3/0.95, 4/1.00} {
-        \draw (-0.1,\y) -- (0.1,\y) node[left=0.2cm] {\lab};
-      }
-      \node[rfbar, minimum height=2.76cm, anchor=south] at (1.5,0) {};
-      \node[nnbar, minimum height=1.98cm, anchor=south] at (2.3,0) {};
-      \node[below] at (1.9,-0.2) {Test Acc};
-      \node[above, font=\tiny] at (1.5,2.76) {0,938};
-      \node[above, font=\tiny] at (2.3,1.98) {0,899};
-      \node[rfbar, minimum height=2.78cm, anchor=south] at (4.5,0) {};
-      \node[nnbar, minimum height=1.98cm, anchor=south] at (5.3,0) {};
-      \node[below] at (4.9,-0.2) {F1};
-      \node[above, font=\tiny] at (4.5,2.78) {0,939};
-      \node[above, font=\tiny] at (5.3,1.98) {0,899};
-      \node[rfbar, minimum height=3.74cm, anchor=south] at (7.5,0) {};
-      \node[nnbar, minimum height=3.50cm, anchor=south] at (8.3,0) {};
-      \node[below] at (7.9,-0.2) {AUC};
-      \node[above, font=\tiny] at (7.5,3.74) {0,987};
-      \node[above, font=\tiny] at (8.3,3.50) {0,975};
-      \node[rfbar, minimum width=0.4cm, minimum height=0.3cm] at (3.5,4.2) {};
-      \node[right, font=\footnotesize] at (3.8,4.2) {Random Forest};
-      \node[nnbar, minimum width=0.4cm, minimum height=0.3cm] at (6.5,4.2) {};
-      \node[right, font=\footnotesize] at (6.8,4.2) {MLP Keras};
-    \end{tikzpicture}
-    \par\smallskip
-    \refstepcounter{figure}\label{fig:rf-vs-nn}
-    \small\textbf{Figure \thefigure} -- Comparaison Random Forest / MLP sur le jeu de test
-  \end{minipage}
+    \node[rfbar, minimum height=2.76cm, anchor=south] at (1.5,0) {};
+    \node[nnbar, minimum height=1.98cm, anchor=south] at (2.3,0) {};
+    \node[below] at (1.9,-0.2) {Test Acc};
+    \node[above, font=\tiny] at (1.5,2.76) {0,938};
+    \node[above, font=\tiny] at (2.3,1.98) {0,899};
+    \node[rfbar, minimum height=2.78cm, anchor=south] at (4.5,0) {};
+    \node[nnbar, minimum height=1.98cm, anchor=south] at (5.3,0) {};
+    \node[below] at (4.9,-0.2) {F1};
+    \node[above, font=\tiny] at (4.5,2.78) {0,939};
+    \node[above, font=\tiny] at (5.3,1.98) {0,899};
+    \node[rfbar, minimum height=3.74cm, anchor=south] at (7.5,0) {};
+    \node[nnbar, minimum height=3.50cm, anchor=south] at (8.3,0) {};
+    \node[below] at (7.9,-0.2) {AUC};
+    \node[above, font=\tiny] at (7.5,3.74) {0,987};
+    \node[above, font=\tiny] at (8.3,3.50) {0,975};
+    \node[rfbar, minimum width=0.4cm, minimum height=0.3cm] at (3.5,4.2) {};
+    \node[right, font=\footnotesize] at (3.8,4.2) {Random Forest};
+    \node[nnbar, minimum width=0.4cm, minimum height=0.3cm] at (6.5,4.2) {};
+    \node[right, font=\footnotesize] at (6.8,4.2) {MLP Keras};
+  \end{tikzpicture}
+  \caption{Comparaison Random Forest / MLP sur le jeu de test}
+  \label{fig:rf-vs-nn}
 \end{figure}
 
 \paragraph{Intégration dans le MCTS.}
@@ -967,7 +1093,7 @@ figure~\ref{fig:ml-select-pseudocode}. Il représente uniquement l'étape de
 sélection : pour chaque enfant déjà généré, on calcule un score ML, puis on
 choisit celui qui obtient la meilleure probabilité de victoire.
 
-\begin{figure}[!ht]
+\begin{figure}[H]
 {\small
 \begin{minted}[frame=single,linenos]{text}
 fonction ml_select_child(noeud_parent):
