@@ -109,7 +109,6 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         ai_time: int = 5,
         ai_minimax_depth: int | None = None,
         ai_minimax_scoring: int = 1,
-
     ):
         super().__init__(application=app, title="Quoridor")
         self.set_default_size(680, 760)
@@ -282,11 +281,11 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         self.blitz_label.set_xalign(1.0)
         self.blitz_label.set_visible(False)
 
-        bar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
-        bar.append(menubar)
-        bar.append(self.blitz_label)
+        toolbar = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
+        toolbar.append(menubar)
+        toolbar.append(self.blitz_label)
 
-        return bar
+        return toolbar
 
     def _build_new_session(
         self, *, size: int, players: int, walls: int = DEFAULT_WALLS
@@ -444,7 +443,7 @@ class QuoridorWindow(Gtk.ApplicationWindow):
                 return row, col
         return None
 
-    def _on_drag_begin(self, gesture, start_x, start_y):
+    def _on_drag_begin(self, _gesture, start_x, start_y):
         if self._paused:
             self._set_status("Game is paused.")
             return
@@ -517,13 +516,13 @@ class QuoridorWindow(Gtk.ApplicationWindow):
             self._set_status(error)
         self.area.queue_draw()
 
-    def _on_drag_update(self, gesture, offset_x, offset_y):
+    def _on_drag_update(self, _gesture, offset_x, offset_y):
         if self._drag_pid is None:
             return
         self._drag_offset = (offset_x, offset_y)
         self.area.queue_draw()
 
-    def _on_drag_end(self, gesture, offset_x, offset_y):
+    def _on_drag_end(self, _gesture, offset_x, offset_y):
         if self._drag_pid is None:
             return
         sx, sy = self._drag_start
@@ -807,7 +806,7 @@ class QuoridorWindow(Gtk.ApplicationWindow):
             return
         remaining = self.blitz.remaining_times()
         text = ", ".join(
-            f"Player {pid}: {int(sec)//60:02d}:{int(sec)%60:02d}"
+            f"Player {pid}: {int(sec) // 60:02d}:{int(sec) % 60:02d}"
             for pid, sec in sorted(remaining.items())
         )
         message = f"Blitz time -> {text}"
@@ -909,7 +908,7 @@ class QuoridorWindow(Gtk.ApplicationWindow):
                 self._set_status("Aucun joueur connecté.")
             else:
                 text = ""
-                for player_id, name, status in players:
+                for _player_id, name, status in players:
                     text = text + f"{name}({status}) "
                 self._set_status(f"Joueurs : {text}")
 

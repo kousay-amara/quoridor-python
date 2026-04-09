@@ -1,2 +1,31 @@
 [MAIN]
 recursive = yes
+
+[MESSAGES CONTROL]
+disable =
+    missing-module-docstring,
+    missing-class-docstring,
+    missing-function-docstring,
+    too-many-instance-attributes,
+    too-few-public-methods,
+    too-many-arguments,
+    too-many-positional-arguments,
+    too-many-locals,
+    too-many-branches,
+    too-many-statements,
+    too-many-return-statements,
+    too-many-lines,
+    too-many-public-methods,
+    import-outside-toplevel,
+    protected-access,
+    attribute-defined-outside-init,
+    wrong-import-position,
+    wrong-import-order,
+    ungrouped-imports,
+    broad-exception-caught,
+    duplicate-code,
+    possibly-used-before-assignment,
+    no-member
+
+[FORMAT]
+max-line-length = 88
