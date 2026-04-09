@@ -11,7 +11,7 @@
 
 \title{ProjectName -- C/Java/Python}
 \subtitle{Rapport final}
-\author{AIT-ISSAD MOHAMED SAID, BILAL AL FAYOUMI, AMARA KOUSSAY, GUILEM CAUSS}
+\author{AIT-ISSAD MOHAMED SAID, BILAL AL FAYOUMI, AMARA KOUSAY, GUILEM CAUSS}
 
 %------------------------------------------------------------------------------
 
@@ -97,6 +97,13 @@ l'enseignement de la logique et de l'algorithmique~\cite{gigamic}.
 Le jeu est aujourd'hui décliné en de nombreuses versions (Pocket,
 Kid, Deluxe, Giant) et continûment édité à l'échelle mondiale.
 
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.35\textwidth]{boxquoridor.png}
+  \caption{Boîte du jeu Quoridor (Gigamic, 1997).}
+  \label{fig:boxquoridor}
+\end{figure}
+
 % ------------------------------------------------------------------
 \subsection{Règles du jeu}
 \label{subsec:regles}
@@ -111,8 +118,8 @@ premier l'une des neuf cases du bord opposé à son bord de départ.
 À chaque tour, un joueur accomplit exactement l'une des deux actions
 suivantes.
 
-\paragraph{Déplacement du pion.}
-Le pion se déplace d'une case dans l'une des quatre directions
+\paragraph{Déplacement du pion~:}
+le pion se déplace d'une case dans l'une des quatre directions
 orthogonales (nord, sud, est, ouest), sous réserve qu'aucun mur ne
 barre le passage et que la case d'arrivée soit libre. Lorsque le pion
 adverse se trouve sur une case immédiatement adjacente sans mur
@@ -121,8 +128,15 @@ située juste derrière l'adversaire. Si cette case est inaccessible
 (mur ou bord du plateau), le saut peut s'effectuer en diagonale sur
 l'une des cases latérales adjacentes à l'adversaire~\cite{gigamic,glendenning2005}.
 
-\paragraph{Pose d'un mur.}
-Un mur est une pièce plate couvrant deux segments consécutifs de la
+\begin{figure}[H]
+  \centering
+  \includegraphics[height=0.45\textheight]{quoridor-rules.jpg}
+  \caption{Illustrations des règles de déplacement, tirées du manuel officiel~\cite{gigamic}.}
+  \label{fig:deplacement}
+\end{figure}
+
+\paragraph{Pose d'un mur~:}
+un mur est une pièce plate couvrant deux segments consécutifs de la
 grille, posé dans l'une des rainures du plateau. Il bloque
 définitivement le passage entre les cases qu'il sépare, pour tous les
 joueurs. La règle la plus importante du jeu --- et la plus exigeante
@@ -133,24 +147,31 @@ objectif~\cite{gigamic,glendenning2005}. Cette contrainte impose, à
 chaque tentative de pose, une vérification de connectivité par un
 parcours de graphe (voir section~\ref{sec:algos}).
 
-\paragraph{Exemples illustratifs.}
-Pour ancrer ces règles dans la pratique, considérons quelques situations
+\paragraph{Exemples illustratifs~:}
+pour ancrer ces règles dans la pratique, considérons quelques situations
 concrètes exprimées en notation algébrique~\cite{glendenning2005}.
 
-\textit{Déplacement simple.} Le joueur~1 part de la case \texttt{e9}
+\textit{Déplacement simple~:} le joueur~1 part de la case \texttt{e9}
 (centre du bord sud) et avance vers le nord : il atteint \texttt{e8}.
 Si un mur horizontal a été posé en \texttt{e8h}, bloquant le passage
 entre les rangées 8 et 9, ce déplacement est illégal et le joueur doit
 choisir une autre direction ou poser un mur à la place.
 
-\textit{Saut et repli diagonal.} Le joueur~1 est en \texttt{e5} et le
+\textit{Saut et repli diagonal~:} le joueur~1 est en \texttt{e5} et le
 joueur~2 en \texttt{e4}, sans mur entre eux. Le joueur~1 peut sauter
 directement en \texttt{e3}. Si un mur horizontal bloque \texttt{e3},
 le saut droit est impossible : le joueur~1 peut alors se rabattre en
 diagonale vers \texttt{d4} ou \texttt{f4}, à condition qu'aucun mur ne
 barre ces accès latéraux~\cite{gigamic}.
 
-\textit{Mur illégal.} Supposons que des murs successifs aient été posés
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.50\textwidth]{figure2-2.png}
+  \caption{Saut direct par-dessus l'adversaire (gauche) et repli diagonal lorsqu'un mur bloque l'atterrissage (droite)~\cite{glendenning2005}.}
+  \label{fig:jump}
+\end{figure}
+
+\textit{Mur illégal~:} supposons que des murs successifs aient été posés
 de façon à ne laisser qu'un seul chemin au joueur~2 vers son bord
 objectif. Toute tentative de poser un mur supplémentaire supprimant ce
 dernier chemin est rejetée par le moteur de jeu, qui déclenche un
@@ -185,12 +206,30 @@ de partie). Une recherche exhaustive est donc totalement hors de
 portée, et la qualité d'un agent repose essentiellement sur la
 pertinence de sa fonction d'évaluation heuristique.
 
-Ces caractéristiques ont un impact direct sur nos choix
+Ces caractéristiques sont résumées dans le tableau~\ref{tab:complexite} et ont un impact direct sur nos choix
 d'implémentation, détaillés en section~\ref{sec:algos} : nécessité
 d'un élagage alpha-bêta avec approfondissement itératif, coût
 prohibitif d'un BFS répété pour la vérification de légalité des murs,
 et importance d'une représentation interne du plateau permettant
 l'ajout et la suppression rapides d'arêtes.
+
+\begin{table}[H]
+  \centering
+  \begin{tabular}{lccc}
+    \hline
+    \textbf{Critère} & \textbf{Quoridor} & \textbf{Échecs} & \textbf{Go ($19\times19$)} \\
+    \hline
+    Espace d'états & $\approx 10^{42}$ & $\approx 10^{44}$ & $\approx 10^{170}$ \\
+    Complexité arbre de jeu & $\approx 10^{162}$ & $\approx 10^{123}$ & $\approx 10^{360}$ \\
+    Facteur de branchement & 60--80 & 35 & 250 \\
+    Information & parfaite & parfaite & parfaite \\
+    Hasard & non & non & non \\
+    Match nul & impossible & possible & possible \\
+    \hline
+  \end{tabular}
+  \caption{Comparaison de la complexité de Quoridor avec d'autres jeux combinatoires de référence~\cite{mertens2006,glendenning2005,russell2020aima}.}
+  \label{tab:complexite}
+\end{table}
 
 % ------------------------------------------------------------------
 \subsection{Travaux existants}
@@ -200,8 +239,8 @@ l'ajout et la suppression rapides d'arêtes.
 Quoridor a fait l'objet de plusieurs travaux académiques qui
 constituent le socle bibliographique de notre projet.
 
-\paragraph{Approches par recherche adversariale.}
-Le premier agent documenté est dû à Lisa Glendenning, dont la thèse de
+\paragraph{Approches par recherche adversariale~:}
+le premier agent documenté est dû à Lisa Glendenning, dont la thèse de
 licence (University of New Mexico, 2005) propose un joueur artificiel
 fondé sur un algorithme Minimax avec une fonction d'évaluation linéaire
 dont les poids sont optimisés par algorithme génétique~\cite{glendenning2005}.
@@ -220,8 +259,8 @@ profondeur d'abord (DFS) et les plus courts chemins par BFS.
 Il conclut que la richesse heuristique prime sur la profondeur de
 recherche pour des temps de réflexion raisonnables.
 
-\paragraph{Approches Monte Carlo.}
-Plus récemment, Massagué Respall, Brown et Aslam ont appliqué la
+\paragraph{Approches Monte Carlo~:}
+plus récemment, Massagué Respall, Brown et Aslam ont appliqué la
 recherche arborescente Monte Carlo (MCTS) à Quoridor~\cite{respall2018}.
 Leur agent repose sur l'algorithme UCT (\emph{Upper Confidence bounds
 applied to Trees}) formalisé par Kocsis et Szepesvári~\cite{kocsis2006uct},
@@ -234,8 +273,8 @@ plus court chemin constituent le socle commun de toutes les
 implémentations sérieuses du jeu. Browne \emph{et al.} fournissent le
 cadre de référence sur les variantes MCTS~\cite{browne2012mcts}.
 
-\paragraph{Positionnement de notre projet.}
-Les solutions logicielles existantes --- agents web universitaires,
+\paragraph{Positionnement de notre projet~:}
+les solutions logicielles existantes --- agents web universitaires,
 applications mobiles multijoueurs --- ne réunissent pas simultanément
 les caractéristiques suivantes : logiciel libre, interfaces CLI et GUI,
 mode réseau multijoueur et intelligence artificielle configurable. C'est
