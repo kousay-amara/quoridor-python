@@ -1105,6 +1105,51 @@ fonction ml_select_child(noeud_parent):
 \label{fig:ml-select-pseudocode}
 \end{figure}
 
+\section*{Revue critique du projet}
+
+\subsection*{Ce qui a été réalisé}
+
+Les trois algorithmes sont pleinement opérationnels. Le Minimax avec élagage
+alpha-beta gère les deadlines nœud par nœud et propose trois heuristiques
+configurables selon la stratégie souhaitée. L'Iterative Deepening garantit
+toujours un coup valide, même si le temps expire en cours d'itération. Le MCTS
+intègre une politique de sélection ML fonctionnelle en remplacement de la
+formule UCT classique.
+
+Le pipeline ML fonctionne de bout en bout~: génération de parties, extraction
+de features, entraînement et intégration dans le moteur sont enchaînés sans
+intervention manuelle. Le modèle Random Forest obtient une AUC de 0,987 et
+est chargé en cache au démarrage pour ne pas pénaliser les temps de réponse.
+
+\subsection*{Limitations}
+
+\paragraph{IA conçue pour 2 joueurs uniquement.}
+Le Minimax et le MCTS supportent jusqu'à 4 joueurs, mais la sélection ML ne
+fonctionne qu'à 2. Les features comparent l'IA à un seul adversaire (distance,
+murs, ralentissement), ce qui rend le modèle inutilisable en l'état pour les
+parties multijoueurs.
+
+\paragraph{Modèle ML limité à la grille 9\texttimes9.}
+Le moteur de jeu accepte des plateaux de taille 3 à 15, mais le modèle a été
+entraîné uniquement sur des parties en 9\texttimes9. Sur une autre taille, les
+features produites seraient hors distribution et les prédictions non fiables.
+
+\paragraph{Profondeur limitée du Minimax avec les murs.}
+En début de partie, le facteur de branchement atteint environ 130 coups
+possibles par position (déplacements + poses de murs). Même avec l'élagage,
+dépasser la profondeur~3 devient très coûteux en temps. En pratique, on ne
+dépasse pas la profondeur~4 avec un budget de 12 secondes.
+
+\subsection*{Améliorations possibles}
+
+La limitation multijoueur du ML pourrait être levée en reformulant les features
+comme des valeurs relatives moyennées sur tous les adversaires. Pour la taille
+de grille, il suffirait de normaliser les positions par \texttt{board\_size}
+dans les features et de ré-entraîner le modèle. Côté Minimax, trier les coups
+avant l'exploration — déplacements en premier, puis murs classés par impact —
+permettrait à l'alpha-beta d'élaguer plus tôt et d'atteindre des profondeurs
+plus élevées dans le même budget temps.
+
 \section*{Conclusion}
 
 Suspendisse sit amet nisi placerat, vestibulum nisl vel, iaculis nunc.
