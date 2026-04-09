@@ -42,35 +42,43 @@
 
 \section*{Introduction}
 
-Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor
-incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis
-nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
-Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu
-fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in
-culpa qui officia deserunt mollit anim id est laborum.
+Quoridor est un jeu de société à deux ou quatre joueurs conçu par Mirko Marchesi
+et publié par Gigamic en 1997. Sur un plateau de neuf cases de côté, chaque
+joueur doit conduire son pion de son bord de départ au bord opposé, tout en
+posant des murs pour ralentir ses adversaires. La règle fondamentale qui interdit
+de condamner tout chemin vers la victoire confère au jeu une profondeur
+stratégique remarquable : l'espace des états avoisine $10^{42}$ configurations
+et la complexité de l'arbre de jeu dépasse $10^{162}$, plaçant Quoridor parmi
+les jeux combinatoires les plus exigeants pour les méthodes de recherche
+automatique.
 
-Pellentesque iaculis molestie euismod. In hac habitasse platea dictumst. Duis eu
-gravida sem. Vivamus pulvinar, tellus auctor sollicitudin iaculis, quam massa
-blandit ligula, in mollis est tellus et velit. Nulla gravida sapien nibh, nec
-faucibus lorem aliquam sed. Curabitur rutrum elit purus, et congue neque
-venenatis vitae. Sed non magna nisi. Pellentesque euismod non ipsum a hendrerit.
-Pellentesque vehicula tincidunt lacinia. Sed rhoncus porttitor facilisis.
+Ce projet a pour objectif de réaliser une implémentation complète de Quoridor en
+Python, allant du moteur de jeu jusqu'aux interfaces utilisateur, en passant par
+plusieurs algorithmes d'intelligence artificielle. Le moteur repose sur une
+modélisation par graphe : les murs sont représentés comme des suppressions
+d'arêtes, et chaque pose de mur est validée par un parcours en largeur vérifiant
+que tous les chemins restent praticables. Sur cette base, trois algorithmes d'IA
+ont été développés : un Minimax avec élagage alpha-bêta et approfondissement
+itératif, un Monte Carlo Tree Search guidé par une politique UCT, et un pipeline
+d'apprentissage automatique fondé sur une forêt aléatoire intégrée à la
+sélection du MCTS. Ces algorithmes partagent le même cœur de jeu et sont
+interchangeables à l'exécution.
 
-Etiam sed molestie odio. Nunc cursus sollicitudin est vitae posuere. Nullam
-pellentesque metus eu dui porttitor bibendum. Morbi egestas arcu ut urna dictum
-placerat non non nisl. Quisque non ante in eros cursus pulvinar. Sed augue
-libero, eleifend a urna eget, pellentesque condimentum odio. Sed sed dui non
-diam mattis interdum eget sed urna. Integer consectetur, erat id rutrum posuere,
-dui velit dictum mi, quis tincidunt magna diam sit amet nunc. Etiam dui augue,
-sollicitudin rhoncus nisl a, rhoncus tempor purus.
+Deux interfaces ont été développées au-dessus de cette logique commune. Une
+interface en ligne de commande (\textbf{CLI}) permet de jouer en mode texte, de
+configurer l'IA et de gérer les parties sauvegardées. Une interface graphique
+(\textbf{GUI}) réalisée avec GTK4 et le moteur de rendu Cairo offre un plateau
+interactif avec glisser-déposer des pions, placement visuel des murs, gestion du
+temps en mode Blitz et connexion à un serveur réseau. La séparation stricte
+entre la couche de présentation et la logique applicative garantit que les deux
+interfaces s'appuient sur exactement le même moteur de jeu.
 
-Suspendisse cursus erat et metus fermentum ullamcorper. Etiam eros arcu, dapibus
-quis efficitur ut, congue id nunc. Pellentesque aliquam venenatis convallis.
-Nulla nisi justo, aliquet quis lacus eget, aliquet maximus velit. Maecenas ex
-turpis, iaculis eget dignissim non, efficitur vel mi. Maecenas pharetra elit
-ornare sem suscipit ornare id id sapien. Vivamus sem neque, consectetur vitae
-aliquet non, finibus eu lectus. Fusce aliquam ipsum ut viverra vehicula. Donec
-ultrices varius nulla vel finibus. Donec convallis fringilla ante id porta.
+Ce rapport présente l'ensemble de la démarche. La section~\ref{sec:sujet} décrit
+le jeu, ses règles et sa complexité. La section suivante expose la modélisation
+retenue, puis l'architecture logicielle générale. La conception des algorithmes
+d'intelligence artificielle est ensuite détaillée, suivie de l'implémentation de
+l'interface graphique. Le rapport se conclut par une présentation des tests
+réalisés et une revue critique du projet.
 
 % ==============================================================
 \section{Explication détaillée du sujet}
