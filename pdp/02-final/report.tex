@@ -363,6 +363,19 @@ fonction iterative_deepening(etat, joueur_ia, temps_max, prof_max):
 \label{fig:iterative-deepening-pseudocode}
 \end{figure}
 
+\begin{table}[h!]
+\centering
+\begin{tabular}{|l|c|c|c|}
+\hline
+\textbf{Critère} & \textbf{Standard (H1)} & \textbf{Matérielle (H2)} & \textbf{Hybride (H3)} \\ \hline
+\textbf{Focus Principal} & Vitesse relative & Obstruction & Positionnement \\ \hline
+\textbf{Référence Murs} & Moyenne adverse & Max adverse & Seuil dynamique \\ \hline
+\textbf{Poids des Murs} & 0,3 - 0,5 & 1,2 - 2,0 & 0,4 $\rightarrow$ 0,8 \\ \hline
+\textbf{Calcul Distance} & BFS (Précis) & BFS (Pondéré $\times$2) & BFS (Agressif) \\ \hline
+\textbf{Bonus Spécial} & Aucun & Aucun & Centralité (Manhattan) \\ \hline
+\end{tabular}
+\caption{Comparaison technique des trois heuristiques implémentées.}
+\end{table}
 
 
 \subsection{Heuristiques}
@@ -401,19 +414,6 @@ Pour ces trois heuristiques, le calcul du chemin le plus court est coûteux mais
 Ces 3 fonctions d’évaluation sont appelées par une fonction parente, \texttt{evaluate\_state}, qui est appelée par l'algorithme minimax et qui, 
 en fonction de la valeur de l’attribut \texttt{scoring}, calcule la position avec l’heuristique choisi.
 
-\begin{table}[h!]
-\centering
-\begin{tabular}{|l|c|c|c|}
-\hline
-\textbf{Critère} & \textbf{Standard (H1)} & \textbf{Matérielle (H2)} & \textbf{Hybride (H3)} \\ \hline
-\textbf{Focus Principal} & Vitesse relative & Obstruction & Positionnement \\ \hline
-\textbf{Référence Murs} & Moyenne adverse & Max adverse & Seuil dynamique \\ \hline
-\textbf{Poids des Murs} & 0,3 - 0,5 & 1,2 - 2,0 & 0,4 $\rightarrow$ 0,8 \\ \hline
-\textbf{Calcul Distance} & BFS (Précis) & BFS (Pondéré $\times$2) & BFS (Agressif) \\ \hline
-\textbf{Bonus Spécial} & Aucun & Aucun & Centralité (Manhattan) \\ \hline
-\end{tabular}
-\caption{Comparaison technique des trois heuristiques implémentées.}
-\end{table}
 
 \subsection{Monte Carlo Tree Search (MCTS)}
 
