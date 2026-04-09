@@ -1141,6 +1141,39 @@ fonction ml_select_child(noeud_parent):
 \label{fig:ml-select-pseudocode}
 \end{figure}
 
+\section*{Tests}
+
+Pour valider les deux composants les plus critiques de l'IA, nous avons écrit
+des tests unitaires couvrant le moteur Minimax et le pipeline ML.
+
+\paragraph{Tests du moteur Minimax (\texttt{test\_minimax\_engine.py}).}
+Un premier test s'assure que \texttt{find\_best\_move\_minimax} retourne un
+coup légal à profondeur~1, et qu'un appel à l'alpha-beta produit un score de
+type \texttt{float} sans erreur. Le comportement face aux timeouts est testé
+explicitement~: une deadline simulée expire dès le deuxième appel, et le test
+confirme qu'un coup valide est tout de même retourné. La conversion automatique
+temps~→~profondeur est couverte par cinq assertions sur les seuils définis
+(0,5~s~→~1, 2~s~→~2, etc.). Deux tests portent sur l'Iterative Deepening~:
+le premier confirme qu'en cas de timeout à la profondeur~4, c'est le résultat
+de la profondeur~3 qui est conservé~; le second s'assure que le paramètre
+\texttt{max\_depth} stoppe l'itération au bon niveau. Un dernier test confirme
+que la deadline est bien propagée jusqu'à la génération des coups légaux.
+
+\paragraph{Tests du pipeline ML (\texttt{test\_ml\_features\_selector.py}).}
+L'extraction de features est testée pour les deux types de coups. Pour un
+déplacement de pion, le test s'assure que les 20 colonnes attendues sont
+présentes et que les valeurs clés sont correctes (\texttt{is\_pawn\_move}~=~1,
+\texttt{pawn\_move\_distance}~=~1, phase de jeu à 0,2). Pour un mur, les flags
+d'orientation sont validés. Le garde multijoueur est également couvert~: un
+état à 3 joueurs doit lever une \texttt{ValueError}. Le calcul de probabilité
+de victoire est testé sur deux types de modèles~: un exposant \texttt{predict\_proba}
+et un exposant uniquement \texttt{predict}. Le cache du modèle est validé~:
+deux appels successifs à \texttt{load\_model} avec le même fichier ne doivent
+déclencher qu'un seul chargement. Enfin, \texttt{ml\_select\_child} est testé
+sur un nœud à deux enfants~: le test confirme que l'enfant au meilleur score
+est sélectionné, et qu'en cas d'erreur dans le scoring, le dernier meilleur
+résultat connu est conservé sans propager l'exception.
+
 \section*{Revue critique du projet}
 
 \subsection*{Ce qui a été réalisé}
