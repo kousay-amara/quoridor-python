@@ -1,0 +1,491 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[a4paper,margin=2.5cm]{geometry}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{float}
+
+\lstset{
+  language=Python,
+  basicstyle=\small\ttfamily,
+  breaklines=true,
+  frame=single,
+  numbers=left,
+  numberstyle=\tiny,
+}
+
+\renewcommand{\lstlistingname}{Extrait}
+
+\begin{document}
+
+\section{Conception et Implémentation de l'Interface Graphique}
+
+Le projet Quoridor nécessite une interface graphique permettant à
+l'utilisateur de jouer avec sa souris : voir le plateau, déplacer ses
+pions, poser des murs, et accéder aux fonctionnalités du programme
+comme l'intelligence artificielle, le mode réseau ou le chronomètre.
+L'interface est implémentée à l'aide de \textbf{GTK4}, un
+ensemble d'outils permettant de créer des fenêtres et des éléments
+visuels en Python. Elle constitue uniquement la couche de présentation :
+elle n'implémente aucune règle du jeu, aucun algorithme d'intelligence
+artificielle, aucune logique réseau. Pour chacune de ces fonctionnalités,
+elle délègue à des modules déjà implémentés (\texttt{GameSession},
+\texttt{GameApplicationService}, \texttt{Blitz}, \texttt{NetworkClient}),
+et se contente d'afficher l'état du jeu à l'écran et de transmettre
+les actions de l'utilisateur à ces modules. Cette séparation stricte
+entre présentation et logique garantit que la CLI et le GUI partagent
+exactement le même cœur de jeu.
+
+\subsection{Dessiner le plateau et interagir avec lui}
+
+Pour afficher le plateau, l'approche la plus intuitive consisterait à
+placer une grille de 81 boutons cliquables un par case. GTK propose
+nativement des widgets \texttt{Gtk.Button} qui gèrent automatiquement
+les clics. Cette solution se heurte cependant à trois obstacles
+rédhibitoires pour Quoridor. Les murs ne se posent pas \emph{sur} les
+cases mais \emph{entre} elles : une grille de boutons n'offre aucun
+espace naturel pour les représenter, ce qui imposerait plus de 200
+widgets supplémentaires avec une logique de coordonnées complexe.
+De plus, l'apparence des boutons GTK dépend du thème graphique du
+système d'exploitation, rendant impossible un rendu visuel homogène
+et contrôlé. Enfin, le glisser-déposer du pion nécessite de suivre
+la position de la souris en temps réel, ce qu'un simple bouton
+cliquable ne sait pas faire.
+
+Pour contourner ces limites, on remplace les 81 boutons par un
+\textbf{canvas de dessin} : un widget \texttt{Gtk.DrawingArea}, une
+zone rectangulaire vierge sur laquelle on dessine tout le plateau
+manuellement à l'aide de \textbf{Cairo}, une bibliothèque de dessin
+vectoriel. Cairo permet de décrire des formes géométriques (rectangles,
+cercles, lignes) indépendamment de la résolution de l'écran, ce qui
+garantit un rendu net quelle que soit la taille de la fenêtre.
+
+\begin{lstlisting}[caption={Création de la zone de dessin}]
+total = SIZE * CELL + (SIZE - 1) * GAP + 2 * MARGIN
+self.area = Gtk.DrawingArea(hexpand=True, vexpand=True)
+self.area.set_content_width(total)
+self.area.set_content_height(total)
+self.area.set_draw_func(self._draw)
+\end{lstlisting}
+
+Une unique méthode \texttt{\_draw} dessine l'intégralité du plateau :
+d'abord le fond, puis les cases, puis les murs dans leurs interstices,
+et enfin les pions par-dessus. L'ordre est important Cairo dessine
+comme un peintre, chaque élément recouvrant ceux dessinés avant lui.
+À chaque changement d'état du jeu, un appel à
+\texttt{self.area.queue\_draw()} demande à GTK de redéclencher ce
+redessin. La taille d'une case est recalculée dynamiquement à chaque
+redessin par \texttt{\_cell\_size} :
+
+\begin{lstlisting}[caption={Calcul dynamique de la taille d'une case}]
+def _cell_size(self):
+    size = self._board_size()
+    available = (
+        min(self.area.get_width(), self.area.get_height()) - 2 * MARGIN
+    )
+    return max((available - (size - 1) * GAP) / size, 1)
+\end{lstlisting}
+
+On prend le plus petit côté de la fenêtre (\texttt{min(width, height)})
+pour garantir que le plateau reste toujours carré même si l'utilisateur
+étire la fenêtre horizontalement. On soustrait ensuite les marges
+(\texttt{2 * MARGIN}) puis l'espace total occupé par les interstices
+entre les cases (\texttt{(size - 1) * GAP}) il y a \texttt{size - 1}
+espaces pour \texttt{size} cases. Ce qui reste est divisé par le nombre
+de cases pour obtenir la taille d'une case. Le \texttt{max(..., 1)}
+est une sécurité qui évite de retourner zéro ou une valeur négative
+si la fenêtre devient trop petite, ce qui ferait planter Cairo.
+
+La méthode \texttt{\_xy\_to\_cell} effectue la transformation inverse :
+à partir des coordonnées en pixels d'un clic, elle retrouve la case
+correspondante.
+
+\begin{lstlisting}[caption={Conversion d'un pixel en coordonnée de case}]
+def _xy_to_cell(self, x, y):
+    size = self._board_size()
+    cs = self._cell_size()
+    step = cs + GAP
+    col = int((x - self._ox) / step)
+    row = int((y - self._oy) / step)
+    if 0 <= row < size and 0 <= col < size:
+        in_cell_x = (x - self._ox) - col * step
+        in_cell_y = (y - self._oy) - row * step
+        if in_cell_x <= cs and in_cell_y <= cs:
+            return row, col
+    return None
+\end{lstlisting}
+
+La division par \texttt{step} donne le numéro de colonne dans lequel
+tombe le pixel \texttt{x}. Mais cela ne suffit pas : si le clic tombe
+dans l'interstice entre deux cases, la division donnerait quand même
+un numéro de colonne valide. Le second test vérifier que
+\texttt{in\_cell\_x} et \texttt{in\_cell\_y} ne dépassent pas
+\texttt{cs} permet de détecter ce cas et de retourner \texttt{None},
+signifiant qu'aucune case n'a été cliquée. Ce filtre est essentiel
+pour distinguer un clic sur une case d'un clic dans un interstice
+destiné à poser un mur.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.5\textwidth]{quoridor.png}
+    \caption{Interface graphique du jeu Quoridor en cours de partie.
+    Les murs s'affichent dans les interstices entre les cases, rendus
+    par Cairo via un unique widget \texttt{Gtk.DrawingArea}.}
+    \label{fig:gui}
+\end{figure}
+
+\subsection{Interagir avec le plateau : le glisser-déposer}
+
+Une fois le plateau affiché, l'utilisateur doit pouvoir déplacer son
+pion et poser des murs avec la souris. GTK4 propose le concept
+d'\textbf{EventController}, un objet qui capture des gestes de haut
+niveau plutôt que des événements bruts de la souris. On utilise
+\texttt{Gtk.GestureDrag}, qui émet trois signaux correspondant aux
+trois phases du geste : \texttt{drag-begin} au moment où l'utilisateur
+appuie sur le bouton de la souris, \texttt{drag-update} pendant le
+déplacement, et \texttt{drag-end} au relâchement. Cette approche est
+plus robuste que l'écoute directe des événements bas niveau car le
+geste gère automatiquement les cas particuliers comme la perte de
+focus ou l'annulation.
+
+\subsubsection*{Phase 1: Détecter l'intention}
+
+La difficulté propre à Quoridor est que le même geste peut exprimer
+deux intentions différentes selon l'endroit où il commence. Au moment
+du \texttt{drag-begin}, l'interface doit donc trancher : si le clic
+part de la case occupée par le pion du joueur courant, c'est un
+déplacement de pion ; si le clic part d'un interstice entre deux
+cases, c'est un placement de mur. Cette distinction est réalisée en
+deux temps. D'abord \texttt{\_xy\_to\_cell} vérifie si le clic tombe
+sur une case. Si ce n'est pas le cas, \texttt{\_xy\_to\_gap} prend le
+relais et analyse si le curseur se trouve dans un interstice :
+
+\begin{lstlisting}[caption={Détection d'un interstice entre deux cases}]
+def _xy_to_gap(self, x, y):
+    cs = self._cell_size()
+    step = cs + GAP
+    col_idx = int(rel_x / step)
+    row_idx = int(rel_y / step)
+    in_cell_x = rel_x - col_idx * step
+    in_cell_y = rel_y - row_idx * step
+    if in_cell_x >= cs and not in_cell_y >= cs:
+        return ("vertical", row_idx, col_idx)
+    if in_cell_y >= cs and not in_cell_x >= cs:
+        return ("horizontal", row_idx, col_idx)
+    return None
+\end{lstlisting}
+
+Le raisonnement est géométrique : si la position locale dans le pas
+(\texttt{in\_cell\_x}) dépasse la taille d'une case (\texttt{cs}),
+le curseur est dans la zone de séparation à droite de la case, donc
+dans un interstice vertical. Le même raisonnement s'applique
+verticalement pour détecter un interstice horizontal. Si ni l'un ni
+l'autre, le clic ne correspond à aucune action valide et est ignoré.
+Une fois l'interstice identifié, \texttt{\_gap\_to\_wall\_edges}
+traduit cette position visuelle en paires de nœuds du graphe de jeu,
+puis le module chargé de la vérification des règles du jeu vérifie que l'action est légal
+
+\subsubsection*{Phase 2: Animer le déplacement}
+
+Pendant le \texttt{drag-update}, aucun coup n'est encore appliqué.
+L'interface se contente de mémoriser le décalage courant de la souris
+par rapport au point de départ et de demander un redessin :
+
+\begin{lstlisting}[caption={Suivi visuel du pion pendant le glissement}]
+def _on_drag_update(self, gesture, offset_x, offset_y):
+    if self._drag_pid is None:
+        return
+    self._drag_offset = (offset_x, offset_y)
+    self.area.queue_draw()
+\end{lstlisting}
+
+La méthode \texttt{\_draw\_players} utilise cet offset pour dessiner
+le pion à la position courante de la souris plutôt qu'au centre de sa
+case d'origine, donnant l'impression que le pion suit le curseur en
+temps réel. C'est purement visuel : l'état du jeu n'est pas modifié
+tant que le joueur n'a pas relâché le bouton.
+
+\subsubsection*{Phase 3: Valider et appliquer le coup}
+
+Au \texttt{drag-end}, l'interface calcule la case cible à partir de
+la position finale du curseur, puis appelle \texttt{validate\_pawn\_move}
+pour vérifier que le déplacement est légal adjacence, sauts
+par-dessus un adversaire, sauts diagonaux en cas de mur bloquant.
+Si le coup est valide, il est appliqué à la session de jeu et le
+plateau est redessiné. Si le coup est invalide, un message est affiché \ref{fig:illegal_move}
+dans la barre de statut et le pion revient à sa position d'origine.
+Dans tous les cas, l'état du drag est réinitialisé en fin de méthode
+pour éviter qu'un drag échoué ne laisse le pion collé à la souris
+lors du prochain geste.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.5\textwidth]{illegal_move.png}
+    \caption{Tentative de déplacement illégal : le joueur tente de
+    se déplacer sur une case occupée par l'adversaire, la barre de
+    statut affiche un message d'erreur explicite.}
+    \label{fig:illegal_move}
+\end{figure}
+
+\subsection{Gérer les menus et les raccourcis clavier}
+
+L'interface expose dix-neuf actions à l'utilisateur — nouvelle partie,
+chargement, sauvegarde, annuler, rejouer, pause, indice, rejoindre un
+serveur, démarrer un serveur, etc. — accessibles depuis trois menus
+(File, Game, Network) et des raccourcis clavier. Ces raccourcis doivent
+de plus être reconfigurables par l'utilisateur et sauvegardés entre
+les sessions.
+
+La manière la plus directe de relier un élément de menu à une action
+serait de connecter chaque bouton du menu directement à la fonction
+Python qui réalise l'action. Avec dix-neuf actions pouvant chacune
+être déclenchées par un élément de menu \emph{et} un raccourci clavier,
+cette approche crée rapidement un enchevêtrement de connexions : si
+l'on veut modifier une action, il faut retrouver et modifier tous les
+endroits du code où elle est connectée. Pour éviter ce problème, on
+introduit un intermédiaire.
+
+Chaque action est d'abord identifiée par un nom unique grâce au
+mécanisme \texttt{Gio.SimpleAction} de GTK. Ce nom joue le rôle
+d'étiquette : le menu et le raccourci clavier référencent tous les
+deux cette étiquette, sans connaître la fonction réelle qui sera
+exécutée. C'est seulement à un endroit centralisé — la méthode
+\texttt{\_install\_actions} — que l'on fait le lien entre chaque
+étiquette et sa fonction :
+
+\begin{lstlisting}[caption={Enregistrement unifié des actions}]
+def _install_actions(self) -> None:
+    handlers = {
+        ActionType.NEW_GAME: self._action_new_game,
+        ActionType.UNDO:     self._action_undo,
+        ActionType.REDO:     self._action_redo,
+        ActionType.PAUSE:    self._action_pause,
+        # ... dix-neuf actions au total ...
+    }
+    for action_type, callback in handlers.items():
+        self.action_registry.register(action_type, callback)
+        action = Gio.SimpleAction.new(action_type.value, None)
+        action.connect("activate", self._on_action_activated, action_type)
+        self.add_action(action)
+\end{lstlisting}
+
+La table \texttt{handlers} est un dictionnaire qui associe chaque
+action à sa fonction. La boucle parcourt ce dictionnaire et enregistre
+chaque association dans l'\texttt{ActionRegistry} — une classe dont
+le seul rôle est de mémoriser ces associations et de les exécuter à
+la demande. Ajouter une nouvelle action au programme ne demande alors
+qu'une seule ligne dans ce dictionnaire : le menu, le raccourci
+clavier et la gestion d'erreurs sont automatiquement pris en charge.
+
+Ce point d'entrée unique apporte un second avantage : la gestion des
+erreurs. Lorsqu'une action est déclenchée, qu'elle vienne du menu ou
+d'un raccourci, elle passe toujours par la même fonction
+\texttt{\_on\_action\_activated}. Si quelque chose se passe mal —
+un fichier introuvable, un coup illégal, une perte de connexion —
+l'erreur est interceptée à cet endroit et son message est affiché
+dans la barre de statut en bas de la fenêtre, sans jamais faire
+planter l'interface.
+
+Enfin, pour la personnalisation des raccourcis, l'utilisateur peut
+modifier chaque raccourci depuis un menu dédié. Ces modifications sont
+sauvegardées dans un fichier de configuration \texttt{.qoridorrc}
+placé dans le dossier personnel de l'utilisateur, et rechargées
+automatiquement au prochain lancement du programme. Avant toute
+sauvegarde, une vérification s'assure qu'aucun raccourci n'est
+assigné à deux actions différentes en même temps, ce qui provoquerait
+des conflits.
+
+\subsection{Maintenir la fluidité face aux calculs longs}
+
+Le programme offre la possibilité de jouer contre une intelligence
+artificielle. Pour déterminer le meilleur coup à jouer, celle-ci
+explore un grand nombre de positions possibles, ce qui peut prendre
+plusieurs secondes. Or GTK repose sur une \textbf{boucle d'événements} :
+un mécanisme qui attend qu'un événement se produise (clic, frappe au
+clavier, demande de redessin), appelle la fonction correspondante,
+puis reprend son attente. Cette boucle est à \emph{thread unique} :
+tant qu'une fonction ne lui a pas rendu la main, elle est bloquée et
+ne peut rien faire d'autre. Si l'IA calcule directement dans cette
+boucle, l'interface se fige complètement pendant toute la durée du
+calcul — l'utilisateur voit la fenêtre grisée et croit que le
+programme a planté.
+
+La solution naturelle est de déplacer ces calculs dans un \textbf{thread} séparé, c'est-à-dire un fil d'exécution parallèle permettant de faire tourner plusieurs tâches en même temps pour ne pas bloquer la boucle principale. Cependant, GTK n'est pas conçu pour
+être manipulé depuis plusieurs threads simultanément : appeler une
+fonction GTK depuis un thread secondaire provoque des comportements
+imprévisibles, voire une corruption de la mémoire. Il faut donc
+calculer dans un thread séparé, puis revenir dans le thread principal
+pour mettre à jour l'interface.
+
+Le calcul de l'IA est lancé dans un thread marqué \texttt{daemon=True}.
+Ce marquage est essentiel : sans lui, si l'utilisateur ferme la
+fenêtre pendant que l'IA réfléchit, Python attendrait la fin du calcul
+avant de fermer le processus, le laissant tourner en arrière-plan
+sans que l'utilisateur ne le sache.
+
+\begin{lstlisting}[caption={Lancement du calcul IA dans un thread séparé}]
+thread = threading.Thread(
+    target=self._compute_ai_move_thread,
+    args=(current,),
+    daemon=True,
+)
+thread.start()
+\end{lstlisting}
+
+Pour revenir dans le thread principal après le calcul, GTK fournit
+\texttt{GLib.idle\_add} : cette fonction place un appel dans la file
+d'attente de la boucle principale, qui l'exécutera dès qu'elle sera
+libre. Le thread de calcul ne touche jamais à GTK directement il
+se contente de déposer son résultat dans cette file :
+
+\begin{lstlisting}[caption={Retour dans le thread principal via idle\_add}]
+# Thread IA
+def _compute_ai_move_thread(self, current: int) -> None:
+    move = self.session.compute_ai_move(...)
+    GLib.idle_add(self._apply_ai_move_gtk, current, move, elapsed)
+
+\end{lstlisting}
+
+
+\subsection{Mesurer le temps avec précision en mode Blitz}
+
+Le mode Blitz impose une limite de temps par joueur : l'interface doit
+afficher le temps restant et déclarer perdant le joueur dont le
+chronomètre atteint zéro \ref{fig:blitz}. GTK fournit \texttt{GLib.timeout\_add},
+une fonction qui appelle périodiquement une autre fonction à intervalle
+régulier. L'approche naïve consisterait à incrémenter un compteur de
+100 millisecondes à chaque appel. Cependant, \texttt{GLib.timeout\_add}
+est un \emph{ordonnanceur}, pas une \emph{horloge} : il garantit que
+l'appel n'aura pas lieu \emph{avant} l'intervalle demandé, mais il
+peut arriver bien plus tard si la boucle est occupée ou si le système
+suspend brièvement le programme. Cumuler des incréments fixes
+produirait une horloge systématiquement en retard un joueur
+gagnerait ainsi du temps réel simplement parce que la machine est
+chargée.
+
+Avant de résoudre ce problème, notons que l'objet \texttt{Blitz} est
+instancié même quand le mode est désactivé, avec
+\texttt{time\_limit\_minutes=0}. Sa méthode \texttt{is\_enabled()}
+retourne alors \texttt{False} et ses autres méthodes ne font rien.
+C'est le \textbf{pattern Null Object} : plutôt que de parsemer le
+code de vérifications \texttt{if self.blitz is None}, on garantit que
+l'objet existe toujours avec la même interface, qu'il soit actif ou
+non, simplifiant considérablement le code appelant.
+
+Pour la mesure du temps, la solution consiste à séparer complètement
+la cadence de rafraîchissement de l'affichage et la mesure du temps
+réel écoulé. Au début de chaque tour, on mémorise l'instant précis
+de démarrage via \texttt{time.time()}, qui lit directement l'horloge
+du système :
+
+\begin{lstlisting}[caption={Démarrage du chronomètre}]
+def _start_blitz_turn(self) -> None:
+    if not self.blitz.is_enabled():
+        return
+    self._turn_start_time = time.time()
+    self._blitz_timer_id = GLib.timeout_add(100, self._on_blitz_tick)
+\end{lstlisting}
+
+À chaque appel du timer, le temps écoulé est recalculé entièrement
+depuis cet instant de démarrage, sans jamais accumuler d'incréments :
+
+\begin{lstlisting}[caption={Calcul du temps sans dérive}]
+def _on_blitz_tick(self) -> bool:
+    if self._paused:
+        return True
+    elapsed = time.time() - self._turn_start_time
+    remaining = self.blitz.remaining_time(player_id) - elapsed
+    if remaining <= 0:
+        self._stop_blitz_turn(player_id)
+        self.session.timeout_player(player_id)
+    # ... mise a jour de l'affichage ...
+\end{lstlisting}
+
+Si un appel du timer arrive en retard, le calcul suivant lira l'heure
+réelle du système et verra le temps effectivement écoulé : aucune
+dérive n'est possible. \texttt{GLib.timeout\_add} n'est plus qu'un
+moyen de rafraîchir l'affichage à une cadence raisonnable. Le même
+principe s'applique à la pause : on mémorise le temps écoulé au moment
+de la suspension, puis on recule \texttt{\_turn\_start\_time} à la
+reprise pour que le calcul reste immédiatement correct.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.5\textwidth]{quoridor_blitz.png}
+    \caption{Mode Blitz : le temps du joueur 1 est écoulé
+    (\texttt{Player1: 0:00}), le joueur 2 est déclaré vainqueur
+    par timeout.}
+    \label{fig:blitz}
+\end{figure}
+
+\subsection{Intégrer le mode réseau dans l'interface}
+
+Le programme permet de jouer en réseau contre un adversaire distant.
+Dans ce mode, le GUI ne pilote plus le jeu localement : c'est le
+serveur qui valide chaque coup et renvoie le nouvel état de la partie
+aux deux clients. L'interface doit donc abandonner son rôle de décideur
+pour devenir un afficheur d'état distant, tout en continuant à
+répondre aux interactions de l'utilisateur.
+
+La connexion au serveur est initiée depuis un formulaire collectant
+l'adresse du serveur, le port et le pseudonyme du joueur. Une fois
+connecté, quatre réactions sont enregistrées auprès du module réseau :
+une pour recevoir le nouvel état du jeu après chaque coup, une pour
+recevoir les notifications comme les invitations, une pour détecter
+les déconnexions, et une pour recevoir les coups adverses. Chacune
+est enveloppée dans un \texttt{GLib.idle\_add}, exactement comme pour
+l'IA, car le module réseau s'exécute dans son propre thread de
+réception et ne peut pas toucher à GTK directement.
+
+Lorsque le serveur renvoie un nouvel état après un coup valide,
+l'interface restaure l'état complet reçu plutôt que d'appliquer
+seulement le coup adverse :
+
+\begin{lstlisting}[caption={Restauration de l'état reçu du serveur}]
+def _apply_game_state_update(self, update) -> None:
+    before_state = self.session.state.to_snapshot()
+    self.session.state.restore(update["state"])
+    record = MoveRecord(
+        player_id=player_id, player_type="human",
+        action="move_pawn",
+        before_state=before_state,
+        after_state=update["state"],
+    )
+    self.session.history.record_move(record)
+    self.area.queue_draw()
+    if update["winner_id"]:
+        self._game_over = True
+\end{lstlisting}
+
+Ce choix est délibéré : si un message réseau est perdu ou si le client
+se désynchronise momentanément, recevoir l'état complet garantit qu'on
+ne diverge jamais du serveur. L'état d'une partie de Quoridor étant
+minuscule, ce choix de robustesse n'a
+aucun coût significatif. Un enregistrement du coup est ensuite
+reconstruit manuellement pour maintenir la cohérence de l'historique
+local.
+
+Le mode réseau impose également des restrictions sur certaines
+fonctionnalités : l'annulation et la pause sont désactivées, car les
+appliquer unilatéralement créerait une désynchronisation entre les
+deux clients. Lorsqu'une invitation est reçue comme illustré en figure~\ref{fig:reseau}, l'interface affiche
+une fenêtre modale permettant de l'accepter ou de la refuser sans
+bloquer la boucle d'événements. En cas de déconnexion inattendue,
+l'interface repasse automatiquement en mode local sans laisser le
+programme dans un état incohérent.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=\textwidth]{reseau.png}
+    \caption{Mode réseau : à gauche le joueur 1 envoie une invitation,
+    à droite le joueur 2 reçoit une fenêtre modale lui permettant
+    d'accepter ou de refuser la partie.}
+    \label{fig:reseau}
+\end{figure}
+\end{document}
