@@ -227,8 +227,387 @@ dépendances orientées vers le métier, et extensions (IA, réseau, interfaces)
 ajoutées sans modifier le noyau de règles.
 
 \section{Intelligence artificielle}
+\subsection{Minimax avec élagage Alpha-Beta}
 
-\input{ia_section}
+Le Minimax explore récursivement l'arbre de jeu. À chaque nœud, il génère les
+coups légaux, applique chaque coup sur une copie de l'état, puis évalue les
+positions obtenues. Une victoire pour l'IA vaut $+1\,000\,000$, une défaite
+$-1\,000\,000$. À profondeur nulle, l'évaluation repose sur l'une des trois
+heuristiques configurables.
+
+Sans élagage, le coût est exponentiel en fonction du facteur de branchement
+$b$ et de la profondeur $d$ : $O(b^d)$. Au Quoridor, ce facteur est élevé car
+il faut considérer à la fois les déplacements de pion et les poses de murs.
+L'élagage alpha-beta réduit ce coût en supprimant les branches qui ne peuvent
+plus influencer le résultat. La figure~\ref{fig:alpha-beta-tree} montre ce cas
+simple : si MAX possède déjà une branche à 5, une branche adverse qui descend
+à 2 est coupée.
+
+\begin{figure}[!ht]
+  \centering
+  \begin{tikzpicture}[
+      >=Latex,
+      font=\footnotesize,
+      level distance=1.6cm,
+      sibling distance=2.4cm,
+      every node/.style={draw, circle, minimum size=0.7cm, inner sep=1pt},
+      pruned/.style={draw=gray!40, text=gray!40},
+      edge from parent/.style={draw, ->,thick},
+      level 1/.style={sibling distance=5cm},
+      level 2/.style={sibling distance=2.4cm},
+    ]
+    \node {MAX}
+      child {
+        node {MIN}
+        child { node[rectangle, rounded corners] {5} edge from parent }
+        child { node[rectangle, rounded corners] {3} edge from parent }
+        edge from parent node[left, draw=none] {$\alpha{=}5$}
+      }
+      child {
+        node {MIN}
+        child { node[rectangle, rounded corners] {2} edge from parent }
+        child {
+          node[pruned, rectangle, rounded corners] {?}
+          edge from parent[draw=gray!40, dashed]
+        }
+        edge from parent node[right, draw=none] {$\beta{=}2 \leq \alpha$}
+      };
+  \end{tikzpicture}
+  \caption{Élagage alpha-beta : la branche droite est coupée car MIN a trouvé
+    2 alors que MAX dispose déjà d'une branche à 5.}
+  \label{fig:alpha-beta-tree}
+\end{figure}
+
+Dans les modes à temps borné, la recherche vérifie une deadline avant chaque
+expansion de nœud. Si le temps est écoulé, elle s'arrête et renvoie le meilleur
+coup déjà calculé. Le pseudo-code correspondant est donné en
+figure~\ref{fig:minimax-pseudocode}.
+
+\begin{figure}[!ht]
+{\small
+\begin{minted}[frame=single,linenos]{text}
+fonction minimax(etat, profondeur, alpha, beta, maximise):
+    verifier la deadline
+    si etat terminal: retourner score final
+    si profondeur = 0: retourner heuristique(etat)
+
+    pour chaque coup legal:
+        evaluer recursivement l'etat enfant
+        mettre a jour la meilleure valeur courante
+        mettre a jour alpha ou beta
+        si beta <= alpha: arreter l'exploration
+
+    retourner la meilleure valeur
+\end{minted}
+}
+\caption{Pseudo-code du Minimax avec élagage alpha-beta}
+\label{fig:minimax-pseudocode}
+\end{figure}
+
+\subsection{Iterative Deepening}
+
+Le problème d'un Minimax à profondeur fixe est simple : on ne sait pas à
+l'avance quelle profondeur sera atteignable dans le temps imparti. Au Quoridor,
+le coût varie fortement selon le nombre de murs encore disponibles.
+
+L'Iterative Deepening lance donc plusieurs recherches successives à profondeur
+croissante : 1, puis 2, puis 3, etc. Quand la deadline est atteinte, on
+conserve le meilleur coup de la dernière profondeur complètement terminée. Ce
+choix garantit qu'un coup valide est toujours disponible, même sous une
+contrainte de temps stricte.
+
+L'IA expose deux usages :
+\begin{itemize}
+  \item \textbf{Profondeur explicite} (\texttt{--ai-minimax-depth}) : Minimax
+    à profondeur fixe.
+  \item \textbf{Temps limité} (\texttt{--ai-time}) : recherche itérative qui
+    approfondit tant que le temps reste disponible.
+\end{itemize}
+
+Quand l'utilisateur choisit \texttt{minimax} sans préciser de profondeur, le
+programme convertit automatiquement le temps disponible en profondeur maximale
+selon les seuils du tableau ci-dessous.
+
+\begin{center}
+\begin{tabular}{cc}
+  \hline
+  \textbf{Temps} & \textbf{Profondeur} \\
+  \hline
+  $\leq 1$~s  & 1 \\
+  $\leq 3$~s  & 2 \\
+  $\leq 6$~s  & 3 \\
+  $\leq 12$~s & 4 \\
+  $> 12$~s    & 5 \\
+  \hline
+\end{tabular}
+\end{center}
+
+\begin{figure}[!ht]
+{\small
+\begin{minted}[frame=single,linenos]{text}
+fonction iterative_deepening(etat, joueur_ia, temps_max, prof_max):
+    fixer une deadline
+    initialiser meilleur_coup avec un coup legal
+
+    pour profondeur croissante:
+        lancer minimax a cette profondeur
+        si la profondeur est entierement terminee:
+            memoriser le meilleur coup
+        sinon:
+            arreter
+
+    retourner meilleur_coup
+\end{minted}
+}
+\caption{Pseudo-code de l'Iterative Deepening}
+\label{fig:iterative-deepening-pseudocode}
+\end{figure}
+
+\subsection{Pipeline d'apprentissage automatique}
+
+Nous avons ajouté une politique de sélection ML pour le MCTS. L'objectif n'est
+pas de remplacer tout le moteur de recherche, mais uniquement la sélection du
+prochain enfant à explorer.
+
+La figure~\ref{fig:ml-pipeline} résume le pipeline complet : génération de
+parties en self-play, extraction des features, entraînement du modèle, puis
+intégration dans le MCTS.
+
+\begin{figure}[!ht]
+  \centering
+  \begin{tikzpicture}[
+      >=Latex,
+      font=\small,
+      pipestep/.style={
+        draw, rounded corners, align=center,
+        minimum width=3.2cm, minimum height=1.1cm,
+        fill=blue!8
+      },
+      pipedata/.style={
+        draw, rounded corners, align=center,
+        minimum width=2.5cm, minimum height=0.9cm,
+        fill=green!10
+      },
+      arrow/.style={->, thick}
+    ]
+    \node[pipestep] (gen) {Self-play\\504 parties IA};
+    \node[pipedata, right=0.7cm of gen] (json) {JSON};
+    \node[pipestep, right=0.7cm of json] (extract) {Extraction\\20 features};
+    \node[pipedata, right=0.7cm of extract] (csv) {CSV\\34\,365 lignes};
+    \node[pipestep, below=0.8cm of csv] (train) {Entraînement\\ML + DL};
+    \node[pipedata, left=0.7cm of train] (model) {Random\\Forest};
+    \node[pipestep, left=0.7cm of model] (mcts) {Sélection\\MCTS + ML};
+    \node[pipedata, left=0.7cm of mcts] (game) {Jeu en\\cours};
+    \draw[arrow] (gen) -- (json);
+    \draw[arrow] (json) -- (extract);
+    \draw[arrow] (extract) -- (csv);
+    \draw[arrow] (csv) -- (train);
+    \draw[arrow] (train) -- (model);
+    \draw[arrow] (model) -- (mcts);
+    \draw[arrow] (mcts) -- (game);
+  \end{tikzpicture}
+  \caption{Pipeline ML : génération, entraînement et intégration en jeu}
+  \label{fig:ml-pipeline}
+\end{figure}
+
+\paragraph{Dataset.}
+Le dataset est construit à partir de 504 parties jouées en self-play entre
+plusieurs variantes de nos IA : Minimax à profondeurs 1, 2 et 3 avec les trois
+heuristiques, et Iterative Deepening avec trois budgets de temps distincts.
+Chaque partie est rejouée tour par tour pour extraire un vecteur de 20 features
+par coup. On obtient 34\,365 exemples au format tabulaire.
+
+Les 20 features sont réparties en trois groupes : contexte avant le coup,
+description du coup et effet du coup. La figure~\ref{fig:feature-categories}
+résume cette décomposition.
+
+\begin{figure}[!ht]
+  \centering
+  \begin{tikzpicture}[
+      >=Latex,
+      font=\small,
+      cat/.style={
+        draw, rounded corners, align=center,
+        minimum width=4.5cm, minimum height=1.2cm,
+        fill=blue!8
+      },
+      feat/.style={
+        draw, rounded corners, align=left,
+        minimum width=4.5cm, text width=4.3cm,
+        fill=gray!6, font=\footnotesize
+      },
+      arrow/.style={->, thick}
+    ]
+    \node[cat] (ctx) {Contexte avant le coup\\(13 features)};
+    \node[cat, right=1.5cm of ctx] (desc) {Description du coup\\(5 features)};
+    \node[cat, right=1.5cm of desc] (eff) {Effet du coup\\(2 features)};
+    \node[feat, below=0.5cm of ctx] (ctx_d) {
+      game\_phase\\
+      distances au but ($\times$2)\\
+      avantage distance\\
+      murs restants ($\times$3)\\
+      positions row/col ($\times$4)\\
+      distances au centre ($\times$2)
+    };
+    \node[feat, below=0.5cm of desc] (desc_d) {
+      is\_pawn\_move\\
+      is\_wall\_move\\
+      wall\_is\_horizontal\\
+      wall\_is\_vertical\\
+      pawn\_move\_distance
+    };
+    \node[feat, below=0.5cm of eff] (eff_d) {
+      my\_progress\\
+      opp\_slowdown
+    };
+    \draw[arrow] (ctx) -- (ctx_d);
+    \draw[arrow] (desc) -- (desc_d);
+    \draw[arrow] (eff) -- (eff_d);
+  \end{tikzpicture}
+  \caption{Les 20 features utilisées pour la sélection ML}
+  \label{fig:feature-categories}
+\end{figure}
+
+\paragraph{Entraînement.}
+Les données sont séparées en 80\,\% apprentissage et 20\,\% test avec
+stratification. Nous avons comparé quatre modèles classiques de
+scikit-learn. Les résultats sont donnés dans le
+tableau~\ref{tab:ml-comparison}.
+
+\begin{table}[!ht]
+  \centering
+  \begin{tabular}{lcccc}
+    \hline
+    \textbf{Modèle} & \textbf{Train Acc} & \textbf{Test Acc} &
+      \textbf{F1} & \textbf{AUC} \\
+    \hline
+    Régression Logistique       & 0,757 & 0,755 & 0,759 & 0,833 \\
+    Arbre de Décision ($d{=}5$) & 0,840 & 0,836 & 0,842 & 0,931 \\
+    \textbf{Random Forest (100)} & \textbf{1,000} & \textbf{0,938} &
+      \textbf{0,939} & \textbf{0,987} \\
+    Gradient Boosting           & 0,869 & 0,866 & 0,867 & 0,946 \\
+    \hline
+  \end{tabular}
+  \caption{Comparaison des modèles ML}
+  \label{tab:ml-comparison}
+\end{table}
+
+Le Random Forest est le meilleur compromis sur nos données : AUC de 0,987,
+F1 de 0,939 et intégration simple dans le moteur. Nous avons aussi testé un
+MLP Keras. Le MLP atteint une AUC de 0,975, inférieure au Random Forest. Nous
+avons donc retenu le Random Forest, plus précis et plus léger à intégrer.
+
+\begin{figure}[!ht]
+  \centering
+  \begin{minipage}[t]{0.48\textwidth}
+    \vspace{0pt}
+    \centering
+    {\scriptsize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{|>{\raggedright\arraybackslash}p{0.51\linewidth}|>{\centering\arraybackslash}p{0.24\linewidth}|>{\centering\arraybackslash}p{0.15\linewidth}|}
+\hline
+\rowcolor{LightSteelBlue!35}
+\textbf{Layer (type)} & \textbf{Output Shape} & \textbf{Param \#} \\
+\hline
+dense & (None, 128) & 2,688 \\
+\hline
+\rowcolor{AliceBlue!40}
+batch\_normalization & (None, 128) & 512 \\
+\hline
+dropout & (None, 128) & 0 \\
+\hline
+dense\_1 & (None, 64) & 8,256 \\
+\hline
+\rowcolor{AliceBlue!40}
+batch\_normalization\_1 & (None, 64) & 256 \\
+\hline
+dropout\_1 & (None, 64) & 0 \\
+\hline
+dense\_2 & (None, 32) & 2,080 \\
+\hline
+\rowcolor{AliceBlue!40}
+batch\_normalization\_2 & (None, 32) & 128 \\
+\hline
+dropout\_2 & (None, 32) & 0 \\
+\hline
+dense\_3 & (None, 1) & 33 \\
+\hline
+\end{tabular}
+    }
+    \par\smallskip
+    \refstepcounter{figure}\label{fig:nn-architecture}
+    \small\textbf{Figure \thefigure} -- Architecture du MLP utilisé pour comparaison
+  \end{minipage}\hfill
+  \begin{minipage}[t]{0.48\textwidth}
+    \vspace{0pt}
+    \centering
+    \begin{tikzpicture}[
+        font=\small,
+        scale=0.85,
+        transform shape,
+        bar/.style={draw, minimum width=0.6cm},
+        rfbar/.style={bar, fill=blue!30},
+        nnbar/.style={bar, fill=orange!30},
+      ]
+      \draw[->] (0,0) -- (10,0);
+      \draw[->] (0,0) -- (0,4.5);
+      \foreach \y/\lab in {0/0.80, 1/0.85, 2/0.90, 3/0.95, 4/1.00} {
+        \draw (-0.1,\y) -- (0.1,\y) node[left=0.2cm] {\lab};
+      }
+      \node[rfbar, minimum height=2.76cm, anchor=south] at (1.5,0) {};
+      \node[nnbar, minimum height=1.98cm, anchor=south] at (2.3,0) {};
+      \node[below] at (1.9,-0.2) {Test Acc};
+      \node[above, font=\tiny] at (1.5,2.76) {0,938};
+      \node[above, font=\tiny] at (2.3,1.98) {0,899};
+      \node[rfbar, minimum height=2.78cm, anchor=south] at (4.5,0) {};
+      \node[nnbar, minimum height=1.98cm, anchor=south] at (5.3,0) {};
+      \node[below] at (4.9,-0.2) {F1};
+      \node[above, font=\tiny] at (4.5,2.78) {0,939};
+      \node[above, font=\tiny] at (5.3,1.98) {0,899};
+      \node[rfbar, minimum height=3.74cm, anchor=south] at (7.5,0) {};
+      \node[nnbar, minimum height=3.50cm, anchor=south] at (8.3,0) {};
+      \node[below] at (7.9,-0.2) {AUC};
+      \node[above, font=\tiny] at (7.5,3.74) {0,987};
+      \node[above, font=\tiny] at (8.3,3.50) {0,975};
+      \node[rfbar, minimum width=0.4cm, minimum height=0.3cm] at (3.5,4.2) {};
+      \node[right, font=\footnotesize] at (3.8,4.2) {Random Forest};
+      \node[nnbar, minimum width=0.4cm, minimum height=0.3cm] at (6.5,4.2) {};
+      \node[right, font=\footnotesize] at (6.8,4.2) {MLP Keras};
+    \end{tikzpicture}
+    \par\smallskip
+    \refstepcounter{figure}\label{fig:rf-vs-nn}
+    \small\textbf{Figure \thefigure} -- Comparaison Random Forest / MLP sur le jeu de test
+  \end{minipage}
+\end{figure}
+
+\paragraph{Intégration dans le MCTS.}
+La sélection ML remplace uniquement la formule UCT. Pour chaque enfant d'un
+nœud, le programme reconstruit les 20 features à partir de l'état avant le
+coup, du coup lui-même et de l'état après le coup. Le modèle calcule ensuite
+une probabilité de victoire, et l'enfant retenu est celui dont cette
+probabilité est maximale. Les autres étapes du MCTS restent inchangées :
+expansion, rollout et rétro-propagation.
+
+Le mode est activé via \texttt{--ai-mcts-selection ML}. Le modèle est chargé
+une seule fois puis mis en cache. Le pseudo-code est donné en
+figure~\ref{fig:ml-select-pseudocode}. Il représente uniquement l'étape de
+sélection : pour chaque enfant déjà généré, on calcule un score ML, puis on
+choisit celui qui obtient la meilleure probabilité de victoire.
+
+\begin{figure}[!ht]
+{\small
+\begin{minted}[frame=single,linenos]{text}
+fonction ml_select_child(noeud_parent):
+    pour chaque enfant du noeud:
+        construire ses features
+        estimer sa probabilite de victoire avec le modele
+
+    retourner l'enfant avec le meilleur score
+\end{minted}
+}
+\caption{Pseudo-code de la sélection ML dans le MCTS}
+\label{fig:ml-select-pseudocode}
+\end{figure}
 
 \section*{Conclusion}
 
