@@ -390,7 +390,9 @@ class NetworkClient:
             try:
                 client_id = int(parts[0])
             except ValueError as exc:
-                raise OSError(f"unexpected players response: {response}") from exc
+                raise OSError(
+                    f"unexpected players response: {response}"
+                ) from exc
             players.append((client_id, parts[1], parts[2]))
         return players
 

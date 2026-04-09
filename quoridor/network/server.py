@@ -633,7 +633,8 @@ class NetworkServer:
                 continue
             message = (
                 "PLAYER_STATUS "
-                f"PLAYER={changed_session.name} STATUS={changed_session.status}"
+                f"PLAYER={changed_session.name} "
+                f"STATUS={changed_session.status}"
             )
             for recipient_client_id, recipient_session in (
                 self._client_sessions.items()
@@ -1109,7 +1110,8 @@ class NetworkServer:
                 return (
                     (
                         "ACCEPT_OK "
-                        f"WAITING_FOR_OTHERS={len(invitation.pending_invitee_ids)}"
+                        "WAITING_FOR_OTHERS="
+                        f"{len(invitation.pending_invitee_ids)}"
                     ),
                     notifications,
                     None,

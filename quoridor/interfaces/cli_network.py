@@ -380,7 +380,8 @@ def command_new_player(state: NetworkState, line: str) -> bool:
 
     try:
         response = state.network_client.send_command(
-            "NEW " + " ".join(str(player_id) for player_id in target_player_ids)
+            "NEW "
+            + " ".join(str(player_id) for player_id in target_player_ids)
         )
     except OSError as exc:
         _handle_connection_lost(state, exc)

@@ -219,7 +219,9 @@ def _program_settings_values(
     return parsed
 
 
-def parse_program_settings(raw_text: str) -> dict[str, bool | int | None | str]:
+def parse_program_settings(
+    raw_text: str,
+) -> dict[str, bool | int | None | str]:
     return _program_settings_values(_settings_values(raw_text))
 
 
@@ -248,10 +250,16 @@ def serialize_settings(
                 "debug="
                 + ("true" if bool(program_settings["debug"]) else "false")
             )
-        ai_mode = program_settings.get("ai_mode", program_settings.get("ai-mode"))
+        ai_mode = program_settings.get(
+            "ai_mode",
+            program_settings.get("ai-mode"),
+        )
         if ai_mode is not None:
             lines.append(f"ai-mode={str(ai_mode).strip().lower()}")
-        ai_time = program_settings.get("ai_time", program_settings.get("ai-time"))
+        ai_time = program_settings.get(
+            "ai_time",
+            program_settings.get("ai-time"),
+        )
         if ai_time is not None:
             lines.append(f"ai-time={int(ai_time)}")
         ai_depth = program_settings.get(

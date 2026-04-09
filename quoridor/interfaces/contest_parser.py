@@ -214,7 +214,8 @@ def parse_contest_file(path: str | Path) -> ContestPosition:
         )
     except StopIteration as exc:
         raise ContestError(
-            f"missing [game] section before line {_expected_line_number(lines)}"
+            "missing [game] section before line "
+            f"{_expected_line_number(lines)}"
         ) from exc
 
     cursor = game_idx + 1

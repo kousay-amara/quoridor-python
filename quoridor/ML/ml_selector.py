@@ -11,7 +11,9 @@ import pandas as pd
 from ..core.game_state import GameState
 from .ml_features import ML_FEATURE_COLUMNS, build_ml_feature_row
 
-DEFAULT_MODEL_PATH = Path(__file__).resolve().parent / "data" / "ml_selector.pkl"
+DEFAULT_MODEL_PATH = (
+    Path(__file__).resolve().parent / "data" / "ml_selector.pkl"
+)
 
 
 @lru_cache(maxsize=4)

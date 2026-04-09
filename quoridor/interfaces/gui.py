@@ -7,10 +7,14 @@ import threading
 from pathlib import Path
 
 import gi
-from quoridor.core.move_record import MoveRecord
 
 gi.require_version("Gtk", "4.0")
 from gi.repository import Gio, GLib, Gtk  # noqa: E402
+
+try:
+    from ..core.move_record import MoveRecord
+except ImportError:
+    from quoridor.core.move_record import MoveRecord
 
 if __package__ in {None, ""}:
     project_root = Path(__file__).resolve().parents[2]
@@ -49,8 +53,6 @@ if __package__ in {None, ""}:
     from quoridor.core.notation import get_notation_from_node
     from quoridor.interfaces.cli_render import _format_hint_move
     from quoridor.network.server import NetworkServer
-    from quoridor.core.move_record import MoveRecord
-
 else:
     from ..application.game_application_service import GameApplicationService
     from ..application.blitz import Blitz
@@ -107,7 +109,7 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         ai_time: int = 5,
         ai_minimax_depth: int | None = None,
         ai_minimax_scoring: int = 1,
-        
+
     ):
         super().__init__(application=app, title="Quoridor")
         self.set_default_size(680, 760)
@@ -452,7 +454,10 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         if self._ai_thinking:
             self._set_status("ai is thinking")
             return
-        if self._network_mode and self.session.state.current_player != self._network_player_id:
+        if (
+            self._network_mode
+            and self.session.state.current_player != self._network_player_id
+        ):
             self._set_status("Ce n'est pas ton tour.")
             return
         cell = self._xy_to_cell(start_x, start_y)
@@ -495,9 +500,11 @@ class QuoridorWindow(Gtk.ApplicationWindow):
             else:
                 self._stop_blitz_turn(current)
                 self.session.place_wall(current, edges, orient)
-                self._set_status(
-                    f"Player {current} placed {orient} wall at ({row}, {col})."
+                message = (
+                    f"Player {current} placed {orient} wall at "
+                    f"({row}, {col})."
                 )
+                self._set_status(message)
                 self._schedule_ai_turn()
                 if (
                     self.session.player_types.get(
@@ -532,8 +539,14 @@ class QuoridorWindow(Gtk.ApplicationWindow):
             )
             if valid:
                 if self._network_mode:
-                    from_notation = get_notation_from_node(from_node, self._board_size())
-                    to_notation = get_notation_from_node(to_node, self._board_size())
+                    from_notation = get_notation_from_node(
+                        from_node,
+                        self._board_size(),
+                    )
+                    to_notation = get_notation_from_node(
+                        to_node,
+                        self._board_size(),
+                    )
                     notation = f"{from_notation}-{to_notation}"
                     print(f"Envoi coup réseau : {notation}")
                     result = self._network_client.move(notation)
@@ -545,9 +558,11 @@ class QuoridorWindow(Gtk.ApplicationWindow):
                     if self._apply_game_outcome():
                         pass
                     else:
-                        self._set_status(
-                            f"Player {self._drag_pid} moved to ({row}, {col})."
+                        message = (
+                            f"Player {self._drag_pid} moved to "
+                            f"({row}, {col})."
                         )
+                        self._set_status(message)
                         self._schedule_ai_turn()
                         if (
                             self.session.player_types.get(
@@ -562,7 +577,6 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         self._drag_pid = None
         self._drag_start = None
         self._drag_offset = (0, 0)
-        
 
     def _xy_to_gap(self, x, y):
         cs = self._cell_size()
@@ -767,14 +781,16 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         self._set_status(f"Hint for player {current}: {best_hint}")
 
     def _history_text(self) -> str:
-        records = self.session.history.records[: self.session.history.cursor + 1]
+        records = self.session.history.records[
+            :self.session.history.cursor + 1
+        ]
         if not records:
             return "No moves played yet."
 
         player_count = max(1, len(self.session.state.player_positions))
         lines = []
         for idx in range(0, len(records), player_count):
-            turn = records[idx : idx + player_count]
+            turn = records[idx:idx + player_count]
             text = " ".join(
                 f"{record.player_id} {record_to_notation(record)};"
                 for record in turn
@@ -830,7 +846,11 @@ class QuoridorWindow(Gtk.ApplicationWindow):
             content.append(row)
 
         dialog.connect(
-            "response", self._on_join_response, host_entry, port_entry, name_entry
+            "response",
+            self._on_join_response,
+            host_entry,
+            port_entry,
+            name_entry,
         )
         dialog.present()
 
@@ -942,7 +962,9 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         try:
             self._network_server = NetworkServer()
             self._network_server.start()
-            self._set_status(f"Serveur démarré sur le port {self._network_server.port}.")
+            self._set_status(
+                f"Serveur démarré sur le port {self._network_server.port}."
+            )
         except Exception as e:
             self._network_server = None
             self._set_status(f"Erreur démarrage serveur : {e}")
@@ -974,7 +996,7 @@ class QuoridorWindow(Gtk.ApplicationWindow):
             action="move_pawn",
             before_state=before_state,
             after_state=update["state"],
-            )
+        )
         self.session.history.record_move(record)
         self.area.queue_draw()
         if update["winner_id"]:
@@ -1051,7 +1073,9 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         for token in values:
             pid = int(token)
             if pid < 1 or pid > players:
-                raise ValueError("ai_players ids must be between 1 and players")
+                raise ValueError(
+                    "ai_players ids must be between 1 and players"
+                )
             if pid not in seen:
                 seen.add(pid)
                 parsed.append(pid)
@@ -1066,9 +1090,15 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         ai_mode = values["ai_mode"].strip().lower()
         ai_time = int(values["ai_time"])
         depth_raw = values["ai_minimax_depth"].strip().lower()
-        ai_depth = None if depth_raw in {"", "none", "null"} else int(depth_raw)
+        if depth_raw in {"", "none", "null"}:
+            ai_depth = None
+        else:
+            ai_depth = int(depth_raw)
         ai_scoring = int(values["ai_minimax_scoring"])
-        ai_players = self._parse_ai_players(values["ai_players"], players=players)
+        ai_players = self._parse_ai_players(
+            values["ai_players"],
+            players=players,
+        )
 
         if players not in {2, 3, 4}:
             raise ValueError("players must be one of: 2, 3, 4")
@@ -1077,7 +1107,9 @@ class QuoridorWindow(Gtk.ApplicationWindow):
         if time_limit <= 0:
             raise ValueError("time_limit must be > 0")
         if ai_mode not in {"minimax", "iterative", "mcts"}:
-            raise ValueError("ai_mode must be one of: minimax, iterative, mcts")
+            raise ValueError(
+                "ai_mode must be one of: minimax, iterative, mcts"
+            )
         if ai_time <= 0:
             raise ValueError("ai_time must be > 0")
         if ai_depth is not None and ai_depth <= 0:
