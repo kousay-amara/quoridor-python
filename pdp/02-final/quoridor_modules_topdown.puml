@@ -1,0 +1,31 @@
+@startuml
+title Architecture simple de quoridor/
+
+skinparam backgroundColor white
+skinparam shadowing false
+skinparam dpi 180
+skinparam defaultFontName "DejaVu Sans"
+skinparam defaultFontSize 14
+skinparam packageStyle rectangle
+skinparam packageBorderColor #4A4A4A
+skinparam packageFontStyle bold
+skinparam ArrowColor #34495E
+skinparam ArrowThickness 1.1
+
+left to right direction
+
+package "interfaces/" as Interfaces
+package "network/" as Network
+package "application/" as Application
+package "rules/" as Rules
+package "core/" as Core
+package "ml/" as ML
+
+Interfaces --> Application
+Network --> Application
+ML --> Application
+Application --> Rules
+Application --> Core
+Rules --> Core
+
+@enduml

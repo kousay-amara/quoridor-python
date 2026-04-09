@@ -313,16 +313,16 @@ de la partie.
 Les Figures~\ref{fig:uml-main} et~\ref{fig:uml-io-ai} présentent les composants
 principaux du projet en deux vues lisibles.
 
-\begin{figure}[htbp]
+\begin{figure}[H]
   \centering
-  \includegraphics[width=\textwidth]{quoridor_uml_main.png}
+  \includegraphics[width=\textwidth,height=0.58\textheight,keepaspectratio]{quoridor_uml_main_topdown.png}
   \caption{Vue UML du noyau métier et de la couche applicative}
   \label{fig:uml-main}
 \end{figure}
 
-\begin{figure}[htbp]
+\begin{figure}[H]
   \centering
-  \includegraphics[width=\textwidth]{quoridor_uml_io_ai.png}
+  \includegraphics[width=\textwidth,height=0.34\textheight,keepaspectratio]{quoridor_uml_io_ai.png}
   \caption{Vue UML des interfaces, du réseau et des composants IA}
   \label{fig:uml-io-ai}
 \end{figure}
@@ -349,15 +349,12 @@ Les dépendances restent dirigées : \texttt{interfaces} $\rightarrow$
 \texttt{utils}), avec \texttt{network} connecté à \texttt{application}. Cette
 orientation limite les cycles et isole le coeur métier.
 
-\begin{verbatim}
-quoridor/
-|-- core/
-|-- rules/
-|-- application/
-|-- interfaces/
-|-- network/
-`-- ml/
-\end{verbatim}
+\begin{figure}[!ht]
+  \centering
+  \includegraphics[width=0.92\textwidth,height=0.28\textheight,keepaspectratio]{quoridor_modules_topdown.png}
+  \caption{Architecture modulaire de \texttt{quoridor/} et dépendances principales}
+  \label{fig:quoridor-modules-topdown}
+\end{figure}
 
 \subsection{Cheminement des actions}
 
