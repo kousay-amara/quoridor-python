@@ -1,6 +1,8 @@
 \documentclass[a4paper]{article}
 
 \usepackage{pdp}
+\usepackage{longtable}
+\usepackage{array}
 
 %------------------------------------------------------------------------------
 %	REPORT INFORMATION
@@ -224,6 +226,10 @@ L'ensemble produit une architecture compacte : responsabilités localisées,
 dépendances orientées vers le métier, et extensions (IA, réseau, interfaces)
 ajoutées sans modifier le noyau de règles.
 
+\section{Intelligence artificielle}
+
+\input{ia_section}
+
 \section*{Conclusion}
 
 Suspendisse sit amet nisi placerat, vestibulum nisl vel, iaculis nunc.
@@ -250,13 +256,112 @@ Maecenas porttitor massa vel felis elementum tristique.
 %------------------------------------------------------------------------------
 \appendix
 
-\section{Section en annexe}
+\section{Liste des 40 besoins}
 
-Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor
-incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis
-nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.
-Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu
-fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in
-culpa qui officia deserunt mollit anim id est laborum.
+\small
+\setlength{\LTpre}{0pt}
+\setlength{\LTpost}{0pt}
+\renewcommand{\arraystretch}{1.15}
+
+Cette annexe synthétise l'état de conformité des besoins fonctionnels. Les
+verdicts utilisés sont limités à \textbf{FAIT}, \textbf{PARTIEL} et
+\textbf{NON FAIT}. Lorsque l'exigence n'a pas encore fait l'objet d'un audit
+stabilisé, l'évaluation reste prudente et devra être confirmée lors de la
+relecture finale.
+
+\begin{longtable}{|p{0.08\textwidth}|p{0.18\textwidth}|p{0.10\textwidth}|p{0.35\textwidth}|p{0.19\textwidth}|}
+\hline
+\textbf{Exigence} & \textbf{Intitulé court} & \textbf{Verdict} & \textbf{Justification concise} & \textbf{Preuve / référence} \\
+\hline
+\endfirsthead
+\hline
+\textbf{Exigence} & \textbf{Intitulé court} & \textbf{Verdict} & \textbf{Justification concise} & \textbf{Preuve / référence} \\
+\hline
+\endhead
+\hline
+\endfoot
+F1 & Exigence F1 à confirmer & PARTIEL & Évaluation à confirmer lors de la relecture finale ; audit détaillé non stabilisé à ce stade. & À revalider \\
+\hline
+F2 & Exigence F2 à confirmer & PARTIEL & Évaluation à confirmer lors de la relecture finale ; audit détaillé non stabilisé à ce stade. & À revalider \\
+\hline
+F3 & Exigence F3 à confirmer & PARTIEL & Évaluation à confirmer lors de la relecture finale ; audit détaillé non stabilisé à ce stade. & À revalider \\
+\hline
+F4 & Exigence F4 à confirmer & PARTIEL & Évaluation à confirmer lors de la relecture finale ; audit détaillé non stabilisé à ce stade. & À revalider \\
+\hline
+F5 & Exigence F5 à confirmer & PARTIEL & Évaluation à confirmer lors de la relecture finale ; audit détaillé non stabilisé à ce stade. & À revalider \\
+\hline
+F6 & Exigence F6 à confirmer & PARTIEL & Évaluation à confirmer lors de la relecture finale ; audit détaillé non stabilisé à ce stade. & À revalider \\
+\hline
+F7 & Annulation et rétablissement & PARTIEL & Le mécanisme existe, mais la conformité finale à la spécification doit être reconfirmée avant rendu. & Tests undo/redo à revalider \\
+\hline
+F8 & Exigence F8 à confirmer & PARTIEL & Évaluation à confirmer lors de la relecture finale ; audit détaillé non stabilisé à ce stade. & À revalider \\
+\hline
+F9 & Exigence F9 à confirmer & PARTIEL & Évaluation à confirmer lors de la relecture finale ; audit détaillé non stabilisé à ce stade. & À revalider \\
+\hline
+F10 & Exigence F10 à confirmer & PARTIEL & Évaluation à confirmer lors de la relecture finale ; audit détaillé non stabilisé à ce stade. & À revalider \\
+\hline
+F11 & Exigence F11 à confirmer & PARTIEL & Évaluation à confirmer lors de la relecture finale ; audit détaillé non stabilisé à ce stade. & À revalider \\
+\hline
+F12 & Exigence F12 à confirmer & PARTIEL & Évaluation à confirmer lors de la relecture finale ; audit détaillé non stabilisé à ce stade. & À revalider \\
+\hline
+F13 & Exigence F13 à confirmer & PARTIEL & Évaluation à confirmer lors de la relecture finale ; audit détaillé non stabilisé à ce stade. & À revalider \\
+\hline
+F14 & Exigence F14 à confirmer & PARTIEL & Évaluation à confirmer lors de la relecture finale ; audit détaillé non stabilisé à ce stade. & À revalider \\
+\hline
+F15 & Shell interactif & PARTIEL & Le shell interactif est largement implémenté, mais la conformité globale n'a pas encore été consolidée exigence par exigence. & CLI et tests shell à revalider \\
+\hline
+F16 & Exigence F16 à confirmer & PARTIEL & Évaluation à confirmer lors de la relecture finale ; audit détaillé non stabilisé à ce stade. & À revalider \\
+\hline
+F17 & Exigence F17 à confirmer & PARTIEL & Évaluation à confirmer lors de la relecture finale ; audit détaillé non stabilisé à ce stade. & À revalider \\
+\hline
+F18 & Exigence F18 à confirmer & PARTIEL & Évaluation à confirmer lors de la relecture finale ; audit détaillé non stabilisé à ce stade. & À revalider \\
+\hline
+F19 & Exigence F19 à confirmer & PARTIEL & Évaluation à confirmer lors de la relecture finale ; audit détaillé non stabilisé à ce stade. & À revalider \\
+\hline
+F20 & Déplacement et saut du pion & PARTIEL & Les règles de déplacement et de saut semblent présentes, mais la relecture finale de conformité reste nécessaire. & Règles du pion et tests à revalider \\
+\hline
+F21 & Sauvegarde et restauration & FAIT & La sauvegarde et la restauration sont conformes, avec sections ordonnées, parseur robuste et messages d'erreur explicites. & Service de persistance ; tests save/load \\
+\hline
+F22 & Commentaires dans la sauvegarde & FAIT & Les commentaires en ligne et en bloc sont correctement ignorés lors du parsing. & Parseur de sauvegarde ; tests CLI I/O \\
+\hline
+F23 & Format des paramètres du jeu & FAIT & La section \texttt{[settings]} sérialise désormais les paramètres de partie et les principaux paramètres de programme au format clé-valeur. & Persistance ; tests program settings \\
+\hline
+F24 & Format du plateau ASCII & FAIT & Le format \texttt{[game]} est lu et écrit correctement, et les erreurs de lecture signalent maintenant le type d'erreur et la ligne concernée. & Contest parser ; tests contest \\
+\hline
+F25 & Format de l'historique & FAIT & L'historique est écrit et relu sous forme de tours, puis rejoué pour reconstruire l'état de la partie. & Persistance ; tests history \\
+\hline
+F26 & Module graphe générique & FAIT & Le projet fournit un module de graphe générique en liste d'adjacences, indépendant de Quoridor et réutilisable dans d'autres contextes. & \texttt{utils/graph.py} ; tests graphe \\
+\hline
+F27 & Algorithmes sur les graphes & FAIT & Les algorithmes de validation, génération de coups, application, score et fin de partie sont bien intégrés au moteur. & Règles, session de jeu, tests \\
+\hline
+F28 & Menus de la GUI & PARTIEL & Les menus et actions principales existent, mais la conformité textuelle à la spécification n'a pas encore été entièrement normalisée. & GUI ; tests menus à revalider \\
+\hline
+F29 & Exigence GUI à confirmer & PARTIEL & Évaluation à confirmer lors de la relecture finale ; audit détaillé non stabilisé à ce stade. & À revalider \\
+\hline
+F30 & Glisser-déposer du pion & FAIT & Le déplacement du pion à la souris par glisser-déposer est implémenté et testé. & GUI drag and drop ; tests GUI \\
+\hline
+F31 & Temps de réflexion borné & FAIT & L'option \texttt{--ai-time} borne la réflexion et l'IA joue le meilleur coup complet trouvé avant expiration. & Minimax itératif ; tests IA \\
+\hline
+F32 & Minimax avec élagage alpha-bêta & FAIT & L'algorithme minimax avec \textit{alpha-beta pruning} est implémenté et activé par défaut pour le mode IA. & Moteur minimax ; config et CLI \\
+\hline
+F33 & Fonctions d'évaluation Minimax & FAIT & Trois fonctions d'évaluation sont disponibles et le scoring choisi est désormais propagé jusqu'au moteur minimax. & AI logic ; tests scoring \\
+\hline
+F34 & Approfondissement itératif & FAIT & Le mode \texttt{iterative} réalise un approfondissement progressif de minimax en fonction du temps disponible. & Moteur itératif ; tests dédiés \\
+\hline
+F35 & Profondeur de recherche Minimax & FAIT & La profondeur maximale peut être fixée explicitement ou déterminée automatiquement à partir du temps disponible. & CLI, session, tests profondeur \\
+\hline
+F36 & Monte Carlo Tree Search & FAIT & Le mode \texttt{mcts} est implémenté et utilise UCT comme politique de sélection standard par défaut. & Moteur MCTS ; tests MCTS \\
+\hline
+F37 & Sélection MCTS par apprentissage & FAIT & Une politique de sélection ML entraînée sur des parties jouées est disponible via \texttt{--ai-mcts-selection ML}. & Module ML, dataset, tests selector \\
+\hline
+F38 & Exigence IA à confirmer & PARTIEL & Évaluation à confirmer lors de la relecture finale ; audit détaillé non stabilisé à ce stade. & À revalider \\
+\hline
+F39 & Exigence IA à confirmer & PARTIEL & Évaluation à confirmer lors de la relecture finale ; audit détaillé non stabilisé à ce stade. & À revalider \\
+\hline
+F40 & Exigence F40 à confirmer & PARTIEL & Évaluation à confirmer lors de la relecture finale ; audit détaillé non stabilisé à ce stade. & À revalider \\
+\hline
+\end{longtable}
+
+\normalsize
 
 \end{document}

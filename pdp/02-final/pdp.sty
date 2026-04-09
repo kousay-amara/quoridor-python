@@ -10,8 +10,6 @@
 \usepackage[T1]{fontenc}
 
 \usepackage{lmodern}
-\usepackage{palatino}
-\renewcommand\ttdefault{pcr}
 
 %------------------------------------------------------------------------------
 %	MARGINS AND SPACING
@@ -41,12 +39,15 @@
 \usepackage{tikz}
 \usetikzlibrary{calc,arrows.meta,positioning}
 
-\usepackage{minted} % Required for including code snippets
-\setminted{fontfamily=tt}
+\usepackage{fancyvrb}
+\NewDocumentEnvironment{minted}{O{} m}
+  {\VerbatimEnvironment\begin{Verbatim}}
+  {\end{Verbatim}}
 
 \usepackage{graphicx}
 \usepackage{hyperref}
 \usepackage{xcolor} % Enabling colors by their 'svgnames'
+\usepackage{colortbl}
 
 %------------------------------------------------------------------------------
 %	CUSTOM MACROS AND COMMANDS
@@ -112,7 +113,7 @@
   \vspace{-25pt}
   \noindent\HRule%
   \vspace{0pt} % Horizontal rule before the title
-  \fontsize{32}{36}\usefont{T1}{ppl}{b}{n}\selectfont % Palatino
+  \fontsize{32}{36}\bfseries\rmfamily\selectfont
   \color{DarkBlue} % Text color for the title and author(s)
 }
 
