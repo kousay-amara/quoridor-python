@@ -1741,6 +1741,45 @@ Appliquer le DIP via l’injection de dépendances réduirait le couplage, et
 ajouter du cache sur les BFS réduirait les recalculs coûteux pendant les
 simulations.
 
+\paragraph{Limites fonctionnelles du mode réseau.}
+Certaines fonctionnalités prévues dans le cahier des charges n’ont pas pu être
+entièrement réalisées, en particulier concernant le mode réseau. Bien que le
+protocole côté serveur permette théoriquement la création de parties avec
+plusieurs joueurs via la commande \texttt{NEW <id1> [id2...]}, l’interface
+graphique ne propose actuellement qu’un mécanisme d’invitation limité à un seul
+joueur à la fois. En pratique, aucune gestion complète d’une salle de jeu
+(\texttt{GameRoom}) à 3 ou 4 participants n’a été implémentée, notamment pour
+la synchronisation cohérente de l’état de la partie entre tous les clients.
+Ainsi, le mode réseau reste limité à des parties en 1 contre 1, ce qui ne
+répond que partiellement aux exigences initiales (2 à 4 joueurs).
+
+\paragraph{Problème identifié sur le mode Blitz en interface graphique.}
+Un dysfonctionnement a été identifié dans l’intégration du mode Blitz au sein
+de l’interface graphique. La fenêtre de configuration permet bien d’activer le
+mode Blitz et de définir une durée de jeu. Cependant, ces paramètres ne sont
+pas correctement propagés lors du lancement d’une nouvelle partie depuis la GUI.
+En conséquence, le système de minuterie ne s’active pas systématiquement, et
+l’affichage associé (notamment le label du Blitz) peut rester inactif.
+
+Il est à noter que le mode Blitz fonctionne correctement lorsqu’il est activé
+via les arguments en ligne de commande (par exemple \texttt{-b -t 2}). Cela
+indique que le problème est spécifique à l’interface graphique et non à la
+logique métier sous-jacente.
+
+\paragraph{Hypothèse sur l’origine du bug Blitz.}
+Le bug n’a pas pu être complètement diagnostiqué dans le temps imparti, mais le
+comportement observé permet de formuler une hypothèse plausible. Lors du
+lancement d’une nouvelle partie depuis la GUI, la \texttt{GameSession} ne
+semble pas être recréée avec les paramètres de configuration mis à jour.
+Autrement dit, les valeurs définies dans la fenêtre de configuration ne sont
+probablement pas correctement récupérées ou transmises au moment de
+l’initialisation de la partie.
+
+Ce défaut de propagation des paramètres suggère un problème de liaison entre la
+couche interface (GUI) et la couche applicative. Faute de temps, l’origine
+exacte du bug n’a pas pu être localisée précisément, mais son périmètre est
+clairement identifié.
+
 \section*{Utilisation d'outils d'assistance à la programmation}
 
 Dans le cadre du développement du projet, nous avons eu recours à des outils
@@ -1759,6 +1798,8 @@ situations :
   \item \textbf{Recherche d'implémentations simples} : exploration de solutions
         alternatives ou simplifiées pour mieux comprendre certains concepts ou
         améliorer la lisibilité du code.
+  \item \textbf{Rédaction du rapport} : assistance ponctuelle pour la reformulation,
+        la structuration de certaines sections et la clarification du style.
 \end{itemize}
 
 Il est important de souligner que ces outils n'ont pas été utilisés comme
