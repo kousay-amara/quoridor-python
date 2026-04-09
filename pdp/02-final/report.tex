@@ -363,6 +363,157 @@ fonction iterative_deepening(etat, joueur_ia, temps_max, prof_max):
 \label{fig:iterative-deepening-pseudocode}
 \end{figure}
 
+
+
+\subsection{Heuristiques}
+
+Nos algorithmes MiniMax appellent tous une fonction \texttt{evaluate\_state()} qui prend en argument l’état du jeu, un id de 
+joueur et le mode de l’IA. Nous en avons implémenté 3, 3 heuristiques basées sur différentes stratégie adaptées au jeu du quoridor. 
+La première est celle utilisée par défaut. Elle se concentre sur une comparaison directe entre le joueur et ses adversaires. 
+Elle compare d’abord les distances entre l’IA et son objectif et de ses adversaires avec les leurs à partir de la fonction 
+\texttt{get\_shortest\_path\_length}, un algorithme de parcours en largeur (BFS) qui retourne le nombre de mouvements du chemin le 
+plus court vers l’objectif du joueur. Si la distance de l’IA est plus faible, alors le score est positif. Elle prend également en 
+compte le matériel en comparant son nombre de murs restants à celui de la moyenne des adversaires. Le poids accordé à la comparaison 
+des murs est assez faible (on multiplie l’écart du nombre de murs restants par 0,5 si c’est une partie à 2 joueurs, 0,3 sinon), 
+ce qui poussera l’IA à bouger son pion plutôt que de placer des murs.
+
+La deuxième est basée sur le matériel, elle est plus agressive. Le poids des murs est plus élevé (x2 si 2 joueurs, 1,2 sinon) et 
+la comparaison ne se fait pas avec la moyenne des murs restants adversaire cette fois-ci mais avec celui qui a le plus de mur uniquement. 
+Cette différence est importante car l’IA se compare avec l’adversaire ayant le plus de murs. Ce choix permet à l’IA d’avoir une meilleure 
+gestion de ses murs, en cas de partie où 2 adversaires n’ont plus de murs et un autre les a toujours tous, elle restera sur ses gardes 
+plutôt que de dépenser tous ses murs car la moyenne des murs restants est basse. Également dans cette évaluation, on calcule la distance 
+de l’adversaire le plus proche et on le multiplie par 2, l’IA va donc chercher à faire faire des détours à ses adversaires, 
+quitte à rallonger son chemin au passage, tant qu’elle garde l’avantage du nombre de murs. Cette stratégie se concentre sur 
+l’obstruction des adversaires, elle joue la montre, elle mise sur la victoire à long terme après l’épuisement des murs. 
+C’est une stratégie très commune au Quoridor.
+
+Enfin la troisième, la plus complexe, on peut l’imaginer comme une version hybride améliorée des deux premières. 
+Elle mélange le positionnement spatial ainsi qu’une gestion dynamique des ressources. On introduit ici une composante de centralité, 
+au quoridor, être au centre permet de plus facilement varier entre la gauche et la droite lorsqu’un adversaire pose un mur, 
+c’est donc un avantage. Pour calculer ce bonus, on calcul la distance de Manhattan entre le pion du joueur et l'intersection entre la colonne 
+centrale et la ligne centrale. Le poids de ce bonus est assez faible pour influencer l’IA entre 2 mouvements égaux à choisir celui qui se 
+rapproche du centre, sans pour autant faire reculer son pion pour rester au centre, réduire la distance vers l'arrivée reste plus important. 
+On a ensuite implémenté un poids dynamique des murs, si l’IA à plus de 2 murs, elle leur donne une faible importance (poids de 0,4). 
+A partir de 2 murs et moins, le poids devient 0,8, elle devient plus conservatrice et préfère les conserver pour bloquer plus efficacement 
+l’adversaire. De plus, on augmente encore plus le poids de la distance adversaire par rapport à la sienne ce qui rend l’IA plus agressive.
+Pour ces trois heuristiques, le calcul du chemin le plus court est coûteux mais précis, c’est donc un compromis intéressant. 
+
+Ces 3 fonctions d’évaluation sont appelées par une fonction parente, \texttt{evaluate\_state}, qui est appelée par l'algorithme minimax et qui, 
+en fonction de la valeur de l’attribut \texttt{scoring}, calcule la position avec l’heuristique choisi.
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{|l|c|c|c|}
+\hline
+\textbf{Critère} & \textbf{Standard (H1)} & \textbf{Matérielle (H2)} & \textbf{Hybride (H3)} \\ \hline
+\textbf{Focus Principal} & Vitesse relative & Obstruction & Positionnement \\ \hline
+\textbf{Référence Murs} & Moyenne adverse & Max adverse & Seuil dynamique \\ \hline
+\textbf{Poids des Murs} & 0,3 - 0,5 & 1,2 - 2,0 & 0,4 $\rightarrow$ 0,8 \\ \hline
+\textbf{Calcul Distance} & BFS (Précis) & BFS (Pondéré $\times$2) & BFS (Agressif) \\ \hline
+\textbf{Bonus Spécial} & Aucun & Aucun & Centralité (Manhattan) \\ \hline
+\end{tabular}
+\caption{Comparaison technique des trois heuristiques implémentées.}
+\end{table}
+
+\subsection{Monte Carlo Tree Search (MCTS)}
+
+\subsubsection{Introduction}
+
+Alors que l’algorithme Minimax repose sur une exploration exhaustive et déterministe à profondeur fixe, 
+le Monte Carlo Tree Search propose une approche stochastique basée sur l'échantillonnage de l’espace des états. 
+Dans le cadre du jeu Quoridor, le passage au MCTS est motivé par deux caractéristiques majeures du jeu : 
+
+1- L'explosion du facteur de branchement : Avec la possibilité de déplacer un pion ou de placer un mur parmi la multitude de coordonnées et orientations, le nombre de coups légaux par tour est élevé. Une exploration complète devient rapidement impossible à mesure que la complexité combinatoire augmente.
+
+2- La difficulté d’évaluation : Contrairement aux échecs, une position dite “avantageuse” au Quoridor est difficile à quantifier par une simple heuristique positionnelle et matérielle. En effet un simple mur bien placé peut totalement inverser la distance des joueurs vers leur objectif.
+
+Le MCTS offre une solution : il accumule des simulations pour construire statistiquement une estimation de la valeur d’un coup. 
+En pratique, le MCTS ne cherche pas à calculer l’arbre complet du jeu, ce qui serait impossible. A chaque tour, l’algorithme lance un cycle 
+de simulations intensives qui s'exécute de manière itérative jusqu’à l’épuisement du temps imparti (défini par l’argument \texttt{--ai-time}).
+
+L’algorithme construit progressivement un arbre partiel en mémoire. Chaque noeud de cet arbre représente un état du plateau et stocke 
+deux statistiques cruciales issues des simulations passées : 
+
+\begin{itemize}
+    \item \textbf{Le nombre de visites (N)} : Combien de fois un état a été exploré.
+    \item \textbf{Le nombre de victoires (W)} : Le succès cumulé des joueurs à partir de ce nœud.
+\end{itemize}
+
+Plus une branche semble prometteuse, plus l’algorithme y consacre de simulations. A l’inverse, les branches menant à des défaites rapides 
+sont délaissées. Une fois le temps écoulé, l’IA ne choisit pas nécessairement le nœud ayant le meilleur ratio de victoire, mais le nœud ayant 
+le plus grand nombre de visites. Ce critère est le plus robuste car il désigne le coup que l’algorithme a jugé le plus digne d’intérêt après 
+des milliers de tests.
+
+Un cycle de simulation est divisé en 4 phases : 
+
+\begin{enumerate}
+    \item \textbf{Sélection} : En partant de la racine (l’état actuel du jeu), l’algorithme descend dans l’arbre en choisissant à chaque niveau le nœud de l’enfant le plus pertinent. Ce choix repose sur la formule UCT, cette formule permet d’équilibrer l'exploitation des coups connus comme gagnants et l’exploration de coups encore peu visités : 
+    \[ UCT = \frac{W_i}{N_i} + C \times \sqrt{\frac{\ln(N_{parent})}{N_i}} \]
+    Où $W_i$ est le nombre de victoires du nœud, $N_i$ son nombre de visites et $C$ une constante (souvent fixée à $\sqrt{2}$, c’est le choix approximatif que nous avons fait dans notre moteur, plus précisément 1,41). Ce jonglage se fait car le premier terme (exploitation) augmente avec le taux de victoire, tandis que le second (exploration) augmente si le nœud est délaissé par rapport à ses frères.
+    
+    \item \textbf{Expansion} : Lorsqu’un nœud est atteint mais qu’il possède encore des coups non explorés (\texttt{untried\_moves}), l’algorithme crée un nouveau nœud enfant pour l’un de ces coups et l’ajoute à l’arbre.
+    \item \textbf{Simulation (Rollout)} : Phase de plongée. A partir du nouveau nœud, l’IA simule une partie rapide jusqu’à la victoire d’un joueur. Cette simulation est habituellement aléatoire, afin de donner une idée rapide de si la position est gagnante ou non pour le joueur. Nous détaillons plus loin un choix technique concernant cette simulation afin d’améliorer notre moteur.
+    \item \textbf{Rétropropagation} : Une fois le vainqueur de la simulation connu, l’algorithme remonte de nœud en nœud jusqu’à la racine pour mettre à jour les statistiques (N et W) de tous les parents traversés lors de cette itération.
+\end{enumerate}
+
+Ces quatres étapes forment le cycle de base d’un algorithme MCTS, dont l’efficacité repose théoriquement sur la convergence statistique vers 
+les meilleurs coups au fil des simulations. Ce modèle est robuste pour des jeux à faible complexité mais présente de réelles limites lorsqu’on 
+s’attaque à des jeux plus vastes comme le Quoridor.
+
+\subsubsection{Problématique}
+
+En effet, l’application d’un MCTS “pur”, donc totalement aléatoire dans la simulation des coups, au Quoridor s’est avérée très instable 
+lors de nos premiers tests. En effet, le facteur de branchement est tellement grand que simuler des coups aléatoires jusqu’à la victoire de 
+l’un des joueurs à chaque nœud va créer un arbre beaucoup trop large et l’algorithme n’a pas le temps d’explorer suffisamment pour trouver 
+un coup intéressant en seulement quelques secondes. Les simulations produisent un “bruit” important car les pions tendent à errer sans but 
+et à placer des murs inutiles, ce qui rend les statistiques de victoire peu fiables pour l’algorithme. 
+
+Prenons pour exemple une partie à 2 joueurs sur un plateau de 9x9 cases. dès le premier coup, il y a 3 mouvements de pions possibles 
+(avancer, droite, gauche) et 128 murs possibles (8 murs différents par ligne / colonne, donc 64 par orientations), on a un total de 131 coups 
+légaux différents. Au mieux, les coups suivants auront minimum 124 possibilités et ainsi de suite, l’arbre devient très vite trop large et 
+sa complexité augmente trop vite. Un algorithme explorant cet arbre de manière aléatoire va très vite se perdre.
+
+Pour pallier ces limites, notre implémentation s’écarte du modèle classique en introduisant un élagage sélectif des coups, 
+plus particulièrement sur le placement des murs, ainsi que des simulations guidées par des heuristiques de distance. 
+Cette approche permet de concentrer la puissance de calcul sur les séquences de jeu les plus crédibles, réduisant ainsi drastiquement 
+la largeur de l’arbre au profit de sa profondeur.
+
+\subsubsection{Optimisation de l’espace de recherche / Architecture et fonctionnement}
+
+L’efficacité de notre moteur MCTS (dans le fichier \texttt{mcts\_engine.py}) repose sur une rupture avec l’approche “brute” classique. 
+Au lieu d’explorer l’intégralité des coups légaux, l’algorithme se concentre sur un sous-ensemble de mouvements qualitatifs, 
+réduisant ainsi le facteur de branchement de manière drastique.
+
+\paragraph{Élagage stratégique des coups} La fonction \texttt{get\_tree\_moves} est le premier filtre de l’algorithme. 
+Dans une partie de Quoridor, nous avons vu que le nombre de murs posables est immense alors que la majorité n’ont aucun impact 
+stratégique immédiat. A la place donc de créer un noeud représentant un état du jeu avec une liste de tous les coups possible 
+depuis cet état, nous filtrons cette liste en nous basant sur 3 points importants : 
+
+\begin{itemize}
+    \item \textbf{Priorité aux déplacements} : L’algorithme inclut systématiquement tous les déplacements de pions légaux.
+    \item \textbf{Ciblage des murs} : Nous utilisons la fonction \texttt{get\_blocking\_walls}, une heuristique de filtrage qui va tester à l’aide d’un algorithme BFS tous les murs et ne garder seulement les murs dits “bloquants”. Un mur est considéré comme tel s’il augmente la distance du chemin le plus court de l’adversaire vers sa ligne d'arrivée. Nous effectuons un \texttt{clone\_state(state)} à chaque itération, c’est l’opération la plus lourde de cette fonction mais l’efficacité du filtrage justifie ce coût de clonage répété.
+    \item \textbf{Activation tardive} : L’exploration intensive des murs n’est activée que lorsque l’adversaire est à une distance inférieure à 5 de son objectif (on calcul ici la distance axiale, sans prendre en compte les murs, de la ligne / colonne du joueur jusqu’à sa ligne / colonne d’arrivée). Cela permet à l’IA de se concentrer sur sa propre progression en début de partie tout en devenant extrêmement défensive par la suite.
+\end{itemize}
+
+Il est important de préciser que lorsque la fonction \texttt{get\_blocking\_walls} retourne la liste des murs bloquant, 
+la fonction \texttt{get\_tree\_move} n’en sélectionne que 3 au hasard. L’objectif ici est d’éviter l’explosion combinatoire, 
+en effet même en ne gardant que les murs bloquants, il peut y en avoir une dizaine à chaque coups et le problème n’aurait été que 
+déplacé. En ne prenant que 3 murs, nous faisons le pari statistique que parmi ces 3, au moins un sera suffisamment pertinent pour contrer 
+l’adversaire. Étant donné que le MCTS est lancé plusieurs fois, l’aléatoire permet de tester des murs différents d’une partie à l’autre, 
+finissant par identifier ceux qui mènent à la victoire sans que les options de murs ne saturent totalement le temps de calcul.
+
+\paragraph{Simulations guidées par heuristiques} Le point critique d’un MCTS est la phase de Simulation. Si les deux joueurs jouent n’importe comment, le résultat de la simulation ne reflète pas la qualité réelle du coup initial. Pour résoudre ce problème, nous avons implémenté une politique de simulation guidée.
+
+\begin{itemize}
+    \item \textbf{Biais de progression} : Lors d’un rollout, le joueur n’est pas aléatoire. Il y a une forte probabilité (85\%) qu’il choisisse un coup réduisant sa distance vers l’objectif (calculé par \texttt{get\_shortest\_path\_length}). En forçant ainsi les pions à se diriger vers leur but, les simulations se terminent plus rapidement et imitent un comportement humain. Les statistiques de victoire (win / visits) deviennent alors un indicateur fiable de la solidité d’une position. 
+    \item \textbf{Gestion des murs en simulation} : Les rollouts ne posent jamais de murs, ils simulent uniquement la fin de partie avec les pions. Cela fait gagner en rapidité de calcul durant les simulations mais poussera l’IA à beaucoup consommer ses murs car elle voit l’avantage immédiat d’un mur posé dans l’arbre, mais elle ne va pas simuler le fait que l’adversaire pourrait répondre par un autre mur.
+    \item \textbf{Compromis qualité/quantité} : Nous avons conscience qu’utiliser un algorithme de parcours en largeur pour calculer la distance la plus courte à chaque rollout est coûteux, mais ce coût est largement compensé par la pertinence des résultats obtenus. Nous choisissons en quelque sorte la qualité à la quantité, nous perdons en vitesse brute mais gagnons en précision.
+    \item \textbf{Robustesse} : Nous avons fait le choix de garder 15\% d’aléatoire ici afin de préserver la nature explorative du MCTS. Un rollout purement dirigé par le plus court chemin rendrait l’évaluation trop rigide et incapable d’anticiper les comportements humain de l’adversaire. Ce mélange permet d’obtenir des simulations qui sont à la fois efficaces et diversifiées.
+\end{itemize}
+
+Ainsi, nous avons conçu un MCTS capable de rivaliser avec un Minimax. Là où un MCTS classique échouerait par manque de temps et trop de branches à visiter, le nôtre va à chaque fois retourner un coup utile. Tout cela en fait un réel adversaire, imparfait évidemment, mais suffisamment intelligent pour offrir au joueur une partie vraiment intéressante.
+
+
 \subsection{Pipeline d'apprentissage automatique}
 
 Nous avons ajouté une politique de sélection ML pour le MCTS. L'objectif n'est
