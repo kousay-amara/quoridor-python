@@ -42,7 +42,7 @@
 
 \section*{Introduction}
 
-Quoridor est un jeu de société à deux ou quatre joueurs conçu par Mirko Marchesi
+Quoridor est un jeu de société à 2--4 joueurs conçu par Mirko Marchesi
 et publié par Gigamic en 1997. Sur un plateau de neuf cases de côté, chaque
 joueur doit conduire son pion de son bord de départ au bord opposé, tout en
 posant des murs pour ralentir ses adversaires. La règle fondamentale qui interdit
@@ -1273,7 +1273,7 @@ def _xy_to_cell(self, x, y):
 La division par \texttt{step} donne le numéro de colonne dans lequel
 tombe le pixel \texttt{x}. Mais cela ne suffit pas : si le clic tombe
 dans l'interstice entre deux cases, la division donnerait quand même
-un numéro de colonne valide. Le second test vérifier que
+un numéro de colonne valide. Le second test vérifie que
 \texttt{in\_cell\_x} et \texttt{in\_cell\_y} ne dépassent pas
 \texttt{cs} permet de détecter ce cas et de retourner \texttt{None},
 signifiant qu'aucune case n'a été cliquée. Ce filtre est essentiel
