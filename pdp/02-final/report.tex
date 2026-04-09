@@ -65,83 +65,183 @@ ultrices varius nulla vel finibus. Donec convallis fringilla ante id porta.
 \label{sec:sujet}
 % ==============================================================
 
+% ------------------------------------------------------------------
 \subsection{Historique du jeu}
+\label{subsec:historique}
+% ------------------------------------------------------------------
 
-Quoridor est un jeu de stratégie abstraite conçu par Mirko Marchesi et publié
-en~1997 par l'éditeur français Gigamic~\cite{marchesi1997,gigamic}. Son précurseur
-direct est \emph{Blockade}, inventé par Philip Slater en~1975~\cite{slater1975},
-qui repose déjà sur l'idée de gêner la progression adverse par des obstacles sur
-grille. Marchesi en dériva \emph{Pinko Pallino} (Epta Games, 1995), joué sur un
-plateau de $11\times11$ cases à deux joueurs avec 42~murs~\cite{marchesi1997},
-avant de reformuler le jeu en Quoridor sur $9\times9$ cases, ouvert à deux ou
-quatre joueurs.
+Quoridor est un jeu de stratégie abstraite conçu par le créateur de
+jeux italien Mirko Marchesi et publié en 1997 par l'éditeur français
+Gigamic~\cite{marchesi1997,gigamic}. Son histoire remonte à un jeu
+antérieur, \emph{Blockade}, inventé par Philip Slater en
+1975~\cite{slater1975} : ce dernier posait déjà le principe consistant à
+gêner la progression adverse au moyen d'obstacles disposés sur un
+plateau en grille. Marchesi s'inspira de cette mécanique pour
+concevoir en 1995 une première variante, \emph{Pinko Pallino}, éditée
+par la société italienne Epta Games~\cite{marchesi1997}. Pinko Pallino
+se jouait à deux joueurs sur un plateau de $11 \times 11$ cases avec
+42 murs au total et des règles légèrement différentes. Quoridor en
+constitue la formulation ultérieure, ramenée à un plateau de
+$9 \times 9$ cases et ouverte à deux ou quatre joueurs.
 
-Le jeu reçoit le \emph{Mensa Select Award} en~1997~\cite{mensa1997} et est élu
-\emph{Jeu de l'Année 1998} par \emph{Games Magazine}~\cite{games1998}, distinctions
-qui consacrent sa profondeur tactique malgré des règles très accessibles. Il est
-aujourd'hui décliné en plusieurs versions (Pocket, Kid, Deluxe, Giant) et adopté
-comme support pédagogique dans le réseau MindLab~\cite{gigamic}.
+Dès sa sortie, le jeu obtient une reconnaissance critique
+internationale : il reçoit le \emph{Mensa Select Award} en
+1997~\cite{mensa1997}, puis est élu \emph{Jeu de l'Année 1998} par le
+magazine américain \emph{Games Magazine} dans la catégorie des jeux de
+stratégie abstraite~\cite{games1998}. Ces distinctions consacrent sa
+qualité de conception : des règles très accessibles combinées à une
+profondeur tactique surprenante. De nombreux établissements
+d'enseignement européens, notamment dans le cadre du réseau
+MindLab, ont depuis intégré Quoridor comme support pédagogique pour
+l'enseignement de la logique et de l'algorithmique~\cite{gigamic}.
+Le jeu est aujourd'hui décliné en de nombreuses versions (Pocket,
+Kid, Deluxe, Giant) et continûment édité à l'échelle mondiale.
 
+% ------------------------------------------------------------------
 \subsection{Règles du jeu}
+\label{subsec:regles}
+% ------------------------------------------------------------------
 
-Le plateau est carré, $9\times9$ cases. Chaque joueur place son pion au centre
-du bord qui lui est assigné et dispose de dix murs (cinq en partie à
-quatre)~\cite{gigamic}. L'objectif est d'atteindre en premier l'une des neuf cases
-du bord opposé.
+Quoridor se joue sur un plateau carré de $9 \times 9$ cases. Chaque
+joueur positionne son pion au centre du bord qui lui est assigné et
+dispose d'une réserve de murs : dix murs par joueur en partie à deux,
+cinq en partie à quatre~\cite{gigamic}. L'objectif est d'atteindre en
+premier l'une des neuf cases du bord opposé à son bord de départ.
+
+À chaque tour, un joueur accomplit exactement l'une des deux actions
+suivantes.
 
 \paragraph{Déplacement du pion.}
-Le pion avance d'une case dans l'une des quatre directions orthogonales, sans mur
-sur le passage ni pion adverse sur la case d'arrivée. Si un pion adverse est
-directement adjacent sans mur interposé, le joueur peut sauter par-dessus vers la
-case située juste derrière. Si cette case est bloquée (mur ou bord), le saut
-s'effectue en diagonale sur une case latérale libre~\cite{gigamic,glendenning2005}.
+Le pion se déplace d'une case dans l'une des quatre directions
+orthogonales (nord, sud, est, ouest), sous réserve qu'aucun mur ne
+barre le passage et que la case d'arrivée soit libre. Lorsque le pion
+adverse se trouve sur une case immédiatement adjacente sans mur
+interposé, le joueur peut sauter par-dessus pour atterrir sur la case
+située juste derrière l'adversaire. Si cette case est inaccessible
+(mur ou bord du plateau), le saut peut s'effectuer en diagonale sur
+l'une des cases latérales adjacentes à l'adversaire~\cite{gigamic,glendenning2005}.
 
 \paragraph{Pose d'un mur.}
-Un mur couvre deux segments consécutifs de la grille et bloque définitivement le
-passage pour tous les joueurs. Contrainte fondamentale : un mur ne peut pas
-supprimer le \emph{dernier chemin} permettant à l'un des joueurs d'atteindre son
-bord objectif~\cite{gigamic,glendenning2005}. Le moteur de jeu impose donc un BFS
-de vérification de connectivité à chaque tentative de pose
-(voir section~\ref{sec:algos}).
+Un mur est une pièce plate couvrant deux segments consécutifs de la
+grille, posé dans l'une des rainures du plateau. Il bloque
+définitivement le passage entre les cases qu'il sépare, pour tous les
+joueurs. La règle la plus importante du jeu --- et la plus exigeante
+du point de vue algorithmique --- interdit de poser un mur si ce
+placement supprime \emph{le dernier chemin} permettant à l'un
+quelconque des joueurs d'atteindre son bord
+objectif~\cite{gigamic,glendenning2005}. Cette contrainte impose, à
+chaque tentative de pose, une vérification de connectivité par un
+parcours de graphe (voir section~\ref{sec:algos}).
 
-\subsection{Complexité du jeu}
+\paragraph{Exemples illustratifs.}
+Pour ancrer ces règles dans la pratique, considérons quelques situations
+concrètes exprimées en notation algébrique~\cite{glendenning2005}.
 
-Quoridor est un jeu combinatoire abstrait à information parfaite, déterministe et
-à somme nulle~\cite{russell2020aima} : les techniques de recherche adversariale
-classiques, en particulier l'élagage alpha-bêta de Knuth et
-Moore~\cite{knuth1975alphabeta}, sont donc applicables. Cependant, l'espace d'états
-est considérable : Mertens estime environ $3{,}9\times10^{42}$ positions légales et
-une complexité d'arbre de $10^{162}$~\cite{mertens2006}, supérieure aux Échecs
-($10^{123}$)~\cite{russell2020aima}. Le facteur de branchement atteint 60 à
-80~coups légaux par position~\cite{glendenning2005}, dominé par les poses de murs
-(jusqu'à 128 en début de partie). Une recherche exhaustive est donc hors de portée :
-la qualité d'un agent dépend essentiellement de sa fonction d'évaluation heuristique
-et de l'efficacité de la représentation interne du graphe.
+\textit{Déplacement simple.} Le joueur~1 part de la case \texttt{e9}
+(centre du bord sud) et avance vers le nord : il atteint \texttt{e8}.
+Si un mur horizontal a été posé en \texttt{e8h}, bloquant le passage
+entre les rangées 8 et 9, ce déplacement est illégal et le joueur doit
+choisir une autre direction ou poser un mur à la place.
 
+\textit{Saut et repli diagonal.} Le joueur~1 est en \texttt{e5} et le
+joueur~2 en \texttt{e4}, sans mur entre eux. Le joueur~1 peut sauter
+directement en \texttt{e3}. Si un mur horizontal bloque \texttt{e3},
+le saut droit est impossible : le joueur~1 peut alors se rabattre en
+diagonale vers \texttt{d4} ou \texttt{f4}, à condition qu'aucun mur ne
+barre ces accès latéraux~\cite{gigamic}.
+
+\textit{Mur illégal.} Supposons que des murs successifs aient été posés
+de façon à ne laisser qu'un seul chemin au joueur~2 vers son bord
+objectif. Toute tentative de poser un mur supplémentaire supprimant ce
+dernier chemin est rejetée par le moteur de jeu, qui déclenche un
+parcours en largeur (BFS) sur le graphe du plateau pour détecter la
+violation avant d'enregistrer l'action (voir section~\ref{sec:algos}).
+Cet exemple illustre directement pourquoi la vérification de
+connectivité est au c\oe ur de l'implémentation.
+
+% ------------------------------------------------------------------
+\subsection{Classification et complexité du jeu}
+\label{subsec:complexite}
+% ------------------------------------------------------------------
+
+Quoridor appartient à la famille des jeux combinatoires abstraits à
+information parfaite, déterministes et à somme nulle, au même titre
+que les Échecs ou le Go~\cite{russell2020aima}. Cette classification
+implique que les techniques de recherche adversariale classiques sont
+théoriquement applicables : en particulier, l'élagage alpha-bêta
+introduit par Knuth et Moore~\cite{knuth1975alphabeta} permet
+d'explorer l'arbre de jeu en réduisant significativement le nombre de
+n\oe uds évalués.
+
+Cependant, la taille de l'espace d'états est considérable. Mertens
+estime le nombre de positions légalement atteignables à environ
+$3{,}9 \times 10^{42}$, et la complexité de l'arbre de jeu autour de
+$10^{162}$~\cite{mertens2006}, soit un ordre de grandeur supérieur à
+celui des Échecs (environ $10^{123}$~\cite{russell2020aima}).
+Glendenning montre que le facteur de branchement moyen est de l'ordre
+de 60 à 80 coups légaux par position~\cite{glendenning2005}, dominé
+par les nombreux placements de murs possibles (jusqu'à 128 en début
+de partie). Une recherche exhaustive est donc totalement hors de
+portée, et la qualité d'un agent repose essentiellement sur la
+pertinence de sa fonction d'évaluation heuristique.
+
+Ces caractéristiques ont un impact direct sur nos choix
+d'implémentation, détaillés en section~\ref{sec:algos} : nécessité
+d'un élagage alpha-bêta avec approfondissement itératif, coût
+prohibitif d'un BFS répété pour la vérification de légalité des murs,
+et importance d'une représentation interne du plateau permettant
+l'ajout et la suppression rapides d'arêtes.
+
+% ------------------------------------------------------------------
 \subsection{Travaux existants}
+\label{subsec:existant}
+% ------------------------------------------------------------------
 
-\paragraph{Recherche adversariale.}
-Glendenning (Univ.\ New Mexico, 2005) propose le premier agent Minimax documenté
-pour Quoridor, avec une fonction d'évaluation linéaire dont les poids sont optimisés
-par algorithme génétique~\cite{glendenning2005}. Le signal heuristique central est la
-différence des longueurs des plus courts chemins des deux joueurs vers leur ligne
-d'arrivée. Elle définit également la première notation algébrique formelle du jeu.
-Mertens (Maastricht, 2006) complète cette approche par des heuristiques de
-progression colonne par colonne~\cite{mertens2006} et conclut que la richesse
-heuristique prime sur la profondeur de recherche pour des temps raisonnables.
+Quoridor a fait l'objet de plusieurs travaux académiques qui
+constituent le socle bibliographique de notre projet.
 
-\paragraph{Monte Carlo Tree Search.}
-Massagué Respall, Brown et Aslam appliquent MCTS à Quoridor via l'algorithme
-UCT~\cite{respall2018,kocsis2006uct}, montrant qu'il rivalise avec un Minimax bien
-réglé dès lors que la simulation est guidée par heuristiques. Browne \emph{et al.}
-fournissent le cadre de référence sur les variantes MCTS~\cite{browne2012mcts}. Ces
-travaux confirment que les algorithmes de plus court chemin constituent le socle
-commun de toutes les implémentations sérieuses.
+\paragraph{Approches par recherche adversariale.}
+Le premier agent documenté est dû à Lisa Glendenning, dont la thèse de
+licence (University of New Mexico, 2005) propose un joueur artificiel
+fondé sur un algorithme Minimax avec une fonction d'évaluation linéaire
+dont les poids sont optimisés par algorithme génétique~\cite{glendenning2005}.
+La fonction d'évaluation privilégie la différence de longueurs des plus
+courts chemins des deux joueurs vers leurs lignes d'arrivée
+respectives, quantité qui s'avère être le signal heuristique le plus
+discriminant. Glendenning propose également la première notation
+algébrique formelle pour Quoridor, analogue à la notation des Échecs.
 
-\paragraph{Positionnement du projet.}
-Aucune solution libre existante ne réunit simultanément interfaces CLI et GUI, mode
-réseau multijoueur et IA configurable. Notre projet couvre ces quatre axes en
-s'appuyant sur les algorithmes validés ci-dessus.
+Mertens complète cette approche en 2006 en introduisant des
+heuristiques supplémentaires basées sur la progression colonne par
+colonne et en analysant l'impact du choix des poids sur les
+performances~\cite{mertens2006}. Son agent repose sur Minimax à
+profondeur 2 et calcule la connectivité par une recherche en
+profondeur d'abord (DFS) et les plus courts chemins par BFS.
+Il conclut que la richesse heuristique prime sur la profondeur de
+recherche pour des temps de réflexion raisonnables.
+
+\paragraph{Approches Monte Carlo.}
+Plus récemment, Massagué Respall, Brown et Aslam ont appliqué la
+recherche arborescente Monte Carlo (MCTS) à Quoridor~\cite{respall2018}.
+Leur agent repose sur l'algorithme UCT (\emph{Upper Confidence bounds
+applied to Trees}) formalisé par Kocsis et Szepesvári~\cite{kocsis2006uct},
+qui équilibre exploration et exploitation au sein de l'arbre de jeu.
+Les résultats montrent que MCTS se révèle compétitif face à un Minimax
+bien réglé, et que l'incorporation d'heuristiques dans les phases de
+sélection et de simulation améliore sensiblement les performances. Cette
+étude confirme que la modélisation par graphe et les algorithmes de
+plus court chemin constituent le socle commun de toutes les
+implémentations sérieuses du jeu. Browne \emph{et al.} fournissent le
+cadre de référence sur les variantes MCTS~\cite{browne2012mcts}.
+
+\paragraph{Positionnement de notre projet.}
+Les solutions logicielles existantes --- agents web universitaires,
+applications mobiles multijoueurs --- ne réunissent pas simultanément
+les caractéristiques suivantes : logiciel libre, interfaces CLI et GUI,
+mode réseau multijoueur et intelligence artificielle configurable. C'est
+précisément le créneau que vise notre projet, en nous appuyant sur les
+algorithmes validés par les travaux cités ci-dessus
+(voir section~\ref{sec:algos}).
 
 % ==============================================================
 \section{Modélisation du jeu}
