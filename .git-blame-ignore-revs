@@ -1,0 +1,6 @@
+# Commits de reformatage pur (black), à ignorer par git blame pour
+# conserver une attribution fidèle aux auteurs originaux.
+# Usage : git blame --ignore-revs-file .git-blame-ignore-revs <fichier>
+# ou : git config blame.ignoreRevsFile .git-blame-ignore-revs
+
+823fb5faff0072bf21362df689481a81f920e7b3
