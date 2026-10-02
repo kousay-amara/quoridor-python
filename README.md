@@ -107,6 +107,10 @@ Cette section distingue ma contribution individuelle de celle de l'équipe, d'ap
 
 Le module d'intelligence artificielle par apprentissage (`quoridor/ML/`) a été principalement écrit par mon coéquipier Bilal Al Fayoumi ; j'ai contribué à son intégration dans le moteur MCTS (`quoridor/application/mcts_engine.py`).
 
+## Licence
+
+Ce projet est sous licence [MIT](LICENSE).
+
 ## Origine du sujet
 
 Le sujet du projet (`pdp/quoridor-specs.pdf`) a été fourni par l'enseignant encadrant, Emmanuel Fleury, dans le cadre du cursus de l'Université de Bordeaux. Il n'est pas de notre fait et reste la propriété de l'établissement.
