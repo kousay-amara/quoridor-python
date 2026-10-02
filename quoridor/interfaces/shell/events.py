@@ -33,9 +33,7 @@ class EventBus:
     def __init__(self) -> None:
         self._listeners: dict[str, list[EventListener]] = defaultdict(list)
 
-    def subscribe(
-        self, event_name: str, listener: EventListener
-    ) -> Callable[[], None]:
+    def subscribe(self, event_name: str, listener: EventListener) -> Callable[[], None]:
         self._listeners[event_name].append(listener)
 
         def _unsubscribe() -> None:

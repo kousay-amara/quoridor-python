@@ -46,9 +46,7 @@ def _distance_to_goal(state: GameState, player_id: int) -> int:
     )
 
 
-def _position_features(
-    state: GameState, player_id: int
-) -> tuple[int, int, int]:
+def _position_features(state: GameState, player_id: int) -> tuple[int, int, int]:
     node = state.player_positions[player_id]
     row, col = divmod(node, state.board_size)
     center = state.board_size // 2
@@ -77,9 +75,7 @@ def build_ml_feature_row(
     Used both during dataset extraction (training) and at runtime
     (MCTS selection scoring).
     """
-    opponent_ids = [
-        pid for pid in before_state.active_player_ids() if pid != player_id
-    ]
+    opponent_ids = [pid for pid in before_state.active_player_ids() if pid != player_id]
     if len(opponent_ids) != 1:
         raise ValueError("ML features support 2-player games only")
     opponent_id = opponent_ids[0]
@@ -88,12 +84,8 @@ def build_ml_feature_row(
     my_dist_before = _distance_to_goal(before_state, player_id)
     opp_dist_before = _distance_to_goal(before_state, opponent_id)
 
-    my_row_b, my_col_b, my_center_b = _position_features(
-        before_state, player_id
-    )
-    opp_row_b, opp_col_b, opp_center_b = _position_features(
-        before_state, opponent_id
-    )
+    my_row_b, my_col_b, my_center_b = _position_features(before_state, player_id)
+    opp_row_b, opp_col_b, opp_center_b = _position_features(before_state, opponent_id)
 
     my_walls_before = before_state.remaining_walls[player_id]
     opp_walls_before = before_state.remaining_walls[opponent_id]

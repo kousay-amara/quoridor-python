@@ -25,9 +25,7 @@ class ContestPosition:
     horizontal_walls: list[tuple[int, int]]
 
 
-def _expected_line_number(
-    lines: list[tuple[int, str]], cursor: int = 0
-) -> int:
+def _expected_line_number(lines: list[tuple[int, str]], cursor: int = 0) -> int:
     if cursor < len(lines):
         return lines[cursor][0]
     if lines:
@@ -49,9 +47,7 @@ def _tokenize(line: str) -> list[str]:
     return [tok for tok in line.strip().split() if tok]
 
 
-def _parse_cell_token(
-    token: str, *, line_no: int, col_no: int
-) -> tuple[bool, str]:
+def _parse_cell_token(token: str, *, line_no: int, col_no: int) -> tuple[bool, str]:
     if not _CELL_TOKEN_PATTERN.match(token):
         raise ContestError(
             f"invalid cell token at line {line_no}, column {col_no}: {token}"
@@ -77,9 +73,7 @@ def _parse_cell_row(
             f"expected {size} tokens, got {len(tokens)}"
         )
     for col, tok in enumerate(tokens):
-        has_vwall, cell = _parse_cell_token(
-            tok, line_no=line_no, col_no=col + 1
-        )
+        has_vwall, cell = _parse_cell_token(tok, line_no=line_no, col_no=col + 1)
         if has_vwall and col > 0:
             left = row * size + (col - 1)
             right = row * size + col
@@ -115,8 +109,7 @@ def _parse_separator_row(
             horizontal_walls.append((top, bottom))
         elif tok != ".":
             raise ContestError(
-                "invalid separator token at line "
-                f"{line_no}, column {col + 1}: {tok}"
+                "invalid separator token at line " f"{line_no}, column {col + 1}: {tok}"
             )
 
 
@@ -190,10 +183,7 @@ def _parse_walls_line(
         )
 
     try:
-        return {
-            pid: int(token)
-            for pid, token in zip(player_ids, tokens, strict=True)
-        }
+        return {pid: int(token) for pid, token in zip(player_ids, tokens, strict=True)}
     except ValueError as exc:
         raise ContestError(f"invalid walls value at line {line_no}") from exc
 
@@ -214,15 +204,13 @@ def parse_contest_file(path: str | Path) -> ContestPosition:
         )
     except StopIteration as exc:
         raise ContestError(
-            "missing [game] section before line "
-            f"{_expected_line_number(lines)}"
+            "missing [game] section before line " f"{_expected_line_number(lines)}"
         ) from exc
 
     cursor = game_idx + 1
     if cursor >= len(lines):
         raise ContestError(
-            "missing current player at line "
-            f"{_expected_line_number(lines, cursor)}"
+            "missing current player at line " f"{_expected_line_number(lines, cursor)}"
         )
     current_player_line_no = lines[cursor][0]
     try:

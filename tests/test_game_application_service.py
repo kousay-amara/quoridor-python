@@ -114,39 +114,30 @@ def test_service_hint_modes_and_errors():
         minimax_called["ok"] = True
         return ("move_pawn", 0, 1)
 
-    assert (
-        service.hint(
-            ai_mode="mcts",
-            ai_time=2,
-            ai_minimax_depth=None,
-            mcts_fn=fake_mcts,
-        )
-        == ("move_pawn", 0, 1)
-    )
+    assert service.hint(
+        ai_mode="mcts",
+        ai_time=2,
+        ai_minimax_depth=None,
+        mcts_fn=fake_mcts,
+    ) == ("move_pawn", 0, 1)
     assert mcts_called["ok"] is True
 
-    assert (
-        service.hint(
-            ai_mode="iterative",
-            ai_time=3,
-            ai_minimax_depth=4,
-            ai_minimax_scoring=1,
-            iterative_fn=fake_iterative,
-        )
-        == ("move_pawn", 0, 1)
-    )
+    assert service.hint(
+        ai_mode="iterative",
+        ai_time=3,
+        ai_minimax_depth=4,
+        ai_minimax_scoring=1,
+        iterative_fn=fake_iterative,
+    ) == ("move_pawn", 0, 1)
     assert iterative_called["ok"] is True
 
-    assert (
-        service.hint(
-            ai_mode="minimax",
-            ai_time=1,
-            ai_minimax_depth=2,
-            ai_minimax_scoring=1,
-            minimax_fn=fake_minimax,
-        )
-        == ("move_pawn", 0, 1)
-    )
+    assert service.hint(
+        ai_mode="minimax",
+        ai_time=1,
+        ai_minimax_depth=2,
+        ai_minimax_scoring=1,
+        minimax_fn=fake_minimax,
+    ) == ("move_pawn", 0, 1)
     assert minimax_called["ok"] is True
 
     with pytest.raises(ValueError, match="no legal moves available"):
@@ -183,9 +174,7 @@ def test_service_hint_passes_selected_minimax_scoring():
         minimax_fn=fake_minimax,
     )
 
-    assert observed["score"] == evaluate_state(
-        session.state, 1, scoring_type=2
-    )
+    assert observed["score"] == evaluate_state(session.state, 1, scoring_type=2)
 
 
 def test_service_hint_uses_automatic_depth_for_minimax():

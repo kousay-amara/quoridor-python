@@ -50,9 +50,7 @@ def _wait_connected_clients(server: NetworkServer, expected_count: int) -> bool:
     return False
 
 
-def _wait_for_notification_prefix(
-    client: NetworkClient, prefix: str
-) -> str | None:
+def _wait_for_notification_prefix(client: NetworkClient, prefix: str) -> str | None:
     deadline = time.time() + 1.0
     while time.time() < deadline:
         for notification in client.drain_notifications():
@@ -140,12 +138,16 @@ def test_network_players_supports_detailed_lookup_by_id():
         assert _wait_connected_clients(server, 1)
 
         players = client.players()
-        assert any(cid == client.client_id and name == "alice" for cid, name, _ in players)
+        assert any(
+            cid == client.client_id and name == "alice" for cid, name, _ in players
+        )
 
         with pytest.raises(ValueError, match="player id must be positive"):
             client.player_details(0)
 
-        cid, name, _status, wins, losses, played = client.player_details(client.client_id)
+        cid, name, _status, wins, losses, played = client.player_details(
+            client.client_id
+        )
         assert cid == client.client_id
         assert name == "alice"
         assert wins == losses == played == 0
@@ -228,6 +230,7 @@ def test_network_away_back_roundtrip_and_invalid_players_format():
 def test_basic_network_unit_helpers():
     # _validate_port: invalid range
     import pytest as _pytest
+
     with _pytest.raises(ValueError, match="invalid port"):
         _validate_port(0)
     with _pytest.raises(ValueError, match="invalid port"):
@@ -529,7 +532,9 @@ def test_cli_network_server_and_handlers(capsys):
         def close(self):
             pass
 
-    st6 = NS(network_client=_QuitRaises(), network_player_id=1, network_restore_callback=None)
+    st6 = NS(
+        network_client=_QuitRaises(), network_player_id=1, network_restore_callback=None
+    )
     cn.disconnect_client(st6)
     assert st6.network_player_id is None
 
@@ -540,7 +545,9 @@ def test_server_handshake_rejects_invalid_hello_and_name():
 
     try:
         server.start()
-        sock = socket.create_connection(("127.0.0.1", port), timeout=_SOCKET_TIMEOUT_SEC)
+        sock = socket.create_connection(
+            ("127.0.0.1", port), timeout=_SOCKET_TIMEOUT_SEC
+        )
         sock.settimeout(_SOCKET_TIMEOUT_SEC)
         try:
             assert _recv_protocol_line(sock).startswith("WELCOME ")
@@ -550,7 +557,9 @@ def test_server_handshake_rejects_invalid_hello_and_name():
         finally:
             sock.close()
 
-        sock = socket.create_connection(("127.0.0.1", port), timeout=_SOCKET_TIMEOUT_SEC)
+        sock = socket.create_connection(
+            ("127.0.0.1", port), timeout=_SOCKET_TIMEOUT_SEC
+        )
         sock.settimeout(_SOCKET_TIMEOUT_SEC)
         try:
             assert _recv_protocol_line(sock).startswith("WELCOME ")

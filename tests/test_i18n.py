@@ -51,9 +51,7 @@ def test_setup_i18n_uses_default_english_when_language_is_not_provided(
     assert captured.err == ""
 
 
-def test_setup_i18n_uses_lang_for_french_when_lc_all_missing(
-    monkeypatch, capsys
-):
+def test_setup_i18n_uses_lang_for_french_when_lc_all_missing(monkeypatch, capsys):
     monkeypatch.delenv("LC_ALL", raising=False)
     monkeypatch.setenv("LANG", "fr_FR.UTF-8")
 

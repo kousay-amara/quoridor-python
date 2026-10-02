@@ -55,9 +55,7 @@ FR_MESSAGES: dict[str, str] = {
         "Interface en ligne de commande de Quoridor."
     ),
     "path to a saved game file": "chemin vers un fichier de sauvegarde",
-    "show program version and exit": (
-        "afficher la version du programme puis quitter"
-    ),
+    "show program version and exit": ("afficher la version du programme puis quitter"),
     "increase program verbosity": "augmenter la verbosite du programme",
     "show debug messages": "afficher les messages de debug",
     "run in headless mode (requires --server)": (
@@ -94,9 +92,7 @@ FR_MESSAGES: dict[str, str] = {
     "AI scoring type (1: Default, 2: Material, 3: Hybrid)": (
         "type de score IA (1: Defaut, 2: Materiel, 3: Hybride)"
     ),
-    "MCTS selection policy (UCT or ML)": (
-        "politique de selection MCTS (UCT ou ML)"
-    ),
+    "MCTS selection policy (UCT or ML)": ("politique de selection MCTS (UCT ou ML)"),
 }
 
 

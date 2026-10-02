@@ -36,38 +36,67 @@ class _Client:
     port = 19999
     client_id = 1
 
-    def ping(self): return 10.0
-    def quit(self): pass
-    def close(self): pass
-    def players(self): return [(1, "alice", "idle")]
+    def ping(self):
+        return 10.0
+
+    def quit(self):
+        pass
+
+    def close(self):
+        pass
+
+    def players(self):
+        return [(1, "alice", "idle")]
+
     def player_details(self, cid):
-        if cid == 999: raise ValueError("Player not found.")
+        if cid == 999:
+            raise ValueError("Player not found.")
         return (cid, "alice", "idle", 0, 0, 0)
-    def scoreboard(self): return [(1, "alice", 1, 0, 1)]
+
+    def scoreboard(self):
+        return [(1, "alice", 1, 0, 1)]
+
     def send_command(self, cmd):
-        if cmd.startswith("NEW "): return "INVITATION_SENT PLAYER=bob TIMEOUT=300s"
+        if cmd.startswith("NEW "):
+            return "INVITATION_SENT PLAYER=bob TIMEOUT=300s"
         return "OK"
-    def accept(self): return "GAME_START OPPONENT=bob"
-    def decline(self): return "DECLINE_OK PLAYER=alice"
-    def cancel(self): return "CANCEL_OK PLAYER=bob"
-    def move(self, _notation): return "MOVE_OK"
-    def drain_opponent_moves(self): return ["e1-e2"]
+
+    def accept(self):
+        return "GAME_START OPPONENT=bob"
+
+    def decline(self):
+        return "DECLINE_OK PLAYER=alice"
+
+    def cancel(self):
+        return "CANCEL_OK PLAYER=bob"
+
+    def move(self, _notation):
+        return "MOVE_OK"
+
+    def drain_opponent_moves(self):
+        return ["e1-e2"]
 
 
 def test_cli_network_core_flow(capsys, monkeypatch):
     state = _State()
 
     class _FailingClient:
-        def __init__(self, **_): pass
-        def connect(self): raise OSError("refused")
+        def __init__(self, **_):
+            pass
+
+        def connect(self):
+            raise OSError("refused")
 
     monkeypatch.setattr(cli_net, "NetworkClient", _FailingClient)
     command_join(state, "join 127.0.0.1:1")
     assert "Cannot connect" in capsys.readouterr().out
 
     class _OkClient(_Client):
-        def __init__(self, **_): pass
-        def connect(self): pass
+        def __init__(self, **_):
+            pass
+
+        def connect(self):
+            pass
 
     monkeypatch.setattr(cli_net, "NetworkClient", _OkClient)
     command_join(state, "join 127.0.0.1:19999")
@@ -108,7 +137,8 @@ def test_cli_network_core_flow(capsys, monkeypatch):
     assert "Disconnected" in out and state.network_client is None
 
     class _LostClient(_Client):
-        def ping(self): raise OSError("lost")
+        def ping(self):
+            raise OSError("lost")
 
     state.network_client = _LostClient()
     command_ping(state, "ping")
@@ -132,13 +162,26 @@ def test_network_handlers_join_and_apply_state(capsys):
     wired = {}
 
     class _MockClient:
-        def set_opponent_move_callback(self, cb): wired["move"] = cb
-        def set_game_state_callback(self, cb): wired["state"] = cb
-        def set_notification_callback(self, cb): wired["notif"] = cb
-        def set_connection_lost_callback(self, cb): wired["lost"] = cb
-        def drain_opponent_moves(self): return ["e1-e2"]
-        def drain_game_state_updates(self): return []
-        def drain_notifications(self): return []
+        def set_opponent_move_callback(self, cb):
+            wired["move"] = cb
+
+        def set_game_state_callback(self, cb):
+            wired["state"] = cb
+
+        def set_notification_callback(self, cb):
+            wired["notif"] = cb
+
+        def set_connection_lost_callback(self, cb):
+            wired["lost"] = cb
+
+        def drain_opponent_moves(self):
+            return ["e1-e2"]
+
+        def drain_game_state_updates(self):
+            return []
+
+        def drain_notifications(self):
+            return []
 
     def _join_fn(s, _line):
         s.network_client = _MockClient()
@@ -196,15 +239,22 @@ def test_network_handlers_wrappers_and_save_local_state():
 
     state.saved_local_state = None
     for attr, val in [
-        ("session", None), ("has_unsaved_changes", False),
-        ("ai_minimax_scoring", 1), ("ai_mcts_selection", "UCT"),
-        ("current_ai_mode", "minimax"), ("current_ai_time", 5),
+        ("session", None),
+        ("has_unsaved_changes", False),
+        ("ai_minimax_scoring", 1),
+        ("ai_mcts_selection", "UCT"),
+        ("current_ai_mode", "minimax"),
+        ("current_ai_time", 5),
         ("current_ai_minimax_depth", None),
         ("current_ai_minimax_scoring", 1),
         ("current_ai_mcts_selection", "UCT"),
-        ("players", 2), ("walls_per_player", 10), ("board_size", 9),
-        ("ai_players", []), ("blitz_enabled", False),
-        ("time_limit", 5.0), ("blitz", None),
+        ("players", 2),
+        ("walls_per_player", 10),
+        ("board_size", 9),
+        ("ai_players", []),
+        ("blitz_enabled", False),
+        ("time_limit", 5.0),
+        ("blitz", None),
     ]:
         setattr(state, attr, val)
     saves = []

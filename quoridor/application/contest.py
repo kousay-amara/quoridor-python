@@ -21,7 +21,6 @@ from ..interfaces.contest_parser import (
     parse_contest_file,
 )
 
-
 CONTEST_SEARCH_DEPTH = 2
 
 
@@ -49,8 +48,7 @@ def _move_to_notation(
 def _build_state(position: ContestPosition) -> GameState:
     player_ids = sorted(position.positions.keys())
     remaining_walls = {
-        pid: position.remaining_walls.get(pid, WALLS_DEFAULT)
-        for pid in player_ids
+        pid: position.remaining_walls.get(pid, WALLS_DEFAULT) for pid in player_ids
     }
     return GameState(
         board_size=position.size,

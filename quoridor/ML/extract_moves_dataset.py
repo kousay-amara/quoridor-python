@@ -34,9 +34,7 @@ def _deserialize_move(move_data: dict) -> tuple:
 def _build_initial_state(game_data: dict):
     board_size = game_data["board_size"]
     players = game_data["players"]
-    walls_per_player = game_data.get(
-        "walls_per_player", DEFAULT_WALLS_PER_PLAYER
-    )
+    walls_per_player = game_data.get("walls_per_player", DEFAULT_WALLS_PER_PLAYER)
 
     positions = initial_player_positions(board_size, players)
     remaining_walls = {pid: walls_per_player for pid in positions}

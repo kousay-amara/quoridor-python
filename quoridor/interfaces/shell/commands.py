@@ -123,8 +123,7 @@ def build_command_registry(
                 runner=command_help,
             ),
             CommandSpec(
-                matcher=lambda line: line.lower()
-                in {"history", "show history"},
+                matcher=lambda line: line.lower() in {"history", "show history"},
                 runner=command_history,
             ),
             CommandSpec(

@@ -58,10 +58,9 @@ def serialize_history(session: GameSession) -> str:
     lines = ["[history]"]
 
     for idx in range(0, len(active_records), player_count):
-        turn = active_records[idx: idx + player_count]
+        turn = active_records[idx : idx + player_count]
         turn_text = " ".join(
-            f"{record.player_id} {record_to_notation(record)};"
-            for record in turn
+            f"{record.player_id} {record_to_notation(record)};" for record in turn
         )
         lines.append(turn_text)
 
@@ -105,17 +104,13 @@ def parse_history(raw_text: str) -> list[tuple[int, str]]:
             try:
                 player_id = int(parts[0])
             except ValueError as exc:
-                raise ValueError(
-                    f"invalid history player id: {parts[0]}"
-                ) from exc
+                raise ValueError(f"invalid history player id: {parts[0]}") from exc
             entries.append((player_id, parts[1].strip().lower()))
 
     return entries
 
 
-def _parse_key_value_lines(
-    lines: list[str], *, section_name: str
-) -> dict[str, str]:
+def _parse_key_value_lines(lines: list[str], *, section_name: str) -> dict[str, str]:
     values: dict[str, str] = {}
 
     for line in lines:
@@ -142,9 +137,7 @@ _REQUIRED_SETTINGS_KEYS = {
 
 def _settings_values(raw_text: str) -> dict[str, str]:
     sections = split_sections(raw_text)
-    return _parse_key_value_lines(
-        sections.get("settings", []), section_name="settings"
-    )
+    return _parse_key_value_lines(sections.get("settings", []), section_name="settings")
 
 
 def _validated_current_settings(raw_text: str) -> dict[str, str]:
@@ -153,13 +146,10 @@ def _validated_current_settings(raw_text: str) -> dict[str, str]:
         raise ValueError("missing [settings] section")
     if "blitz" in sections:
         raise ValueError(
-            "legacy [blitz] section is not supported; "
-            "use blitz fields in [settings]"
+            "legacy [blitz] section is not supported; " "use blitz fields in [settings]"
         )
 
-    values = _parse_key_value_lines(
-        sections["settings"], section_name="settings"
-    )
+    values = _parse_key_value_lines(sections["settings"], section_name="settings")
     missing = sorted(_REQUIRED_SETTINGS_KEYS - set(values))
     if missing:
         raise ValueError("missing settings keys: " + ", ".join(missing))
@@ -172,9 +162,7 @@ def _program_settings_values(
     parsed: dict[str, bool | int | None | str] = {}
 
     if "verbose" in values:
-        parsed["verbose"] = _parse_bool_value(
-            values["verbose"], label="verbose"
-        )
+        parsed["verbose"] = _parse_bool_value(values["verbose"], label="verbose")
     if "debug" in values:
         parsed["debug"] = _parse_bool_value(values["debug"], label="debug")
     if "ai-mode" in values:
@@ -242,13 +230,11 @@ def serialize_settings(
     if program_settings is not None:
         if "verbose" in program_settings:
             lines.append(
-                "verbose="
-                + ("true" if bool(program_settings["verbose"]) else "false")
+                "verbose=" + ("true" if bool(program_settings["verbose"]) else "false")
             )
         if "debug" in program_settings:
             lines.append(
-                "debug="
-                + ("true" if bool(program_settings["debug"]) else "false")
+                "debug=" + ("true" if bool(program_settings["debug"]) else "false")
             )
         ai_mode = program_settings.get(
             "ai_mode",
@@ -269,8 +255,7 @@ def serialize_settings(
         if ai_depth is not None:
             lines.append(f"ai-minimax-depth={int(ai_depth)}")
         elif any(
-            key in program_settings
-            for key in ("ai_minimax_depth", "ai-minimax-depth")
+            key in program_settings for key in ("ai_minimax_depth", "ai-minimax-depth")
         ):
             lines.append("ai-minimax-depth=none")
         ai_scoring = program_settings.get(
@@ -284,10 +269,7 @@ def serialize_settings(
             program_settings.get("ai-mcts-selection"),
         )
         if ai_mcts_selection is not None:
-            lines.append(
-                "ai-mcts-selection="
-                + str(ai_mcts_selection).strip().upper()
-            )
+            lines.append("ai-mcts-selection=" + str(ai_mcts_selection).strip().upper())
 
     enabled = False
     time_limit = 0
@@ -308,8 +290,7 @@ def serialize_settings(
     lines.append(f"blitz-paused={'true' if paused else 'false'}")
     if remaining:
         parts = [
-            f"{player_id}={remaining[player_id]:.6f}"
-            for player_id in sorted(remaining)
+            f"{player_id}={remaining[player_id]:.6f}" for player_id in sorted(remaining)
         ]
         lines.append("blitz-remaining-times=" + " ".join(parts))
     else:
@@ -333,15 +314,11 @@ def parse_player_types(raw_text: str) -> dict[int, str]:
         try:
             player_id = int(player_id_raw)
         except ValueError as exc:
-            raise ValueError(
-                f"invalid player id in settings: {player_id_raw}"
-            ) from exc
+            raise ValueError(f"invalid player id in settings: {player_id_raw}") from exc
 
         player_type = player_type_raw.strip().lower()
         if player_type not in {"human", "ai"}:
-            raise ValueError(
-                f"invalid player type in settings: {player_type_raw}"
-            )
+            raise ValueError(f"invalid player type in settings: {player_type_raw}")
         parsed[player_id] = player_type
 
     return parsed
@@ -420,8 +397,7 @@ def replay_history(
             wall_counts[player_id] = wall_counts.get(player_id, 0) + 1
 
     remaining_walls = position.remaining_walls or {
-        pid: fallback_walls_per_player.get(pid, WALLS_DEFAULT)
-        for pid in players
+        pid: fallback_walls_per_player.get(pid, WALLS_DEFAULT) for pid in players
     }
     initial_walls = {
         pid: remaining_walls.get(pid, WALLS_DEFAULT) + wall_counts.get(pid, 0)
@@ -456,14 +432,10 @@ def replay_history(
         final_state.current_player != position.current_player
         or final_state.player_positions != position.positions
         or final_state.remaining_walls != remaining_walls
-        or sorted(final_state.vertical_walls)
-        != sorted(position.vertical_walls)
-        or sorted(final_state.horizontal_walls)
-        != sorted(position.horizontal_walls)
+        or sorted(final_state.vertical_walls) != sorted(position.vertical_walls)
+        or sorted(final_state.horizontal_walls) != sorted(position.horizontal_walls)
     ):
-        raise ContestError(
-            f"history does not match saved game state in {path}"
-        )
+        raise ContestError(f"history does not match saved game state in {path}")
 
     return session
 
@@ -491,9 +463,7 @@ def load_session(
 
     players = sorted(position.positions.keys())
     player_types = {
-        pid: saved_player_types.get(
-            pid, fallback_player_types.get(pid, "human")
-        )
+        pid: saved_player_types.get(pid, fallback_player_types.get(pid, "human"))
         for pid in players
     }
 
@@ -507,8 +477,7 @@ def load_session(
         )
 
     remaining_walls = position.remaining_walls or {
-        pid: fallback_walls_per_player.get(pid, WALLS_DEFAULT)
-        for pid in players
+        pid: fallback_walls_per_player.get(pid, WALLS_DEFAULT) for pid in players
     }
     state = GameState(
         board_size=position.size,
@@ -572,9 +541,7 @@ def serialize_game(state: GameState) -> str:
             lines.append(" ".join(sep_tokens))
 
     ordered_players = sorted(state.remaining_walls.keys())
-    walls_part = " ".join(
-        str(state.remaining_walls[pid]) for pid in ordered_players
-    )
+    walls_part = " ".join(str(state.remaining_walls[pid]) for pid in ordered_players)
     lines.append(f"walls: {walls_part}")
     return "\n".join(lines) + "\n"
 

@@ -70,9 +70,7 @@ class Blitz:
     def from_snapshot(cls, snapshot: BlitzSnapshot | None) -> Blitz:
         if snapshot is None:
             return cls(time_limit_minutes=0)
-        blitz = cls(
-            time_limit_minutes=float(snapshot.get("time_limit_minutes", 0))
-        )
+        blitz = cls(time_limit_minutes=float(snapshot.get("time_limit_minutes", 0)))
         blitz.restore_snapshot(snapshot)
         return blitz
 
@@ -89,9 +87,7 @@ class Blitz:
         if player_id not in remaining_times:
             raise ValueError(f"unknown blitz player: {player_id}")
 
-        remaining_times[player_id] = max(
-            0.0, remaining_times[player_id] - elapsed
-        )
+        remaining_times[player_id] = max(0.0, remaining_times[player_id] - elapsed)
         return remaining_times[player_id] <= 0
 
     def expire_player(self, player_id: int) -> None:

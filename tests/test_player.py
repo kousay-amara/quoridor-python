@@ -13,9 +13,7 @@ def test_player_initialization_with_defaults():
 
 
 def test_player_initialization_with_explicit_targets_and_walls():
-    player = Player(
-        player_id=3, pos=40, target_row=None, target_col=8, wall_count=7
-    )
+    player = Player(player_id=3, pos=40, target_row=None, target_col=8, wall_count=7)
     assert player.player_id == 3
     assert player.pos == 40
     assert player.target_col == 8

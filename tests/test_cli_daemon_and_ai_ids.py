@@ -22,10 +22,7 @@ def test_run_server_daemon_start_error(monkeypatch, capsys):
     monkeypatch.setattr(cli_mod, "NetworkServer", FailingServer)
     code = cli_mod._run_server_daemon(25000)
     assert code == 1
-    assert (
-        "Cannot start server on port 25000: bind failed"
-        in capsys.readouterr().err
-    )
+    assert "Cannot start server on port 25000: bind failed" in capsys.readouterr().err
 
 
 def test_run_server_daemon_lifecycle(monkeypatch, capsys):

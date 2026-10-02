@@ -138,8 +138,7 @@ class ShortcutManager:
             token = shortcut.lower()
             if token in seen and seen[token] != action:
                 raise ShortcutError(
-                    f"shortcut '{shortcut}' is already used by "
-                    f"{seen[token].value}"
+                    f"shortcut '{shortcut}' is already used by " f"{seen[token].value}"
                 )
             seen[token] = action
 

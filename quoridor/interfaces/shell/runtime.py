@@ -38,9 +38,7 @@ def start_blitz_alarm(timeout_sec: float | None) -> tuple[bool, object | None]:
     return True, previous_handler
 
 
-def stop_blitz_alarm(
-    alarm_started: bool, previous_handler: object | None
-) -> None:
+def stop_blitz_alarm(alarm_started: bool, previous_handler: object | None) -> None:
     if not alarm_started:
         return
 
@@ -63,9 +61,7 @@ def is_game_paused(blitz: Any) -> bool:
     return blitz.paused
 
 
-def pause_blocks_gameplay(
-    blitz: Any, *, print_fn: Callable[[str], None]
-) -> bool:
+def pause_blocks_gameplay(blitz: Any, *, print_fn: Callable[[str], None]) -> bool:
     if is_game_paused(blitz):
         print_fn("Game is paused.")
         return True
@@ -121,9 +117,7 @@ def auto_play_ai_until_human_or_end(
 
     while session.player_types.get(session.state.current_player) == "ai":
         current_ai = session.state.current_player
-        before_blitz_snapshot = (
-            blitz.snapshot() if blitz.is_enabled() else None
-        )
+        before_blitz_snapshot = blitz.snapshot() if blitz.is_enabled() else None
         current_ai_time = effective_ai_time_limit(
             ai_time,
             blitz=blitz,
@@ -216,9 +210,7 @@ def read_shell_input(
     print_fn: Callable[..., None] = print,
 ) -> tuple[str | None, bool]:
     timed_player = state.session.state.current_player
-    before_blitz_snapshot = (
-        state.blitz.snapshot() if state.blitz.is_enabled() else None
-    )
+    before_blitz_snapshot = state.blitz.snapshot() if state.blitz.is_enabled() else None
     timeout_sec = state.blitz.input_timeout_for(timed_player)
     if timeout_sec is not None and timeout_sec <= 0:
         state.has_unsaved_changes = True

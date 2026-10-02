@@ -1,5 +1,4 @@
-"""Strategies for executing play commands in local or network mode.
-"""
+"""Strategies for executing play commands in local or network mode."""
 
 from __future__ import annotations
 

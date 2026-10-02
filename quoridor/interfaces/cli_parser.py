@@ -49,9 +49,7 @@ def _players_type(raw: str) -> int:
         raise argparse.ArgumentTypeError("players must be an integer") from exc
     if value not in PLAYER_COUNT_SUPPORTED:
         supported = ", ".join(str(v) for v in sorted(PLAYER_COUNT_SUPPORTED))
-        raise argparse.ArgumentTypeError(
-            f"players must be one of: {supported}"
-        )
+        raise argparse.ArgumentTypeError(f"players must be one of: {supported}")
     return value
 
 
@@ -62,8 +60,7 @@ def _size_type(raw: str) -> int:
         raise argparse.ArgumentTypeError("size must be an integer") from exc
     if value < BOARD_SIZE_MIN or value > BOARD_SIZE_MAX or value % 2 == 0:
         raise argparse.ArgumentTypeError(
-            "size must be odd and between "
-            f"{BOARD_SIZE_MIN} and {BOARD_SIZE_MAX}"
+            "size must be odd and between " f"{BOARD_SIZE_MIN} and {BOARD_SIZE_MAX}"
         )
     return value
 
@@ -72,9 +69,7 @@ def _player_id_type(raw: str) -> int:
     try:
         value = int(raw)
     except ValueError as exc:
-        raise argparse.ArgumentTypeError(
-            "player id must be an integer"
-        ) from exc
+        raise argparse.ArgumentTypeError("player id must be an integer") from exc
     if value < PLAYER_ID_MIN or value > PLAYER_ID_MAX:
         raise argparse.ArgumentTypeError(
             f"player id must be between {PLAYER_ID_MIN} and {PLAYER_ID_MAX}"
@@ -159,13 +154,8 @@ def _build_parser(
         if not isinstance(depth_default, int) or depth_default <= 0:
             depth_default = AI_MINIMAX_DEPTH_DEFAULT
 
-    scoring_default = defaults.get(
-        "ai_minimax_scoring", AI_MINIMAX_SCORING_DEFAULT
-    )
-    if (
-        not isinstance(scoring_default, int)
-        or scoring_default not in {1, 2, 3}
-    ):
+    scoring_default = defaults.get("ai_minimax_scoring", AI_MINIMAX_SCORING_DEFAULT)
+    if not isinstance(scoring_default, int) or scoring_default not in {1, 2, 3}:
         scoring_default = AI_MINIMAX_SCORING_DEFAULT
 
     parser = QuoridorArgumentParser(
@@ -173,9 +163,7 @@ def _build_parser(
         description=_("Quoridor game command-line interface."),
         add_help=True,
     )
-    parser.add_argument(
-        "save_file", nargs="?", help=_("path to a saved game file")
-    )
+    parser.add_argument("save_file", nargs="?", help=_("path to a saved game file"))
     parser.add_argument(
         "-V",
         "--version",
@@ -305,9 +293,7 @@ def _build_contest_parser() -> argparse.ArgumentParser:
         description="Quoridor contest mode.",
         add_help=True,
     )
-    parser.add_argument(
-        "save_file", nargs="?", help="path to a saved game file"
-    )
+    parser.add_argument("save_file", nargs="?", help="path to a saved game file")
     parser.add_argument(
         "-c",
         "--contest",
@@ -341,16 +327,12 @@ def _is_contest_on_cli(argv: list[str]) -> bool:
 
 def _is_time_passed_on_cli(argv: list[str]) -> bool:
     return any(
-        token in {"-t", "--time"} or token.startswith("--time=")
-        for token in argv
+        token in {"-t", "--time"} or token.startswith("--time=") for token in argv
     )
 
 
 def _is_ai_time_passed_on_cli(argv: list[str]) -> bool:
-    return any(
-        token == "--ai-time" or token.startswith("--ai-time=")
-        for token in argv
-    )
+    return any(token == "--ai-time" or token.startswith("--ai-time=") for token in argv)
 
 
 def _cli_prog_name() -> str:

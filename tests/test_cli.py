@@ -86,6 +86,7 @@ def run_shell(monkeypatch, capsys, commands: list[str], **overrides):
 
 # Interactive shell scenarios
 
+
 def test_help_commands_explain_available_actions(monkeypatch, capsys):
     captured = run_shell(
         monkeypatch,
@@ -103,9 +104,7 @@ def test_help_commands_explain_available_actions(monkeypatch, capsys):
 def test_hint_uses_minimax_depth_from_runtime_settings(monkeypatch, capsys):
     called = {"depth": None, "score": None, "deadline_ts": None}
 
-    def fake_minimax(
-        state, *, ai_player_id, depth, eval_fn, deadline_ts
-    ):
+    def fake_minimax(state, *, ai_player_id, depth, eval_fn, deadline_ts):
         called["depth"] = depth
         called["score"] = eval_fn(state, ai_player_id)
         called["deadline_ts"] = deadline_ts
@@ -570,9 +569,7 @@ def test_set_rejects_invalid_format_and_values(monkeypatch, capsys):
     assert "boolean value expected (true/false)" in captured.out
 
 
-def test_load_and_save_without_file_show_explicit_usage_errors(
-    monkeypatch, capsys
-):
+def test_load_and_save_without_file_show_explicit_usage_errors(monkeypatch, capsys):
     captured = run_shell(monkeypatch, capsys, ["load", "save", "quit"])
 
     out = captured.out
@@ -768,14 +765,18 @@ def test_format_hint_move_formats_wall_and_unknown_moves():
         from_node=0,
         size=9,
     ).endswith("h")
-    assert cli_mod._format_hint_move(
-        ("other", 123),
-        from_node=0,
-        size=9,
-    ) == "('other', 123)"
+    assert (
+        cli_mod._format_hint_move(
+            ("other", 123),
+            from_node=0,
+            size=9,
+        )
+        == "('other', 123)"
+    )
 
 
 # CLI helper and entry-point tests
+
 
 def test_cli_type_helpers_validate_values_and_flags():
     assert cli_mod._players_type("2") == 2
@@ -829,9 +830,7 @@ def test_main_dispatches_to_contest_or_interactive(monkeypatch):
     assert cli_mod.main(["--version"]) == 9
 
 
-def test_help_option_prints_help_to_stdout_and_exits_zero(
-    monkeypatch, capsys
-):
+def test_help_option_prints_help_to_stdout_and_exits_zero(monkeypatch, capsys):
     patch_main_defaults(monkeypatch)
 
     with pytest.raises(SystemExit) as exc:
@@ -844,9 +843,7 @@ def test_help_option_prints_help_to_stdout_and_exits_zero(
     assert captured.err == ""
 
 
-def test_qoridor_help_uses_qoridor_prog_and_exits_zero(
-    monkeypatch, capsys
-):
+def test_qoridor_help_uses_qoridor_prog_and_exits_zero(monkeypatch, capsys):
     patch_main_defaults(monkeypatch)
     monkeypatch.setattr(sys, "argv", ["qoridor"])
 
@@ -872,9 +869,7 @@ def test_invalid_option_prints_error_and_help_to_stderr(monkeypatch, capsys):
     assert "usage:" in captured.err.lower()
 
 
-def test_qoridor_invalid_option_uses_qoridor_prog_and_exits_one(
-    monkeypatch, capsys
-):
+def test_qoridor_invalid_option_uses_qoridor_prog_and_exits_one(monkeypatch, capsys):
     patch_main_defaults(monkeypatch)
     monkeypatch.setattr(sys, "argv", ["qoridor"])
 
@@ -936,9 +931,7 @@ def test_main_interactive_starts_with_save_file_argument(monkeypatch):
     assert captured["save_file"] == "save.txt"
 
 
-def test_main_interactive_handles_missing_save_file_cleanly(
-    monkeypatch, capsys
-):
+def test_main_interactive_handles_missing_save_file_cleanly(monkeypatch, capsys):
     patch_main_defaults(monkeypatch)
     missing = "path/to/missing_save.txt"
 
@@ -1019,9 +1012,7 @@ def test_main_contest_accepts_f1_options(monkeypatch, capsys):
     assert calls[-1] == (True, True)
 
 
-def test_main_contest_initializes_i18n_like_interactive_mode(
-    monkeypatch, capsys
-):
+def test_main_contest_initializes_i18n_like_interactive_mode(monkeypatch, capsys):
     monkeypatch.setenv("LANG", "C")
     monkeypatch.delenv("LC_ALL", raising=False)
     monkeypatch.setattr(cli_mod, "_get_version", lambda: "1.2.3")
@@ -1032,9 +1023,7 @@ def test_main_contest_initializes_i18n_like_interactive_mode(
     assert "warning: unsupported language 'c'" in captured.err.lower()
 
 
-def test_main_contest_uses_french_locale_when_supported(
-    monkeypatch, capsys
-):
+def test_main_contest_uses_french_locale_when_supported(monkeypatch, capsys):
     monkeypatch.setenv("LANG", "fr_FR.UTF-8")
     monkeypatch.delenv("LC_ALL", raising=False)
 

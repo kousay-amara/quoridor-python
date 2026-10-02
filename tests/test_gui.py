@@ -559,12 +559,8 @@ def test_action_routing_new_game_show_info_quit(gui_mod, monkeypatch):
 def test_action_load_save_routing(gui_mod):
     win = _make_window(gui_mod)
     called = {"load": 0, "save": 0}
-    win._on_load_clicked = lambda _btn: called.__setitem__(
-        "load", called["load"] + 1
-    )
-    win._on_save_clicked = lambda _btn: called.__setitem__(
-        "save", called["save"] + 1
-    )
+    win._on_load_clicked = lambda _btn: called.__setitem__("load", called["load"] + 1)
+    win._on_save_clicked = lambda _btn: called.__setitem__("save", called["save"] + 1)
     win._action_load_game()
     win._action_save_game()
     assert called == {"load": 1, "save": 1}
@@ -633,9 +629,7 @@ def test_dialog_openers_attach_handlers(gui_mod, monkeypatch):
     def factory(**kwargs):
         obj = _Chooser(**kwargs)
         key = (
-            "save"
-            if kwargs["action"] == gui_mod.Gtk.FileChooserAction.SAVE
-            else "load"
+            "save" if kwargs["action"] == gui_mod.Gtk.FileChooserAction.SAVE else "load"
         )
         seen[key] = obj
         return obj

@@ -104,8 +104,7 @@ class MCTSNode:
         return max(
             self.childrens,
             key=lambda child: (child.wins / child.visits)
-            + exploration_weight
-            * math.sqrt(math.log(self.visits) / child.visits),
+            + exploration_weight * math.sqrt(math.log(self.visits) / child.visits),
         )
 
 
@@ -158,9 +157,7 @@ def mcts_search(
                 node._turn = turn_counter[0]
                 node = ml_select_child(node)
             else:
-                node = node.uct_select_child(
-                    exploration_weight=exploration_weight
-                )
+                node = node.uct_select_child(exploration_weight=exploration_weight)
 
         if node.untried_moves:
             turn_counter[0] += 1

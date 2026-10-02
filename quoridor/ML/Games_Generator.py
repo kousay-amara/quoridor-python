@@ -134,9 +134,7 @@ class GameGenerator:
 
     def _build_session(self) -> GameSession:
         positions = initial_player_positions(self.board_size, self.players)
-        remaining_walls = {
-            player_id: self.walls_per_player for player_id in positions
-        }
+        remaining_walls = {player_id: self.walls_per_player for player_id in positions}
 
         state = (
             GameStateBuilder(board_size=self.board_size)

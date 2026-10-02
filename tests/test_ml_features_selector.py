@@ -193,6 +193,4 @@ def test_ml_select_child_chooses_best_and_fallback_on_error(monkeypatch):
     assert picked is child_a
 
     with pytest.raises(ValueError, match="No children"):
-        ml_selector.ml_select_child(
-            SimpleNamespace(state=parent_state, childrens=[])
-        )
+        ml_selector.ml_select_child(SimpleNamespace(state=parent_state, childrens=[]))

@@ -15,8 +15,7 @@ def initialize_shell_state(
     fallback_remaining_walls: Callable[[Any], dict[int, int]],
     load_session_from_file: Callable[..., Any],
     load_blitz_snapshot_from_file: Callable[[str], Any],
-    load_program_settings_from_file: Callable[[str], dict[str, object]]
-    | None = None,
+    load_program_settings_from_file: Callable[[str], dict[str, object]] | None = None,
     blitz_factory: Callable[..., Any],
     format_minutes: Callable[[float], str],
     print_state: Callable[..., None],
@@ -49,9 +48,7 @@ def initialize_shell_state(
         )
         if load_program_settings_from_file is not None:
             try:
-                _apply_program_settings(
-                    load_program_settings_from_file(save_file)
-                )
+                _apply_program_settings(load_program_settings_from_file(save_file))
             except (OSError, ValueError):
                 pass
         print(translate("Loading game from {path}").format(path=save_file))
@@ -74,9 +71,9 @@ def initialize_shell_state(
             player_ids=session.state.player_positions,
         )
         print(
-            translate(
-                "New game started (blitz: {minutes} min/player)."
-            ).format(minutes=format_minutes(config.time_limit))
+            translate("New game started (blitz: {minutes} min/player).").format(
+                minutes=format_minutes(config.time_limit)
+            )
         )
     else:
         print(translate("New game started with default options."))
@@ -89,14 +86,10 @@ def initialize_shell_state(
     active_ai_players = session_ai_players(session)
     if active_ai_players:
         depth_label = (
-            "auto"
-            if config.ai_minimax_depth is None
-            else config.ai_minimax_depth
+            "auto" if config.ai_minimax_depth is None else config.ai_minimax_depth
         )
         time_label = (
-            ""
-            if config.ai_mode == ai_mode_minimax
-            else f", time={config.ai_time}s"
+            "" if config.ai_mode == ai_mode_minimax else f", time={config.ai_time}s"
         )
         print(
             f"AI players: {active_ai_players} "
