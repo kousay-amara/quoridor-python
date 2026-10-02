@@ -345,6 +345,7 @@ def test_apply_game_config_updates_runtime_and_restarts(gui_mod):
             "ai_mode": "iterative",
             "ai_time": "3",
             "ai_minimax_depth": "5",
+            "ai_minimax_scoring": "1",
         }
     )
 
@@ -379,6 +380,7 @@ def test_apply_game_config_accepts_auto_depth_for_minimax(gui_mod):
             "ai_mode": "minimax",
             "ai_time": "5",
             "ai_minimax_depth": "none",
+            "ai_minimax_scoring": "1",
         }
     )
 
@@ -486,6 +488,7 @@ def test_load_response_branches(gui_mod):
             horizontal_walls=[],
         ),
         player_types={1: "human", 2: "human"},
+        game_outcome=lambda: types.SimpleNamespace(status="ongoing", winner_id=None),
     )
     loaded_blitz = types.SimpleNamespace(
         is_enabled=lambda: False,
