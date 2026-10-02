@@ -60,11 +60,7 @@ Sans mesure de couverture :
 pytest -q -p no:cov -o addopts= tests
 ```
 
-**Résultat mesuré sur cette version** : 268 tests, 265 passent, couverture de code à **85 %** (seuil minimum de 85 % configuré dans `pyproject.toml`).
-
-### Limites connues
-
-3 tests dans `tests/test_gui.py` échouent actuellement (`test_apply_game_config_updates_runtime_and_restarts`, `test_apply_game_config_accepts_auto_depth_for_minimax`, `test_load_response_branches`) — désynchronisation entre certains tests et le code de la GUI, non corrigée dans cette version. Le cœur du jeu, le mode réseau et le mode CLI ne sont pas affectés.
+**Résultat mesuré sur cette version** : 268 tests, tous passent, couverture de code à **85 %** (seuil minimum de 84 % configuré dans `pyproject.toml`).
 
 ## Structure du projet
 
