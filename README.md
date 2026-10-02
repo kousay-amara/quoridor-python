@@ -1,56 +1,52 @@
 # Quoridor
 
-Python implementation of the **Quoridor** board game with:
-- an interactive command-line interface (CLI),
-- a contest mode (read a position file and output one move),
-- an optional GTK graphical interface.
+Implémentation en Python du jeu de plateau **Quoridor**, avec une interface en ligne de commande interactive, un mode « concours » (lecture d'une position et calcul d'un coup), une interface graphique GTK optionnelle et un mode multijoueur en réseau local. Projet universitaire réalisé entre janvier et avril 2026 dans le cadre du cursus informatique de l'**Université de Bordeaux**, par une équipe de 6 étudiants.
+
+## Fonctionnalités
+
+- Moteur de règles complet (déplacements, murs, pathfinding, conditions de victoire), 2 à 4 joueurs
+- Interface en ligne de commande interactive (shell avec historique, auto-complétion, aide intégrée)
+- Mode « concours » : lecture d'une position depuis un fichier, calcul et affichage d'un coup
+- Interface graphique optionnelle (GTK)
+- Mode réseau multijoueur : serveur TCP concurrent, découverte automatique des serveurs sur le réseau local (UDP broadcast), système d'invitations/salons de jeu, tableau des scores
+- Intelligence artificielle configurable (Minimax, Monte Carlo Tree Search avec sélection assistée par un modèle scikit-learn)
+- Mode blitz (chronomètre par joueur)
+- Sauvegarde/chargement de parties
+
+## Technologies
+
+- **Langage** : Python ≥ 3.10
+- **Dépendances runtime** : `joblib`, `pandas`, `scikit-learn` (IA), `PyGObject` (GUI GTK, optionnelle)
+- **Tests** : `pytest`, `pytest-cov`
+- **Qualité** : `black`, `flake8`, `mypy`, `pylint`
+- **Documentation** : Sphinx (`docs/`)
+- **Build** : `setuptools` (`pyproject.toml`)
+- **CI** : GitHub Actions (tests automatiques à chaque push, voir `.github/workflows/`)
 
 ## Installation
 
-From the project root (a virtual environment is recommended):
+Un environnement virtuel est recommandé.
 
 ```bash
-pip install -e .
-```
-
-For development (tests, coverage, formatting, docs):
-
-```bash
+python -m venv venv
+source venv/bin/activate
 pip install -e ".[dev]"
 ```
 
-For the GUI (optional):
+Pour l'interface graphique (optionnel, nécessite GTK installé au niveau système) :
 
 ```bash
 pip install -e ".[gui]"
 ```
 
-## Run The Game
+## Lancement
 
-- **Interactive CLI mode**
-  ```bash
-  quoridor
-  ```
-
-- **Contest mode** (read a position file and print one move to stdout)
-  ```bash
-  quoridor -c path/to/file.txt
-  ```
-
-- **Version**
-  ```bash
-  quoridor -V
-  ```
-
-- **GTK GUI**
-  From the repository root:
-  ```bash
-  python -m quoridor.interfaces.gui
-  ```
-  From `quoridor/interfaces`:
-  ```bash
-  python -m gui
-  ```
+```bash
+quoridor                      # mode interactif
+quoridor -c chemin/vers/fichier.txt   # mode concours
+quoridor -V                   # affiche la version
+python -m quoridor.interfaces.gui     # interface graphique GTK
+```
 
 ## Tests
 
@@ -58,38 +54,59 @@ pip install -e ".[gui]"
 pytest
 ```
 
-Without coverage:
+Sans mesure de couverture :
 
 ```bash
 pytest -q -p no:cov -o addopts= tests
 ```
 
-Run only contest-mode tests:
+**Résultat mesuré sur cette version** : 268 tests, 265 passent, couverture de code à **85 %** (seuil minimum de 85 % configuré dans `pyproject.toml`).
 
-```bash
-PYTHONPATH=. pytest -q -p no:cov -o addopts= tests/test_contest.py
+### Limites connues
+
+3 tests dans `tests/test_gui.py` échouent actuellement (`test_apply_game_config_updates_runtime_and_restarts`, `test_apply_game_config_accepts_auto_depth_for_minimax`, `test_load_response_branches`) — désynchronisation entre certains tests et le code de la GUI, non corrigée dans cette version. Le cœur du jeu, le mode réseau et le mode CLI ne sont pas affectés.
+
+## Structure du projet
+
+```
+quoridor/
+├── core/           # modèle du jeu
+├── rules/          # règles, pathfinding, conditions de victoire
+├── application/    # services applicatifs, moteurs IA (minimax, MCTS), historique, blitz
+├── network/        # serveur/client TCP, protocole, découverte LAN
+├── interfaces/      # CLI (shell), GUI (GTK)
+├── ML/             # génération de données d'entraînement et sélection de features pour l'IA
+└── utils/, ui/, i18n.py
+tests/              # suite de tests pytest
+docs/               # documentation Sphinx
 ```
 
-## Documentation
+## Auteurs
 
-API documentation is generated with Sphinx. After installing dev dependencies:
+Projet réalisé en équipe, encadré par Emmanuel Fleury (Université de Bordeaux). D'après l'historique Git :
 
-```bash
-pip install -r docs/requirements.txt
-cd docs
-make html
-```
+| Contributeur | Rôle |
+|---|---|
+| **Kousay Amara** | Étudiant — voir « Ce que j'ai réalisé » ci-dessous |
+| Guilhem Causse | Étudiant |
+| Mohamed Ait Issad | Étudiant |
+| Bilal Al Fayoumi | Étudiant |
+| Omar Harchi | Étudiant |
+| Emmanuel Fleury | Enseignant, encadrant du projet |
 
-If the RTD theme is missing (`ThemeError: no theme named 'sphinx_rtd_theme'`):
+*(Les adresses email des contributeurs autres que moi ont été anonymisées lors de la migration de ce dépôt, par respect de leur vie privée.)*
 
-```bash
-pip install sphinx-rtd-theme
-```
+## Ce que j'ai réalisé (Kousay Amara)
 
-Then open: **`docs/_build/html/index.html`** (or [index.html](docs/_build/html/index.html) from the repository root).
+Cette section distingue ma contribution individuelle de celle de l'équipe, d'après l'analyse de l'historique Git (`git blame`) :
 
-## Development
+- **Module réseau (`quoridor/network/`)** : conçu et implémenté la quasi-totalité du serveur TCP concurrent (multi-thread), du protocole texte avec sérialisation JSON de l'état de partie, et de la découverte automatique de serveurs sur le réseau local (UDP broadcast) — `basic_network.py`, `server.py`, `discovery.py`, `client.py`.
+- **Interface CLI côté réseau** (`cli_network.py`, en grande partie) : commandes de connexion à un serveur, invitations de partie, liste des joueurs, tableau des scores.
+- **Shell interactif** (`cli_shell.py`, en bonne partie) et catalogue de commandes (`command_catalog.py`, en bonne partie) : structure du shell (parsing, aide, historique, auto-complétion).
+- **Tests associés** : auteur principal de `tests/test_network.py` et de `tests/test_cli_network_minimal.py`, et contributeur majoritaire de `tests/test_cli.py`.
 
-- Manually test contest mode (example):  
-  `PYTHONPATH=. python3 -m quoridor.interfaces.cli -c contest_example.txt`  
-  (adjust the module path if your CLI entry point is different).
+Le module d'intelligence artificielle par apprentissage (`quoridor/ML/`) a été principalement écrit par mon coéquipier Bilal Al Fayoumi ; j'ai contribué à son intégration dans le moteur MCTS (`quoridor/application/mcts_engine.py`).
+
+## Origine du sujet
+
+Le sujet du projet (`pdp/quoridor-specs.pdf`) a été fourni par l'enseignant encadrant, Emmanuel Fleury, dans le cadre du cursus de l'Université de Bordeaux. Il n'est pas de notre fait et reste la propriété de l'établissement.
