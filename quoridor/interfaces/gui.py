@@ -547,9 +547,7 @@ class QuoridorWindow(Gtk.ApplicationWindow):
                         self._board_size(),
                     )
                     notation = f"{from_notation}-{to_notation}"
-                    print(f"Envoi coup réseau : {notation}")
-                    result = self._network_client.move(notation)
-                    print(f"Réponse serveur : {result}")
+                    self._network_client.move(notation)
                 else:
                     self._stop_blitz_turn(self._drag_pid)
                     self.session.play_pawn_move(self._drag_pid, to_node)
@@ -867,7 +865,6 @@ class QuoridorWindow(Gtk.ApplicationWindow):
                 client.connect()
                 self._network_client = client
                 self._network_mode = True
-                print(f"Mon client_id : {client.client_id}")
                 self._network_client.set_opponent_move_callback(
                     lambda notation: GLib.idle_add(
                         self._handle_opponent_move, notation
@@ -980,10 +977,6 @@ class QuoridorWindow(Gtk.ApplicationWindow):
             self._set_status(f"Erreur arrêt serveur : {e}")
 
     def _apply_game_state_update(self, update) -> None:
-        print(
-            f"GAME_STATE reçu : player_id={update['player_id']}, "
-            f"winner={update['winner_id']}"
-        )
         if self._network_player_id is None:
             self._network_player_id = update["player_id"]
         before_state = self.session.state.to_snapshot()
